@@ -8,6 +8,7 @@
 #include <ESPAsyncWebServer.h>
 #include <list>
 #include <Arduino.h>
+#include "http_adapter_socket.h"
 
 #ifndef ESP_ASYNC_WEB_SERVER_CONTENT_TYPE_HACK
 #error "you need my hacked version of ESPAsyncWebServer to compile this code. Use this branch: https://github.com/timotto/ESPAsyncWebServer/tree/hack/bad-content-type"
@@ -68,16 +69,18 @@ namespace ArduMower
     private:
       Router &_router;
       AsyncWebServer &_server;
+      AsyncWebSocket *_ws;
       Http::Metrics *_metrics;
       std::list<Http::CommandRequest *> _queue;
       SemaphoreHandle_t _lock;
       uint32_t requestId;
+      Http::SocketHandler socketHandler;
 
       void handleCommandRequest(AsyncWebServerRequest *request);
       void handleCORSPreflightRequest(AsyncWebServerRequest *request);
       void apiReboot(AsyncWebServerRequest *request);
       void handleRootRequest(AsyncWebServerRequest *request);
-
+      
       void enqueueRequest(Http::CommandRequest *req);
       bool queueIsFull();
       void processQueue();

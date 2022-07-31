@@ -75,7 +75,6 @@
       <Route path="/settings" component="{SettingsRoute}" /> 
     </div>
   </Router>
-  <DashboardRoute />
 </Content>
 
 <style>

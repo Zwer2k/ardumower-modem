@@ -1,3 +1,5 @@
+#ifdef ENABLE_PS4_CONTROLLER
+
 #ifndef _PS4_CONTROLLER_H
 #define _PS4_CONTROLLER_H
 
@@ -45,3 +47,5 @@ namespace ArduMower
 }
 
 #endif // _IOBROKER_H
+
+#endif // ENABLE_PS4_CONTROLLER

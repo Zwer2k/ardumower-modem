@@ -33,7 +33,10 @@
 #include "ui_adapter.h"
 #include "web_server.h"
 #include "wifi_adapter.h"
+
+#ifdef ENABLE_PS4_CONTROLLER
 #include "ps4_controller.h"
+#endif
 
 using namespace ArduMower::Modem;
 

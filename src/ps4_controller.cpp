@@ -1,3 +1,5 @@
+#ifdef ENABLE_PS4_CONTROLLER
+
 #include "ps4_controller.h"
 #include "esp_gap_bt_api.h"
 #include <esp_bt_main.h>
@@ -162,3 +164,5 @@ void Adapter::loop()
 // void Adapter::onConnect() {
 //    Serial.println("PS4 controller connected");
 // }
+
+#endif // ENABLE_PS4_CONTROLLER
