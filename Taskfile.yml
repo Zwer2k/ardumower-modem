@@ -71,7 +71,7 @@ tasks:
     vars:
       VARIANT: '{{default "ESP_MODEM_APP" .VARIANT}}'
 
-  compile-pio:
+  compile-with-ps4:
     cmds:
     - pio run
     deps: [task: package-ui]
@@ -93,6 +93,12 @@ tasks:
     cmds:
     - task: compile
       vars: {VARIANT: ESP_MODEM_SIM}
+
+  build-firmware-with-ps4:
+    cmds:
+    - task: compile-with-ps4
+      vars: {VARIANT: ESP_MODEM_APP}
+
 
   build-test:
     cmds:
@@ -175,7 +181,18 @@ tasks:
     deps: [task: build-firmware]
     dir: build
 
-  ota-sim-pio:
+  ota-with-ps4:
+    cmds:
+    - |
+      curl ${ESP_DEV_IP}/api/modem/ota/post \
+        -v \
+        -u "${ESP_DEV_CREDS}" \
+        -X POST \
+        -H 'Content-type: application/binary' \
+        --data-binary @.pio/build/esp32/firmware.bin
+    deps: [task: build-firmware-with-ps4]
+  
+  ota-sim-with-ps4:
     cmds:
     - |
       curl ${ESP_DEV_IP}/api/modem/ota/upload \
