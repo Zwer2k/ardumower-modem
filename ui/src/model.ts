@@ -90,3 +90,39 @@ export interface ChangeEventValue {
  event: Event;
  value: any; 
 }
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface Position extends Point {
+  delta: number;
+  solution: number;
+  age: number;
+  accuracy: number;
+  visible_satellites: number;
+  visible_satellites_dgps: number;
+  mow_point_index: number;
+}
+
+export interface State {
+  timestamp: number;
+  battery_voltage: number;
+  position: Position;
+  target: Point;
+  job: number;
+  sensor: number;
+  amps: number;
+  map_crc: number;
+}
+
+export enum DataType {
+  mowerState = 1,
+  mowerStats,
+};
+
+export interface SocketMessage {
+  type: DataType;
+  data: State;
+}

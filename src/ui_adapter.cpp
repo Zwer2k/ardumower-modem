@@ -44,6 +44,11 @@ void UiAdapter::begin()
   _server.onNotFound(std::bind(&UiAdapter::handleRequest, this, std::placeholders::_1));
 }
 
+void UiAdapter::loop()
+{
+  socketHandler.loop();
+}
+
 bool UiAdapter::servePath(AsyncWebServerRequest *request, const String &path)
 {
   for (auto i = 0; i < asset_count; i++)

@@ -1,37 +1,20 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    
-    let socket;
-    onMount(async () => {
-        socket = new WebSocket("ws://192.168.43.173/ws")
-        socket.addEventListener("open", ()=> {
-            console.log("Opened");
-            sendMessage({ type: 1, data: { abc: 1 }});
-        });
+import type { State } from "../../model";
 
-        socket.addEventListener('close', function (event) {
-            console.log("It's close");
-        });
-
-        socket.addEventListener("message", (message: any) => {
-            //const data: Request = JSON.parse(message.data);
-            console.log("message: ", message)
-        });
-    });
-
-    const sendMessage = (message) => {
-        if (socket.readyState <= 1) {
-            socket.send(JSON.stringify(message));
-        }
-    }
+    export let state: State = null;
 </script>
 
 <article class="contact-card">
 	<h3>State</h3>
 
-	<div class="item-list">
-        <div class="label">Updateted</div><div>value</div>
-    </div>
+    {#if state != null}
+        <div class="item-list">
+            <div class="label">Updateted:</div><div>{state.timestamp}</div>
+            <div class="label">Battery:</div><div>{state.battery_voltage}V/{state.amps}A</div>
+            <div class="label">Position</div><div>{state.position.x}E {state.position.x}N</div>
+            <div class="label">Updateted</div><div>{state.job}</div>
+        </div>
+    {/if}
 </article>
 
 <style>

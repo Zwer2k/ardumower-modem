@@ -123,6 +123,7 @@ void setup() {
   looptime.add("router", std::bind(&Router::loop, &router));
   looptime.add("ble", std::bind(&BleAdapter::loop, &bleAdapter));
   looptime.add("relay", std::bind(&RelayAdapter::loop, &relayAdapter));
+  looptime.add("ui", std::bind(&Http::UiAdapter::loop, &ui));
   looptime.add("mqtt", [&](){mqttAdapter.loop(millis());});
 #ifdef ENABLE_PS4_CONTROLLER
   looptime.add("ps4_controller", std::bind(&PS4controller::Adapter::loop, &ps4ControllerAdapter));

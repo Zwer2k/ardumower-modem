@@ -88,6 +88,8 @@ void State::Position::marshal(const JsonObject &o) const
   o[_t_position_visibleSatellites] = visibleSatellites;
   o[_t_position_visibleSatellitesDgps] = visibleSatellitesDgps;
   o[_t_position_mowPointIndex] = mowPointIndex;
+  o[_t_point_x] = x;
+  o[_t_point_y] = y;
 }
 
 void State::Point::marshal(const JsonObject &o) const

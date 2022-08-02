@@ -43,6 +43,9 @@ namespace ArduMower
 
       public:
         UiSocketHandler(ArduMower::Domain::Robot::StateSource &source);
+        
+        void loop();
+        void sendState();
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
         ~UiSocketHandler();

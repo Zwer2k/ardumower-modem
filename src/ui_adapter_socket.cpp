@@ -38,6 +38,14 @@ UiSocketHandler::~UiSocketHandler()
 {   
 }
 
+void UiSocketHandler::loop()
+{
+}
+
+void UiSocketHandler::sendState()
+{
+} 
+
 void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void * arg, uint8_t *data, size_t len)
 {
   if(type == WS_EVT_CONNECT){

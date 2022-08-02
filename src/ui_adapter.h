@@ -25,6 +25,7 @@ namespace ArduMower
                   ArduMower::Domain::Robot::StateSource &source
                   );
         void begin();
+        void loop();
 
         ~UiAdapter();
 
