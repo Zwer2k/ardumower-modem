@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 #include <inttypes.h>
+#include <ArduinoJson.h>
+
 
 namespace ArduMower
 {
@@ -90,6 +92,7 @@ namespace ArduMower
 
           bool operator==(const Point &other);
           bool operator!=(const Point &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Position : public Point
@@ -109,6 +112,7 @@ namespace ArduMower
 
           bool operator==(const Position &other);
           bool operator!=(const Position &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class State
@@ -130,6 +134,7 @@ namespace ArduMower
 
           bool operator==(const State &other);
           bool operator!=(const State &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
       }
 

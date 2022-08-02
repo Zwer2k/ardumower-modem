@@ -40,17 +40,7 @@ String Json::encode(State::State &s)
 {
   String result;
   DynamicJsonDocument doc(1024);
-
-  doc["battery_voltage"] = s.batteryVoltage;
-  JsonObject pos = doc.createNestedObject("position");
-  encodeInto(pos, s.position);
-  JsonObject tgt = doc.createNestedObject("target");
-  encodeInto(tgt, s.target);
-  doc["job"] = s.job;
-  doc["sensor"] = s.sensor;
-  doc["amps"] = s.amps;
-  doc["map_crc"] = s.mapCrc;
-
+  s.marshal(doc.as<JsonObject>());
   serializeJson(doc, result);
   
   return result;

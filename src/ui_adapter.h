@@ -7,6 +7,7 @@
 #include "domain.h"
 #include "http_common.h"
 #include "settings.h"
+#include "ui_adapter_socket.h"
 
 namespace ArduMower
 {
@@ -25,12 +26,16 @@ namespace ArduMower
                   );
         void begin();
 
+        ~UiAdapter();
+
       private:
         Api::Api &_api;
         Settings::Settings &_settings;
         AsyncWebServer &_server;
         ArduMower::Domain::Robot::StateSource &_source;
         AsyncCallbackJsonWebHandler *_settingsHandler;
+        AsyncWebSocket *_ws;
+        UiSocketHandler socketHandler;
 
         void handleRequest(AsyncWebServerRequest *request);
         bool servePath(AsyncWebServerRequest *request, const String &path);
@@ -41,6 +46,7 @@ namespace ArduMower
         void handleApiGetModemStatus(AsyncWebServerRequest *request);
         void handleApiGetRobotDesiredState(AsyncWebServerRequest *request);
         void handleApiResetModemBluetoothPairings(AsyncWebServerRequest *request);
+  
 
         void delayedRestart();
       };

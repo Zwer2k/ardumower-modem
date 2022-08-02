@@ -2,6 +2,27 @@
 
 using namespace ArduMower::Domain::Robot;
 
+const char * _t_state_timestamp = "timestamp";
+const char * _t_state_batteryVoltage = "battery_voltage";
+const char * _t_state_position = "position";
+const char * _t_state_target = "target";
+const char * _t_state_job = "job";
+const char * _t_state_sensor = "sensor";
+const char * _t_state_amps = "amps";
+const char * _t_state_mapCrc = "map_crc";
+
+const char * _t_position_delta = "delta";
+const char * _t_position_solution = "solution";
+const char * _t_position_age = "age";
+const char * _t_position_accuracy = "accuracy";
+const char * _t_position_visibleSatellites = "visible_satellites";
+const char * _t_position_visibleSatellitesDgps = "visible_satellites_dgps";
+const char * _t_position_mowPointIndex = "mow_point_index";
+
+const char * _t_point_x = "x";
+const char * _t_point_y ="y";
+
+
 #define same(other, prop) (prop == other.prop)
 
 bool Properties::operator==(const Properties &other)
@@ -42,4 +63,35 @@ bool State::Position::operator==(const Position &other)
 bool State::Point::operator==(const Point &other)
 {
   return same(other, x) && same(other, y);
+}
+
+void State::State::marshal(const JsonObject &o) const
+{
+  o[_t_state_timestamp] = timestamp;
+  o[_t_state_batteryVoltage] = batteryVoltage;
+  o.createNestedObject(_t_state_position);
+  position.marshal(o[_t_state_position]);
+  o.createNestedObject(_t_state_target);
+  target.marshal(o[_t_state_target]);
+  o[_t_state_job] = job;
+  o[_t_state_sensor] = sensor;
+  o[_t_state_amps] = amps;
+  o[_t_state_mapCrc] = mapCrc;
+}
+
+void State::Position::marshal(const JsonObject &o) const
+{
+  o[_t_position_delta] = delta;
+  o[_t_position_solution] = solution;
+  o[_t_position_age] = age;
+  o[_t_position_accuracy] = accuracy;
+  o[_t_position_visibleSatellites] = visibleSatellites;
+  o[_t_position_visibleSatellitesDgps] = visibleSatellitesDgps;
+  o[_t_position_mowPointIndex] = mowPointIndex;
+}
+
+void State::Point::marshal(const JsonObject &o) const
+{
+  o[_t_point_x] = x;
+  o[_t_point_y] = y;
 }

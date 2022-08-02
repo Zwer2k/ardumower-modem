@@ -11,11 +11,11 @@
   import { Router, Route, navigate } from "svelte-routing";
   import IconHelp from "carbon-icons-svelte/lib/Help16";
   import IconHome from "carbon-icons-svelte/lib/Home16";
-  import IconMap from "carbon-icons-svelte/lib/Map16";
+  //import IconMap from "carbon-icons-svelte/lib/Map16";
   import IconSettings from "carbon-icons-svelte/lib/Settings16";
 
   import DashboardRoute from "./routes/Dashboard.svelte";
-  import MapRoute from "./routes/Map.svelte";
+  //import MapRoute from "./routes/Map.svelte";
   import SettingsRoute from "./routes/Settings.svelte";
   import { Busy } from "./stores/busy";
   import SaveDiscard from "./widget/SaveDiscard.svelte";
@@ -38,12 +38,12 @@
     icon={IconHome}>
     Dashboard
   </Button>
-  <Button
+  <!-- <Button
     on:click={() => { url = "/map"; navigate(url, { replace: true }); }}
     kind="tertiary"
     icon={IconMap}>
     Map
-  </Button>
+  </Button> -->
   <div slot="skip-to-content">
     <SkipToContent />
   </div>
@@ -71,7 +71,7 @@
   <Router url="{url}">
     <div>
       <Route path="/"  component="{DashboardRoute}" />
-      <Route path="/map" component="{MapRoute}" />
+      <!-- <Route path="/map" component="{MapRoute}" /> -->
       <Route path="/settings" component="{SettingsRoute}" /> 
     </div>
   </Router>

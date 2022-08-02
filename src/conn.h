@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef ESP_MODEM_SIM
+
 #include <functional>
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -56,3 +58,5 @@ namespace ArduMower
     };
   }
 }
+
+#endif // ESP_MODEM_SIM

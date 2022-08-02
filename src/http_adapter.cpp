@@ -10,12 +10,10 @@ void respondWithCors(AsyncWebServerRequest *req, int status, String contentType,
 HttpAdapter::HttpAdapter(Router &router, AsyncWebServer &server)
     : _router(router), _server(server), requestId(0)
 {
-  _ws = new AsyncWebSocket("/ws");
 }
 
 HttpAdapter::~HttpAdapter()
 {
-  delete _ws;
   delete _metrics;
 }
 
@@ -24,9 +22,6 @@ void HttpAdapter::begin()
   _metrics = new Http::Metrics();
   _lock = xSemaphoreCreateBinary();
   xSemaphoreGive(_lock);
-  _ws->onEvent(std::bind(&ArduMower::Modem::Http::SocketHandler::wsEvent, socketHandler, std::placeholders::_1, 
-    std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
-  _server.addHandler(_ws);
   _server.on("/", HTTP_POST, std::bind(&HttpAdapter::handleCommandRequest, this, std::placeholders::_1));
   _server.on("/", HTTP_OPTIONS, std::bind(&HttpAdapter::handleCORSPreflightRequest, this, std::placeholders::_1));
   _server.on("/api/modem/reboot", HTTP_POST, std::bind(&HttpAdapter::apiReboot, this, std::placeholders::_1));

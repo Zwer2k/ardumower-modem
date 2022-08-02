@@ -16,7 +16,9 @@
 
 #include "api.h"
 #include "ble_adapter.h"
+#ifdef ESP_MODEM_SIM
 #include "conn.h"
+#endif
 #include "esp_os.h"
 #include "http_adapter.h"
 #include "looptime_monitor.h"

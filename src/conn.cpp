@@ -1,3 +1,5 @@
+#ifdef ESP_MODEM_SIM
+
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <ArduinoJson.h>
@@ -518,3 +520,5 @@ static String chipIdString()
 
   return String(chipId);
 }
+
+#endif // ESP_MODEM_SIM

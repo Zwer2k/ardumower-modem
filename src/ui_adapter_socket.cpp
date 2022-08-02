@@ -1,25 +1,58 @@
-#include "http_adapter_socket.h"
+#include "ui_adapter_socket.h"
 
 using namespace ArduMower::Modem::Http;
 
-SocketHandler::SocketHandler() 
+UiSocketItem::UiSocketItem(AsyncWebSocketClient *client, ArduMower::Domain::Robot::StateSource &source) : 
+  _client(client), _source(source) 
 {
+  sendState();
 }
 
-SocketHandler::~SocketHandler() 
+void UiSocketItem::handleData(DataType dataType, DynamicJsonDocument &jsonData)
+{
+  Log(INFO, "handle data type %d", dataType);
+}
+
+UiSocketItem::~UiSocketItem() 
 {   
 }
 
-void SocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void * arg, uint8_t *data, size_t len)
+void UiSocketItem::sendState()
+{
+  DynamicJsonDocument doc(1024);
+  doc["type"] = DataType::mowerState;
+  JsonObject data  = doc.createNestedObject("data");
+  _source.state().marshal(data);
+  
+  String strData;
+  serializeJson(doc, strData);
+  _client->printf(strData.c_str());
+}
+
+
+UiSocketHandler::UiSocketHandler(ArduMower::Domain::Robot::StateSource &source) : _source(source)
+{
+}
+
+UiSocketHandler::~UiSocketHandler() 
+{   
+}
+
+void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void * arg, uint8_t *data, size_t len)
 {
   if(type == WS_EVT_CONNECT){
     //client connected
     Log(INFO, "ws[%s][%u] connect\n", server->url(), client->id());
     client->printf("Hello Client %u :)", client->id());
     client->ping();
+    itemMap.emplace(client->id(), new UiSocketItem(client, _source));
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
     Log(INFO, "ws[%s][%u] disconnect: %u\n", server->url(), client->id());
+    if (itemMap.find(client->id()) != itemMap.end()) {
+      delete itemMap[client->id()];
+      itemMap.erase(client->id());
+    }
   } else if(type == WS_EVT_ERROR){
     //error was received from the other end
     Log(INFO, "ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
@@ -41,8 +74,11 @@ void SocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client
         }
         Log(INFO, "\n");
       }
-      if(info->opcode == WS_TEXT)
+      if(info->opcode == WS_TEXT) 
+      {
         client->text("I got your text message");
+        handleData(client->id(), (char*)data);
+      }
       else
         client->binary("I got your binary message");
     } else {
@@ -69,11 +105,35 @@ void SocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client
         if(info->final){
           Log(INFO, "ws[%s][%u] %s-message end\n", server->url(), client->id(), (info->message_opcode == WS_TEXT)?"text":"binary");
           if(info->message_opcode == WS_TEXT)
+          {
             client->text("I got your text message");
+            handleData(client->id(), (char*)data);
+          }
           else
             client->binary("I got your binary message");
         }
       }
     }
+  }
+}
+
+void UiSocketHandler::handleData(uint32_t clientId, char *data) 
+{
+  DynamicJsonDocument doc(strlen(data) * 2);
+  DeserializationError error = deserializeJson(doc, data);
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
+    return;
+  }
+
+  if (itemMap.find(clientId) != itemMap.end())
+  {
+    DynamicJsonDocument jsonData = doc["data"];
+    itemMap[clientId]->handleData(doc["type"], jsonData);
+  } 
+  else 
+  {
+    Log(ERR, "client with id ", clientId, " don't exists");
   }
 }

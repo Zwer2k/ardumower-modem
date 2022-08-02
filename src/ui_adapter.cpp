@@ -11,8 +11,14 @@ UiAdapter::UiAdapter(Api::Api &api,
                      Settings::Settings &settings,
                      AsyncWebServer &server,
                      ArduMower::Domain::Robot::StateSource &source)
-    : Common(settings), _api(api), _settings(settings), _server(server), _source(source)
+    : Common(settings), _api(api), _settings(settings), _server(server), _source(source), socketHandler(UiSocketHandler(_source))
 {
+  _ws = new AsyncWebSocket("/ws");
+}
+
+UiAdapter::~UiAdapter()
+{
+  delete _ws;
 }
 
 void UiAdapter::begin()
@@ -31,6 +37,10 @@ void UiAdapter::begin()
 
   _server.on("/api/robot/desired_state", HTTP_GET, std::bind(&UiAdapter::handleApiGetRobotDesiredState, this, std::placeholders::_1));
 
+  _ws->onEvent(std::bind(&ArduMower::Modem::Http::UiSocketHandler::wsEvent, socketHandler, std::placeholders::_1, 
+    std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
+  _server.addHandler(_ws);
+  
   _server.onNotFound(std::bind(&UiAdapter::handleRequest, this, std::placeholders::_1));
 }
 

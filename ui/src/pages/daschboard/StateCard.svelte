@@ -1,11 +1,12 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-
+    
     let socket;
     onMount(async () => {
         socket = new WebSocket("ws://192.168.43.173/ws")
         socket.addEventListener("open", ()=> {
-            console.log("Opened")
+            console.log("Opened");
+            sendMessage({ type: 1, data: { abc: 1 }});
         });
 
         socket.addEventListener('close', function (event) {
@@ -17,6 +18,12 @@
             console.log("message: ", message)
         });
     });
+
+    const sendMessage = (message) => {
+        if (socket.readyState <= 1) {
+            socket.send(JSON.stringify(message));
+        }
+    }
 </script>
 
 <article class="contact-card">
