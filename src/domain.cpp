@@ -2,7 +2,6 @@
 
 using namespace ArduMower::Domain::Robot;
 
-const char * _t_state_timestamp = "timestamp";
 const char * _t_state_batteryVoltage = "battery_voltage";
 const char * _t_state_position = "position";
 const char * _t_state_target = "target";
@@ -67,15 +66,14 @@ bool State::Point::operator==(const Point &other)
 
 void State::State::marshal(const JsonObject &o) const
 {
-  o[_t_state_timestamp] = timestamp;
-  o[_t_state_batteryVoltage] = batteryVoltage;
+  o[_t_state_batteryVoltage] = serialized(String(batteryVoltage, 2));
   o.createNestedObject(_t_state_position);
   position.marshal(o[_t_state_position]);
   o.createNestedObject(_t_state_target);
   target.marshal(o[_t_state_target]);
   o[_t_state_job] = job;
   o[_t_state_sensor] = sensor;
-  o[_t_state_amps] = amps;
+  o[_t_state_amps] = serialized(String(amps, 2));
   o[_t_state_mapCrc] = mapCrc;
 }
 
@@ -88,12 +86,12 @@ void State::Position::marshal(const JsonObject &o) const
   o[_t_position_visibleSatellites] = visibleSatellites;
   o[_t_position_visibleSatellitesDgps] = visibleSatellitesDgps;
   o[_t_position_mowPointIndex] = mowPointIndex;
-  o[_t_point_x] = x;
-  o[_t_point_y] = y;
+  o[_t_point_x] = serialized(String(x, 8));
+  o[_t_point_y] = serialized(String(y, 8));
 }
 
 void State::Point::marshal(const JsonObject &o) const
 {
-  o[_t_point_x] = x;
-  o[_t_point_y] = y;
+  o[_t_point_x] = serialized(String(x, 8));
+  o[_t_point_y] = serialized(String(y, 8));
 }

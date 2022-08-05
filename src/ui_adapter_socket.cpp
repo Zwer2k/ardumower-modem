@@ -1,11 +1,17 @@
 #include "ui_adapter_socket.h"
+#include "json.h"
+
+uint32_t defaultStateUpdateInterval = 10000;
 
 using namespace ArduMower::Modem::Http;
 
-UiSocketItem::UiSocketItem(AsyncWebSocketClient *client, ArduMower::Domain::Robot::StateSource &source) : 
-  _client(client), _source(source) 
+UiSocketItem::UiSocketItem(
+  UiSocketHandler *socketHandler,
+  AsyncWebSocketClient *client, 
+  ArduMower::Domain::Robot::StateSource &source) 
+  : _socketHandler(socketHandler), _client(client), _source(source) 
 {
-  sendState();
+  //_socketHandler->sendState(this);
 }
 
 void UiSocketItem::handleData(DataType dataType, DynamicJsonDocument &jsonData)
@@ -17,20 +23,15 @@ UiSocketItem::~UiSocketItem()
 {   
 }
 
-void UiSocketItem::sendState()
+void UiSocketItem::sendText(String text)
 {
-  DynamicJsonDocument doc(1024);
-  doc["type"] = DataType::mowerState;
-  JsonObject data  = doc.createNestedObject("data");
-  _source.state().marshal(data);
-  
-  String strData;
-  serializeJson(doc, strData);
-  _client->printf(strData.c_str());
+  _client->printf(text.c_str());
 }
 
-
-UiSocketHandler::UiSocketHandler(ArduMower::Domain::Robot::StateSource &source) : _source(source)
+UiSocketHandler::UiSocketHandler(
+  ArduMower::Domain::Robot::StateSource &source,
+  ArduMower::Domain::Robot::CommandExecutor &cmd) 
+  : _source(source), _cmd(cmd)
 {
 }
 
@@ -40,10 +41,41 @@ UiSocketHandler::~UiSocketHandler()
 
 void UiSocketHandler::loop()
 {
+  auto state = _source.state();
+
+  if ((uint32_t)(millis() - defaultStateUpdateInterval) > state.timestamp) {
+    if ((newDataRequestTimestamp > 0) && ((uint32_t)(millis() - defaultStateUpdateInterval) < newDataRequestTimestamp)) 
+      return;
+    _cmd.requestStatus();
+    newDataRequestTimestamp = millis();
+  } 
+  else if ((state.timestamp != 0) && (state.timestamp != oldStateTimestamp)) {
+    newDataRequestTimestamp = 0;
+    sendState();  
+    oldStateTimestamp = state.timestamp;
+  } 
 }
 
-void UiSocketHandler::sendState()
+void UiSocketHandler::sendState(UiSocketItem *sendTo)
 {
+  auto state = _source.state();
+
+  DynamicJsonDocument doc(1024);
+  doc["type"] = DataType::mowerState; 
+  state.marshal(doc.createNestedObject("data"));
+
+  String stateStr;
+  serializeJson(doc, stateStr);
+  Log(INFO, stateStr.c_str());
+
+  if (sendTo != NULL) {
+    sendTo->sendText(stateStr);
+  } else {
+    for (auto it = itemMap.begin(); it != itemMap.end(); ++it) {
+      Log(INFO, "send to client %d %s", it->first, stateStr.c_str()); 
+      it->second->sendText(stateStr);
+    }
+  }
 } 
 
 void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void * arg, uint8_t *data, size_t len)
@@ -53,10 +85,10 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     Log(INFO, "ws[%s][%u] connect\n", server->url(), client->id());
     client->printf("Hello Client %u :)", client->id());
     client->ping();
-    itemMap.emplace(client->id(), new UiSocketItem(client, _source));
+    itemMap[client->id()] = new UiSocketItem(this, client, _source);
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
-    Log(INFO, "ws[%s][%u] disconnect: %u\n", server->url(), client->id());
+    Log(INFO, "ws[%s][%u] disconnect\n", server->url(), client->id());
     if (itemMap.find(client->id()) != itemMap.end()) {
       delete itemMap[client->id()];
       itemMap.erase(client->id());
@@ -84,7 +116,6 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
       }
       if(info->opcode == WS_TEXT) 
       {
-        client->text("I got your text message");
         handleData(client->id(), (char*)data);
       }
       else

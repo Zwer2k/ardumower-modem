@@ -25,7 +25,7 @@
   let helpOpen = false;
 
   const help = () => (helpOpen = true);
-  export let url = "/";
+  export let url;
 </script>
 
 {#if $Busy}

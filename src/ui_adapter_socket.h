@@ -18,37 +18,48 @@ namespace ArduMower
         mowerStats,
       };
 
+      class UiSocketHandler;
+
       class UiSocketItem
       {
-      private:
-        AsyncWebSocketClient *_client;
-        ArduMower::Domain::Robot::StateSource &_source;
-        
       public:
-        UiSocketItem(AsyncWebSocketClient *client, ArduMower::Domain::Robot::StateSource &source);
+        UiSocketItem(
+          UiSocketHandler *socketHandler,
+          AsyncWebSocketClient *client, 
+          ArduMower::Domain::Robot::StateSource &source);
         void handleData(DataType dataType, DynamicJsonDocument &jsonData);
-        void sendState();
+        void sendText(String text);
 
         ~UiSocketItem();
-      };
       
+      private:
+        UiSocketHandler *_socketHandler;
+        AsyncWebSocketClient *_client;
+        ArduMower::Domain::Robot::StateSource &_source;
+      };      
 
       class UiSocketHandler
       {
-      private:
-        ArduMower::Domain::Robot::StateSource &_source;
-
-        void handleData(uint32_t clientId, char *data);
-        std::map<uint32_t, UiSocketItem*> itemMap;
-
       public:
-        UiSocketHandler(ArduMower::Domain::Robot::StateSource &source);
+        UiSocketHandler(
+          ArduMower::Domain::Robot::StateSource &source,
+          ArduMower::Domain::Robot::CommandExecutor &cmd);
         
         void loop();
-        void sendState();
+        void sendState(UiSocketItem *sendTo = NULL);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
         ~UiSocketHandler();
+      
+      private:
+        uint32_t oldStateTimestamp = 0;
+        uint32_t newDataRequestTimestamp = 0;
+
+        ArduMower::Domain::Robot::StateSource &_source;
+        ArduMower::Domain::Robot::CommandExecutor &_cmd;
+
+        void handleData(uint32_t clientId, char *data);
+        std::map<uint32_t, UiSocketItem*> itemMap;  
       };
     }
   }

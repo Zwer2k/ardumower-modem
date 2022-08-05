@@ -22,8 +22,8 @@ namespace ArduMower
         UiAdapter(Api::Api &api,
                   Settings::Settings &settings,
                   AsyncWebServer &server,
-                  ArduMower::Domain::Robot::StateSource &source
-                  );
+                  ArduMower::Domain::Robot::StateSource &source,
+                  ArduMower::Domain::Robot::CommandExecutor &cmd);
         void begin();
         void loop();
 
@@ -34,6 +34,7 @@ namespace ArduMower
         Settings::Settings &_settings;
         AsyncWebServer &_server;
         ArduMower::Domain::Robot::StateSource &_source;
+        ArduMower::Domain::Robot::CommandExecutor &_cmd;
         AsyncCallbackJsonWebHandler *_settingsHandler;
         AsyncWebSocket *_ws;
         UiSocketHandler socketHandler;

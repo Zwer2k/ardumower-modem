@@ -76,7 +76,7 @@ Cli modemCli(router);
 // ArduMower protocol interpreter, keeps state
 MowerAdapter mowerAdapter(settings, router);
 // serves the web frontend
-Http::UiAdapter ui(api, settings, webServer.server(), mowerAdapter);
+Http::UiAdapter ui(api, settings, webServer.server(), mowerAdapter, mowerAdapter);
 // publish state on MQTT, receive commands on MQTT
 MqttAdapter mqttAdapter(settings, router, mowerAdapter, mowerAdapter);
 // metrics available for use with Prometheus

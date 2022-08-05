@@ -40,7 +40,7 @@ String Json::encode(State::State &s)
 {
   String result;
   DynamicJsonDocument doc(1024);
-  s.marshal(doc.as<JsonObject>());
+  s.marshal(doc.to<JsonObject>());
   serializeJson(doc, result);
   
   return result;

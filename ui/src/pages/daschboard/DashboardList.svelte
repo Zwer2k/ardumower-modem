@@ -6,19 +6,20 @@
     let state: State = null;
 
     let socket;
-    onMount(async () => {
-        socket = new WebSocket("ws://192.168.43.173/ws")
+    function createSocket() {
+        let host = location.hostname;
+        socket = new WebSocket("ws://" + (((host == "[::1]") || (host == "127.0.0.1")) ? "192.168.43.186" : host) + "/ws")
         socket.addEventListener("open", ()=> {
-            console.log("Opened");
-            sendMessage({ type: 1, data: { abc: 1 }});
+            console.log("socket open");
         });
 
-        socket.addEventListener('close', function (event) {
-            console.log("It's close");
+        socket.addEventListener('close', () => {
+            console.log("socket close");
+            createSocket();
         });
 
         socket.addEventListener("message", (message: any) => {
-            console.log("message: ", message.data)
+            //console.log("message: ", message.data)
             try {
                 let jsonData = JSON.parse(message.data);
                 console.log("parsed: ", jsonData)
@@ -34,7 +35,14 @@
                 console.log("can't parse");
             }
         });
-    });
+
+        setTimeout(() => {
+            if (socket.readyState != 1)
+                createSocket();
+        }, 5000);
+    }
+    
+    onMount(async () => { createSocket(); });
 
     const sendMessage = (message) => {
         if (socket.readyState <= 1) {

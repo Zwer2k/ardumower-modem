@@ -9,7 +9,6 @@ import type { State } from "../../model";
 
     {#if state != null}
         <div class="item-list">
-            <div class="label">Updateted:</div><div>{state.timestamp}</div>
             <div class="label">Battery:</div><div>{state.battery_voltage}V/{state.amps}A</div>
             <div class="label">Position</div><div>{state.position.x}E {state.position.x}N</div>
             <div class="label">Updateted</div><div>{state.job}</div>
