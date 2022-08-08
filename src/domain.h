@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <inttypes.h>
 #include <ArduinoJson.h>
-
+#include <vector>
 
 namespace ArduMower
 {
@@ -126,6 +126,13 @@ namespace ArduMower
           int sensor;
           float amps;
           int mapCrc;
+
+          static const byte jobDescLen = 5;
+          static const char* jobDesc[jobDescLen];
+
+          static const byte posSolutionDescLen = 3;
+          static const char* posSolutionDesc[posSolutionDescLen];
+
 
           State()
               : batteryVoltage(0), job(0), sensor(0), amps(0), mapCrc(0)

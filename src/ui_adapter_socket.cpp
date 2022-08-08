@@ -11,7 +11,7 @@ UiSocketItem::UiSocketItem(
   ArduMower::Domain::Robot::StateSource &source) 
   : _socketHandler(socketHandler), _client(client), _source(source) 
 {
-  //_socketHandler->sendState(this);
+  _socketHandler->sendState(this);
 }
 
 void UiSocketItem::handleData(DataType dataType, DynamicJsonDocument &jsonData)
@@ -59,6 +59,8 @@ void UiSocketHandler::loop()
 void UiSocketHandler::sendState(UiSocketItem *sendTo)
 {
   auto state = _source.state();
+  if (state.timestamp == 0) 
+    return;
 
   DynamicJsonDocument doc(1024);
   doc["type"] = DataType::mowerState; 
@@ -83,7 +85,27 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
   if(type == WS_EVT_CONNECT){
     //client connected
     Log(INFO, "ws[%s][%u] connect\n", server->url(), client->id());
-    client->printf("Hello Client %u :)", client->id());
+    DynamicJsonDocument doc(1024);
+    doc["type"] = DataType::hello;
+    doc["client"] = client->id();
+    JsonObject valueDescriptions = doc.createNestedObject("data");
+    JsonObject newObj = valueDescriptions.createNestedObject("job");
+    int i = 0; 
+    for (const char *item: ArduMower::Domain::Robot::State::State::jobDesc) {
+      newObj[String(i++)] = item;
+    }
+
+    newObj = valueDescriptions.createNestedObject("posSolution");
+    i = 0;
+    for (const char *item: ArduMower::Domain::Robot::State::State::posSolutionDesc) {
+      newObj[String(i++)] = item;
+    }
+
+    String dataStr;
+    serializeJson(doc, dataStr);
+    Log(INFO, dataStr.c_str());
+    client->text(dataStr.c_str());
+
     client->ping();
     itemMap[client->id()] = new UiSocketItem(this, client, _source);
   } else if(type == WS_EVT_DISCONNECT){

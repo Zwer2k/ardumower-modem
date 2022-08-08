@@ -1,7 +1,8 @@
 <script lang="ts">
-import type { State } from "../../model";
+import type { State, ValueDescriptions } from "../../model";
 
     export let state: State = null;
+    export let valueDescriptions: ValueDescriptions = null;
 </script>
 
 <article class="contact-card">
@@ -10,7 +11,12 @@ import type { State } from "../../model";
     {#if state != null}
         <div class="item-list">
             <div class="label">Battery:</div><div>{state.battery_voltage}V/{state.amps}A</div>
-            <div class="label">Position</div><div>{state.position.x}E {state.position.x}N</div>
+            <div class="label">Position</div><div>{state.position.x}E {state.position.y}N</div>
+            <div class="label">Satelite</div>
+            <div>
+                {valueDescriptions.posSolution[state.position.solution]}/{state.position.age.toFixed(1)}s/{state.position.accuracy}m 
+                #{state.position.visible_satellites}/{state.position.visible_satellites_dgps}
+            </div>
             <div class="label">Updateted</div><div>{state.job}</div>
         </div>
     {/if}

@@ -14,7 +14,8 @@ namespace ArduMower
     namespace Http
     {
       enum DataType {
-        mowerState = 1,
+        hello = 0,
+        mowerState,
         mowerStats,
       };
 

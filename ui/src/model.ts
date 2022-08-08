@@ -106,6 +106,11 @@ export interface Position extends Point {
   mow_point_index: number;
 }
 
+export interface ValueDescriptions {
+  job: { [jobId: number]: string };
+  posSolution: { [jobId: number]: string };  
+}
+
 export interface State {
   timestamp: number;
   battery_voltage: number;
@@ -118,7 +123,8 @@ export interface State {
 }
 
 export enum DataType {
-  mowerState = 1,
+  hello = 0,
+  mowerState,
   mowerStats,
 };
 

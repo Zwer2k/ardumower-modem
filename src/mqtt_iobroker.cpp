@@ -69,28 +69,13 @@ bool Adapter::publishState(ArduMower::Domain::Robot::State::State state)
     dtostrf(batteryVoltageToLevel2(state.batteryVoltage), 3, 1, cfloat); 
     if (!iobClient->publish(topicCreate("/iob/stats/battery_level").c_str(), cfloat)) return false;
 
-    itoa(state.job, cint, 10);
-    switch (state.job)
-    {
-      case 0:
-        if (!iobClient->publish(topicCreate("/iob/stats/job").c_str(), "idle")) return false;
-        break;
-      case 1:
-        if (!iobClient->publish(topicCreate("/iob/stats/job").c_str(), "mow")) return false;
-        break;
-      case 2:
-        if (!iobClient->publish(topicCreate("/iob/stats/job").c_str(), "charge")) return false;
-        break;
-      case 3:
-        if (!iobClient->publish(topicCreate("/iob/stats/job").c_str(), "error")) return false;
-        break;
-      case 4:
-        if (!iobClient->publish(topicCreate("/iob/stats/job").c_str(), "dock")) return false;
-        break;
-      default:
+    if ((state.job >= 0 ) || (state.job <= ArduMower::Domain::Robot::State::State::jobDescLen )) {
+      if (!iobClient->publish(topicCreate("/iob/stats/job").c_str(), ArduMower::Domain::Robot::State::State::jobDesc[state.job])) return false;
+    } else {
+      itoa(state.job, cint, 10);
         if (!iobClient->publish(topicCreate("/iob/stats/job").c_str(), cint)) return false;
-        break; 
-    }    
+        
+    }
 
     itoa(state.sensor, cint, 10);
     if (!iobClient->publish(topicCreate("/iob/stats/sensor").c_str(), cint)) return false;
@@ -113,19 +98,8 @@ bool Adapter::publishState(ArduMower::Domain::Robot::State::State state)
     dtostrf(state.position.delta, 3, 2, cfloat); 
     if (!iobClient->publish(topicCreate("/iob/stats/position/delta").c_str(), cfloat)) return false;
 
-    itoa(state.position.solution, cint, 10);
-    switch (state.position.solution)
-    {
-      case 0:
-        if (!iobClient->publish(topicCreate("/iob/stats/position/solution").c_str(), "invalid")) return false;
-        
-      case 1:
-        if (!iobClient->publish(topicCreate("/iob/stats/position/solution").c_str(), "float")) return false;
-        break;
-      case 2:
-        if (!iobClient->publish(topicCreate("/iob/stats/position/solution").c_str(), "fix")) return false;
-        break;
-    }
+    if (!iobClient->publish(topicCreate("/iob/stats/position/solution").c_str(), 
+      ArduMower::Domain::Robot::State::State::posSolutionDesc[state.position.solution])) return false;
  
     dtostrf(state.position.age, 3, 2, cfloat); 
     if (!iobClient->publish(topicCreate("/iob/stats/position/age").c_str(), cfloat)) return false;

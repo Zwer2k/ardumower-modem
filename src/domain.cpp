@@ -49,6 +49,9 @@ bool Stats::Obstacles::operator==(const Obstacles &other)
   return same(other, count) && same(other, sonar) && same(other, bumper) && same(other, gpsMotionLow);
 }
 
+const char* State::State::jobDesc[State::State::jobDescLen] = { "idle", "mow", "charge", "error", "dock" };
+const char* State::State::posSolutionDesc[State::State::posSolutionDescLen] = { "invalid", "float", "fix" };
+
 bool State::State::operator==(const State &other)
 {
   return same(other, timestamp) && same(other, batteryVoltage) && same(other, position) && same(other, target) && same(other, job) && same(other, sensor) && same(other, amps) && same(other, mapCrc);

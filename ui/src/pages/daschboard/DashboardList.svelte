@@ -1,8 +1,9 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
     import { onMount } from 'svelte';
-    import { DataType, SocketMessage, State } from "../../model";
+    import { DataType, SocketMessage, State, ValueDescriptions } from "../../model";
 
+    let valueDescriptions: ValueDescriptions = null;
     let state: State = null;
 
     let socket;
@@ -25,6 +26,9 @@
                 console.log("parsed: ", jsonData)
 
                 switch (jsonData.type) {
+                    case DataType.hello:
+                        valueDescriptions = jsonData.data as ValueDescriptions;
+                        break;
                     case DataType.mowerState:
                         state = jsonData.data as State;
                         break
@@ -51,4 +55,4 @@
     }
 </script>
 
-<StateCard bind:state={state}/>
+<StateCard bind:state={state} bind:valueDescriptions={valueDescriptions}/>
