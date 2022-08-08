@@ -19,8 +19,13 @@ const char * _t_position_visibleSatellitesDgps = "visible_satellites_dgps";
 const char * _t_position_mowPointIndex = "mow_point_index";
 
 const char * _t_point_x = "x";
-const char * _t_point_y ="y";
+const char * _t_point_y = "y";
 
+const char * _t_desiredState_speed = "speed";
+const char * _t_desiredState_mowerMotorEnabled = "mower_motor_enabled";
+const char * _t_desiredState_finishAndRestart = "finish_and_restart";
+const char * _t_desiredState_op = "op";
+const char * _t_desiredState_fixTimeout = "fix_timeout";
 
 #define same(other, prop) (prop == other.prop)
 
@@ -97,4 +102,14 @@ void State::Point::marshal(const JsonObject &o) const
 {
   o[_t_point_x] = serialized(String(x, 8));
   o[_t_point_y] = serialized(String(y, 8));
+}
+
+
+void DesiredState::marshal(const JsonObject &o) const
+{
+  o[_t_desiredState_speed] = speed;
+  o[_t_desiredState_mowerMotorEnabled] = mowerMotorEnabled;
+  o[_t_desiredState_finishAndRestart] = finishAndRestart;
+  o[_t_desiredState_op] = op;
+  o[_t_desiredState_fixTimeout] = fixTimeout;
 }

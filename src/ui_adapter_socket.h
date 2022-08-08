@@ -17,6 +17,8 @@ namespace ArduMower
         hello = 0,
         mowerState,
         mowerStats,
+        desiredState,
+        dataType_length
       };
 
       class UiSocketHandler;
@@ -47,13 +49,13 @@ namespace ArduMower
           ArduMower::Domain::Robot::CommandExecutor &cmd);
         
         void loop();
-        void sendState(UiSocketItem *sendTo = NULL);
+        void sendData(DataType dataType, UiSocketItem *sendTo = NULL);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
         ~UiSocketHandler();
       
       private:
-        uint32_t oldStateTimestamp = 0;
+        uint32_t oldDataTimestamp[DataType::dataType_length];
         uint32_t newDataRequestTimestamp = 0;
 
         ArduMower::Domain::Robot::StateSource &_source;
@@ -61,6 +63,10 @@ namespace ArduMower
 
         void handleData(uint32_t clientId, char *data);
         std::map<uint32_t, UiSocketItem*> itemMap;  
+
+        void stateRequestLoop();
+        template<typename T>
+        void sendData(UiSocketItem *sendTo, DataType dataType, T data);
       };
     }
   }

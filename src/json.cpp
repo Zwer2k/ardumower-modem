@@ -74,14 +74,8 @@ String Json::encode(DesiredState &d)
 {
   String result;
   DynamicJsonDocument doc(1024);
-
-  doc["speed"] = d.speed;
-  doc["mower_motor_enabled"] = d.mowerMotorEnabled;
-  doc["finish_and_restart"] = d.finishAndRestart;
-  doc["op"] = d.op;
-  doc["fix_timeout"] = d.fixTimeout;
-
+  d.marshal(doc.to<JsonObject>());
   serializeJson(doc, result);
-
+  
   return result;
 }

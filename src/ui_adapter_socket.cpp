@@ -11,7 +11,8 @@ UiSocketItem::UiSocketItem(
   ArduMower::Domain::Robot::StateSource &source) 
   : _socketHandler(socketHandler), _client(client), _source(source) 
 {
-  _socketHandler->sendState(this);
+  _socketHandler->sendData(DataType::mowerState, this);
+  _socketHandler->sendData(DataType::desiredState, this);
 }
 
 void UiSocketItem::handleData(DataType dataType, DynamicJsonDocument &jsonData)
@@ -33,6 +34,9 @@ UiSocketHandler::UiSocketHandler(
   ArduMower::Domain::Robot::CommandExecutor &cmd) 
   : _source(source), _cmd(cmd)
 {
+  for (int i; i < DataType::dataType_length; i++) {
+    oldDataTimestamp[i] = 0;
+  }
 }
 
 UiSocketHandler::~UiSocketHandler() 
@@ -40,6 +44,13 @@ UiSocketHandler::~UiSocketHandler()
 }
 
 void UiSocketHandler::loop()
+{
+   stateRequestLoop();
+   sendData(DataType::mowerState);
+   sendData(DataType::desiredState);
+}
+
+void UiSocketHandler::stateRequestLoop()
 {
   auto state = _source.state();
 
@@ -49,22 +60,32 @@ void UiSocketHandler::loop()
     _cmd.requestStatus();
     newDataRequestTimestamp = millis();
   } 
-  else if ((state.timestamp != 0) && (state.timestamp != oldStateTimestamp)) {
-    newDataRequestTimestamp = 0;
-    sendState();  
-    oldStateTimestamp = state.timestamp;
-  } 
 }
 
-void UiSocketHandler::sendState(UiSocketItem *sendTo)
+void UiSocketHandler::sendData(DataType dataType, UiSocketItem *sendTo)
 {
-  auto state = _source.state();
-  if (state.timestamp == 0) 
-    return;
+  switch (dataType) {
+    case DataType::mowerState:
+      sendData(sendTo, dataType, _source.state());
+      break;
+    case DataType::desiredState:
+      sendData(sendTo, dataType, _source.desiredState());
+      break;
+  }
+}
+
+template<typename T>
+void UiSocketHandler::sendData(UiSocketItem *sendTo, DataType dataType, T data)
+{
+  if ((data.timestamp == 0) || (data.timestamp == oldDataTimestamp[DataType::mowerState])) {
+    return;  
+  }
+
+  newDataRequestTimestamp = 0;
 
   DynamicJsonDocument doc(1024);
-  doc["type"] = DataType::mowerState; 
-  state.marshal(doc.createNestedObject("data"));
+  doc["type"] = dataType; 
+  data.marshal(doc.createNestedObject("data"));
 
   String stateStr;
   serializeJson(doc, stateStr);
@@ -78,7 +99,9 @@ void UiSocketHandler::sendState(UiSocketItem *sendTo)
       it->second->sendText(stateStr);
     }
   }
-} 
+
+  oldDataTimestamp[dataType] = data.timestamp;
+}
 
 void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void * arg, uint8_t *data, size_t len)
 {

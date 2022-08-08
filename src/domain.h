@@ -148,6 +148,7 @@ namespace ArduMower
       class DesiredState
       {
       public:
+        uint32_t timestamp;
         float speed;
         bool mowerMotorEnabled;
         bool finishAndRestart;
@@ -155,6 +156,7 @@ namespace ArduMower
         int fixTimeout;
 
         DesiredState() : speed(0), mowerMotorEnabled(false), finishAndRestart(false), op(-1), fixTimeout(-1){};
+        void marshal(const JsonObject &o) const;
       };
 
       class StateSource

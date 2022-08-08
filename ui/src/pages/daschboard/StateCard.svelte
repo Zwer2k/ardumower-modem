@@ -17,7 +17,7 @@ import type { State, ValueDescriptions } from "../../model";
                 {valueDescriptions.posSolution[state.position.solution]}/{state.position.age.toFixed(1)}s/{state.position.accuracy}m 
                 #{state.position.visible_satellites}/{state.position.visible_satellites_dgps}
             </div>
-            <div class="label">Updateted</div><div>{state.job}</div>
+            <div class="label">State</div><div>{valueDescriptions.job[state.job]}</div>
         </div>
     {/if}
 </article>

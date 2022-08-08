@@ -422,6 +422,7 @@ void MowerAdapter::parseStateResponse(String line)
 void MowerAdapter::parseATCCommand(String line)
 {
   Log(DBG, "MowerAdapter::parseATCCommand");
+  const auto now = millis();
 
   processCSVResponse(
       line,
@@ -458,6 +459,8 @@ void MowerAdapter::parseATCCommand(String line)
           break;
         }
       });
+
+  _desiredState.timestamp = now;
 }
 
 bool MowerAdapter::assertSendIsInitialized()
