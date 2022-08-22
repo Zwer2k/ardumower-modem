@@ -66,7 +66,7 @@ void RelayAdapter::setupAuthorizationHeader()
 
   String authValue = "Basic " + String((char *)encoded);
   client.addHeader("Authorization", authValue);
-  free(encoded);
+  //free(encoded);
 }
 
 void RelayAdapter::loop()

@@ -1,6 +1,11 @@
 #pragma once
 
 #include <Arduino.h>
+#include "logToUi.h"
+
+#ifndef LOG_CON
+#define LOG_CON logToUi
+#endif 
 
 #ifndef LOG_CON
 #define LOG_CON Serial
@@ -24,9 +29,16 @@
 #endif
 
 #define DEBUG(...)  LOG_CON.printf(__VA_ARGS__)
-#define Log(X, ...) if((DEBUG_LEVEL & X) == X) \
-                                  { \
-                                    DEBUG("%.3f %d ", millis() / 1000.0, X); \
-                                    DEBUG(__VA_ARGS__); \
-                                    DEBUG("%s", "\r\n"); \
-                                  }
+#if LOG_CON == logToUi
+  #define Log(X, ...) if((DEBUG_LEVEL & X) == X) \
+                                    { \
+                                      DEBUG(__VA_ARGS__); \
+                                    }
+#else
+  #define Log(X, ...) if((DEBUG_LEVEL & X) == X) \
+                                    { \
+                                      DEBUG("%.3f %d ", millis() / 1000.0, X); \
+                                      DEBUG(__VA_ARGS__); \
+                                      DEBUG("%s", "\r\n"); \
+                                    }
+#endif

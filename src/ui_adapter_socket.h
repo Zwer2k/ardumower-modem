@@ -18,6 +18,7 @@ namespace ArduMower
         mowerState,
         mowerStats,
         desiredState,
+        modemLog,
         dataType_length
       };
 
@@ -32,6 +33,7 @@ namespace ArduMower
           ArduMower::Domain::Robot::StateSource &source);
         void handleData(DataType dataType, DynamicJsonDocument &jsonData);
         void sendText(String text);
+        void pingClients();
 
         ~UiSocketItem();
       
@@ -45,19 +47,24 @@ namespace ArduMower
       {
       public:
         UiSocketHandler(
+          AsyncWebSocket *ws,
           ArduMower::Domain::Robot::StateSource &source,
           ArduMower::Domain::Robot::CommandExecutor &cmd);
         
         void loop();
-        void sendData(DataType dataType, UiSocketItem *sendTo = NULL);
+        void sendData(DataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
+        void logToUiLoop();
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
         ~UiSocketHandler();
       
       private:
-        uint32_t oldDataTimestamp[DataType::dataType_length];
-        uint32_t newDataRequestTimestamp = 0;
+        AsyncWebSocket *_ws;
 
+        uint32_t oldDataTimestamp[DataType::dataType_length];
+        uint32_t lastDataRequestTimestamp[DataType::dataType_length];
+        uint32_t lastclientPing = 0;
+        
         ArduMower::Domain::Robot::StateSource &_source;
         ArduMower::Domain::Robot::CommandExecutor &_cmd;
 
@@ -66,7 +73,8 @@ namespace ArduMower
 
         void stateRequestLoop();
         template<typename T>
-        void sendData(UiSocketItem *sendTo, DataType dataType, T data);
+        void sendData(UiSocketItem *sendTo, DataType dataType, T data, bool force = false);
+        void pingClients();
       };
     }
   }

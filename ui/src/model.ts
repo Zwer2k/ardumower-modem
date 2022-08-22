@@ -122,10 +122,22 @@ export interface State {
   map_crc: number;
 }
 
+export interface DesiredState {
+  speed: number;
+  mower_motor_enabled: boolean;
+  finish_and_restart: boolean;
+  op: number;
+  fix_timeout: number;
+}
+
+export interface ConsoleLog { [line: string]: string }
+
 export enum DataType {
   hello = 0,
   mowerState,
   mowerStats,
+  desiredState,
+  modemLog,
 };
 
 export interface SocketMessage {

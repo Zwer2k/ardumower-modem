@@ -1,10 +1,14 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
     import { onMount } from 'svelte';
-    import { DataType, SocketMessage, State, ValueDescriptions } from "../../model";
-
+    import { ConsoleLog, DataType, DesiredState, State, ValueDescriptions } from "../../model";
+import Console from "./Console.svelte";
+import { Accordion } from "carbon-components-svelte";
+    
     let valueDescriptions: ValueDescriptions = null;
     let state: State = null;
+    let desiredState: DesiredState = null; 
+    let modemLog: any;
 
     let socket;
     function createSocket() {
@@ -23,7 +27,7 @@
             //console.log("message: ", message.data)
             try {
                 let jsonData = JSON.parse(message.data);
-                console.log("parsed: ", jsonData)
+                //console.log("parsed: ", jsonData)
 
                 switch (jsonData.type) {
                     case DataType.hello:
@@ -31,6 +35,12 @@
                         break;
                     case DataType.mowerState:
                         state = jsonData.data as State;
+                        break
+                    case DataType.desiredState:
+                        desiredState = jsonData.data as DesiredState;
+                        break
+                    case DataType.modemLog:
+                        modemLog = jsonData.data as ConsoleLog;
                         break
                     default:
                         console.log("unknown data type");
@@ -48,11 +58,16 @@
     
     onMount(async () => { createSocket(); });
 
-    const sendMessage = (message) => {
-        if (socket.readyState <= 1) {
-            socket.send(JSON.stringify(message));
+    const sendText = (text) => {
+        if (socket.readyState == socket.OPEN) {
+            socket.send(text);
         }
     }
 </script>
 
-<StateCard bind:state={state} bind:valueDescriptions={valueDescriptions}/>
+<Accordion>
+{#if valueDescriptions != null}
+    <StateCard bind:state={state} bind:desiredState={desiredState} bind:valueDescriptions={valueDescriptions}/>
+    <Console bind:logData={modemLog}/>
+{/if}
+</Accordion>

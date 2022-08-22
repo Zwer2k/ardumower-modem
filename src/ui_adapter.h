@@ -37,7 +37,7 @@ namespace ArduMower
         ArduMower::Domain::Robot::CommandExecutor &_cmd;
         AsyncCallbackJsonWebHandler *_settingsHandler;
         AsyncWebSocket *_ws;
-        UiSocketHandler socketHandler;
+        UiSocketHandler *socketHandler;
 
         void handleRequest(AsyncWebServerRequest *request);
         bool servePath(AsyncWebServerRequest *request, const String &path);

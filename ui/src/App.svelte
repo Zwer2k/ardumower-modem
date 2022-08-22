@@ -25,7 +25,7 @@
   let helpOpen = false;
 
   const help = () => (helpOpen = true);
-  export let url;
+  let url;
 </script>
 
 {#if $Busy}
@@ -36,7 +36,7 @@
     on:click={() => { url = "/"; navigate(url, { replace: true }); }}
     kind="tertiary"
     icon={IconHome}>
-    Dashboard
+    <!-- <div class="big">Dashboard</div> -->
   </Button>
   <!-- <Button
     on:click={() => { url = "/map"; navigate(url, { replace: true }); }}
@@ -78,7 +78,26 @@
 </Content>
 
 <style>
+
+  :global(.bx--body--with-modal-open) {
+    padding: 2rem;
+  }
+
+  :global(.bx--header) {
+    width: 100vw;
+  }
+
   :global(.bx--toggle-input__label .bx--toggle__switch) {
     margin-top: 0.5rem !important;
+  }
+
+  @media only screen and ( max-width: 500px ) {
+    :global(#main-content) {
+      padding: 0;
+    }
+  }
+
+  :global(.big) {
+    display: none;
   }
 </style>
