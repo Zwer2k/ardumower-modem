@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef LOG_H
+#define LOG_H 
+
 #include <Arduino.h>
 #include "logToUi.h"
 
@@ -18,14 +21,18 @@
 #define EMR     0x03
 #define CRIT    0x01
 
-#ifndef DEBUG_LEVEL
-#ifdef ESP_MODEM_SIM
-#define DEBUG_LEVEL DBG
-#elif ESP_MODEM_TEST
-#define DEBUG_LEVEL DBG
+#if LOG_CON == logToUi
+  #define DEBUG_LEVEL logToUi.modemLogLevel
 #else
-#define DEBUG_LEVEL INFO
-#endif
+  #ifndef DEBUG_LEVEL
+  #ifdef ESP_MODEM_SIM
+  #define DEBUG_LEVEL logLevel
+  #elif ESP_MODEM_TEST
+  #define DEBUG_LEVEL DBG
+  #else
+  #define DEBUG_LEVEL INFO
+  #endif
+  #endif
 #endif
 
 #define DEBUG(...)  LOG_CON.printf(__VA_ARGS__)
@@ -42,3 +49,5 @@
                                       DEBUG("%s", "\r\n"); \
                                     }
 #endif
+
+#endif // LOG_H

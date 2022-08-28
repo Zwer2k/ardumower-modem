@@ -10,6 +10,7 @@ class LogToUi {
     public:
         LogToUi();
 
+        byte modemLogLevel;
         size_t printf(const char *format, ...);
         bool hasData();
         bool pull(String &line);
@@ -20,8 +21,6 @@ class LogToUi {
         Ringbuffer<String, RINGBUFFER_SIZE> *modemLog = NULL;
 
         uint32_t lineNrIn = 0;
-
-        uint32_t modemLogIgnoreLines = 0;
 };
 
 extern LogToUi logToUi;

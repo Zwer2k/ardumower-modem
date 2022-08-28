@@ -1,8 +1,6 @@
 <script>
-import DashboardList from "../pages/daschboard/DashboardList.svelte";
-
+    import DashboardList from "../pages/daschboard/DashboardList.svelte";
 </script>
 
 <DashboardList>
-
 </DashboardList>

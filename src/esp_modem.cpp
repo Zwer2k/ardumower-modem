@@ -9,7 +9,6 @@
 #include "git_version.h"
 
 #ifdef ESP_MODEM_SIM
-#define DEBUG_LEVEL DBG
 #include "log.h"
 #include "../test/helper/fake_ardumower.h"
 #endif

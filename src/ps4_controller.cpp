@@ -3,6 +3,7 @@
 #include "ps4_controller.h"
 #include "esp_gap_bt_api.h"
 #include <esp_bt_main.h>
+#include "log.h"
 
 using namespace ArduMower::Modem::PS4controller;
 
@@ -60,14 +61,10 @@ void Adapter::loop()
             angular = (ps4->Right() || ps4->UpRight() || ps4->DownRight() ? -1 : (ps4->Left() || ps4->UpLeft() || ps4->DownLeft() ? 1 : 0)) * ps4->R2Value() * 0.5 / 255;
             
         } else if ((abs(ps4->RStickX()) > 10) || (abs(ps4->RStickY()) > 10)) {
-            // Serial.printf("Right Stick x at %d\n", ps4->RStickX());
-            // Serial.printf("Right Stick y at %d\n", ps4->RStickY());
             liniar = ps4->RStickY() * 0.1 / 128;
-            angular = -ps4->RStickX() * 0.15 / 128;
+            angular = -ps4->RStickX() * 0.15 / 128;            
             
         } else if ((abs(ps4->LStickX()) > 10) || (abs(ps4->LStickY()) > 10)) {
-            // Serial.printf("Left Stick x at %d\n", ps4->LStickX());
-            // Serial.printf("Left Stick y at %d\n", ps4->LStickY());
             liniar = ps4->LStickY() * 0.33 / 128;
             angular = -ps4->LStickX() * 0.5 / 128;
         }
@@ -80,6 +77,7 @@ void Adapter::loop()
             oldLiniar = liniar;
             oldAngular = angular;
             lastSendTime = millis();
+            Log(DBG, "PS4 stick l.x=%d l.y=%d r.x=%d r.y=%d", ps4->LStickX(), ps4->LStickY(), ps4->RStickX(), ps4->RStickY());
         }
 
         if (millis() - lastSendTime < PS4_SEND_INTERVAL)

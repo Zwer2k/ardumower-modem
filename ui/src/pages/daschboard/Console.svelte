@@ -1,33 +1,36 @@
 <script lang="ts">
     import type { ConsoleLog } from "../../model";
-    import VirtualScroll from 'svelte-virtual-scroll-list';
-import { AccordionItem } from "carbon-components-svelte";
+    import { AccordionItem } from "carbon-components-svelte";
+    import VirtualList from "../../widget/VirtualList.svelte";
 
     export let logData: ConsoleLog = null;
     
-    let logBuffer: {
+    let items: {
         id: number;
         line: string
     }[] = [];
 
-    let list;
     let lineNr = 0;
     let autoscroll = true;
+
+	let start = 0;
+	let end = 0;
+	let scrollToIndex = undefined;
     
     $: if (logData) {
         if (logData != null) {
             Object.keys(logData).forEach(key => {
-                logBuffer = [...logBuffer, { id: lineNr++, line: logData[key] }];
+                items = [...items, { id: lineNr++, line: logData[key] }];
             });
-            if ((list != null) && (autoscroll)) {
-                list.scrollToBottom();
+            if (autoscroll && scrollToIndex != undefined) {
+                scrollToIndex(items.length - 1);
             }
         }
     }
 
-    function onScroll() {
-        autoscroll = list.getOffset() > list.getScrollSize() - list.getClientSize() - 10;
-    }
+    // function onScroll() {
+    //     autoscroll = list.getOffset() > list.getScrollSize() - list.getClientSize() - 10;
+    // }
 
     function onBottom() {
         console.log("bottom");
@@ -36,16 +39,25 @@ import { AccordionItem } from "carbon-components-svelte";
 
 <AccordionItem title="Modem Log" open={true}>
     <div class="log-list">
-        <VirtualScroll bind:this={list} data={logBuffer} let:data start={-1} on:scroll={onScroll} on:bottom={onBottom}>
+        <!-- <VirtualScroll bind:this={list} data={logBuffer} let:data start={-1} on:scroll={onScroll} on:bottom={onBottom}>
             <div class="log-line"><div class="nr">{data.id}:</div><div class="text">{data.line}</div></div>
-        </VirtualScroll>
+        </VirtualScroll> -->
+        <VirtualList {items}
+            bind:scrollToIndex
+            let:item>
+            <div class="log-line"><div class="nr">{item.id}:</div><div class="text">{item.line}</div></div>
+        </VirtualList>
     </div>
 </AccordionItem>
 
 <style>
+    :global(.bx--accordion__item--active .bx--accordion__content) {
+        display: inline;
+    }
+
     .log-list {
-        height: 400px;
-        width: calc(100vw - 110px);
+        height: 300px;
+        width: 100%;
     }
 
     .log-line {

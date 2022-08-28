@@ -1,10 +1,11 @@
 #include "logToUi.h"
-
+#include "log.h"
 
 LogToUi logToUi;
 
 LogToUi::LogToUi() 
 { 
+    modemLogLevel = INFO;
     modemLog = new Ringbuffer<String, RINGBUFFER_SIZE>(); 
 }
 
@@ -31,24 +32,14 @@ size_t LogToUi::printf(const char *format, ...)
         len = vsnprintf(temp, len+1, format, arg);
     }
     va_end(arg);
-    String strTemp = String(temp);
-    if (!modemLog->push(&strTemp)) {
-        if (modemLogIgnoreLines == 0) {
-            Serial.printf("Log ring buffer full %d/%d RAM: %d\r\n", modemLog->currentSize(), modemLog->maxSize(), ESP.getFreeHeap());
-        }
-        modemLogIgnoreLines++;
-    } else {
-        if (modemLogIgnoreLines > 0) {
-            Serial.printf("Log ring buffer no longer full. %d lines ignored.\r\n", modemLogIgnoreLines);
-            modemLogIgnoreLines = 0;
-        }
-    }
 
-    Serial.printf((strTemp + "\r\n").c_str());
+    String strTemp = String(temp);
     if(temp != loc_buf){
         free(temp);
     }
-    
+    modemLog->push(&strTemp, true);
+    Serial.println(strTemp);
+
     timestamp = millis();
     
     return len;
@@ -76,11 +67,10 @@ bool LogToUi::pull(String &line)
 
 void LogToUi::marshal(const JsonObject &o)
 {
-    String line;
-
     if (modemLog->isEmpty())
         return;
     
+    String line;
     int lineNr = 0;
     bool hasData = true;
     while (hasData) {

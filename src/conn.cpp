@@ -6,6 +6,7 @@
 #include "conn.h"
 #include "git_version.h"
 #include "../test/helper/fake_ardumower_h.h"
+#include "logToUi.h"
 
 using namespace ArduMower::Modem;
 
@@ -89,6 +90,21 @@ void Console::loopInput()
     setFakeEnabled(false);
   else if (line == "fake timeout")
     setFakeTimeout();
+  else if (line.startsWith("modem log level "))
+    line.replace("modem log level ", "");
+    if (line == "NONE") {
+      logToUi.modemLogLevel = NONE;
+    } else if (line == "DBG") {
+      logToUi.modemLogLevel = DBG;
+    } else if (line == "INFO") {
+      logToUi.modemLogLevel = INFO;
+    } else if (line == "ERR") {
+      logToUi.modemLogLevel = ERR;
+    } else if (line == "EMR") {
+      logToUi.modemLogLevel = EMR;
+    } else if (line == "CRIT") {
+      logToUi.modemLogLevel = CRIT;
+    }
   else
     printUnknown(line);
 }
@@ -196,6 +212,7 @@ void Console::printInfo()
 void Console::printStatus()
 {
   String wifiMode = "-";
+  String wifiStatus = "-";
   bool wifiSta = false;
   bool wifiAp = false;
 
@@ -203,8 +220,8 @@ void Console::printStatus()
 
   wifi_mode_t mode;
   esp_wifi_get_mode(&mode);
-  wifiSta = mode == 1 || mode == 3;
-  wifiAp = mode == 2 || mode == 3;
+  wifiSta = mode == WIFI_MODE_STA || mode == WIFI_MODE_APSTA;
+  wifiAp = mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA;
   if (mode >= 0 && mode <= 3)
     wifiMode = modes[mode];
 
@@ -215,6 +232,11 @@ void Console::printStatus()
   wifi_config_t confSta, confAp;
   esp_wifi_get_config(WIFI_IF_STA, &confSta);
   esp_wifi_get_config(WIFI_IF_AP, &confAp);
+  
+  const char *statuses[] = {"idle", "no SSID avail", "scan completed", "connected", "connect failed", "connection lost", "disconnected"};
+  wl_status_t status = WiFi.status();
+  if ((status >= 0) && (status <=6)) 
+    wifiStatus = statuses[status];
 
   if (json)
   {
@@ -234,6 +256,7 @@ void Console::printStatus()
           auto w = status.createNestedObject("wifi");
           w["mode"] = wifiMode.c_str();
           w["channel"] = wifiChannel;
+          w["status"] = wifiStatus.c_str();
           auto ap = w.createNestedObject("ap");
           if (!wifiAp)
             ap["enabled"] = false;
@@ -279,9 +302,11 @@ void Console::printStatus()
   io.printf(
       "WiFi:\r\n"
       " Mode   : %s\r\n"
-      " Channel: %d\r\n",
+      " Channel: %d\r\n"
+      " Status : %s\r\n",
       wifiMode.c_str(),
-      (int)wifiChannel);
+      (int)wifiChannel,
+      wifiStatus.c_str());
 
   if (wifiAp)
   {
@@ -483,7 +508,8 @@ void Console::printHelp()
       "restart modem    restart the modem\r\n"
       "reset settings   reset modem settings to default values\r\n"
       "dump settings    print modem settings to console\r\n"
-      "load settings    read modem settings from console\r\n");
+      "load settings    read modem settings from console\r\n"
+      "modem log level NONE|DBG|INFO|ERR|EMR|CRIT   set modem log level\r\n");
 }
 
 void Console::printUnknown(String line)

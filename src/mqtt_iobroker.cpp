@@ -54,7 +54,7 @@ String Adapter::topicCreate(String postfix)
   result += settings.general.name;
   result += postfix;
 
-  Log(DBG, "IOBrokerAdapter::topic::success");
+  Log(DBG, "%s %s", "IOBrokerAdapter::topic::success", postfix.c_str());
   return result;
 }
 

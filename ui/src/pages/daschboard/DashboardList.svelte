@@ -1,16 +1,18 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { ConsoleLog, DataType, DesiredState, State, ValueDescriptions } from "../../model";
-import Console from "./Console.svelte";
-import { Accordion } from "carbon-components-svelte";
-    
+    import Console from "./Console.svelte";
+    import { Accordion } from "carbon-components-svelte";
+ 
     let valueDescriptions: ValueDescriptions = null;
     let state: State = null;
     let desiredState: DesiredState = null; 
     let modemLog: any;
 
-    let socket;
+    let socket: WebSocket = null;
+    let reconnect = true;
+
     function createSocket() {
         let host = location.hostname;
         socket = new WebSocket("ws://" + (((host == "[::1]") || (host == "127.0.0.1")) ? "192.168.43.186" : host) + "/ws")
@@ -20,7 +22,11 @@ import { Accordion } from "carbon-components-svelte";
 
         socket.addEventListener('close', () => {
             console.log("socket close");
-            createSocket();
+            if (reconnect) { 
+                createSocket();
+            } else {
+                socket = null;  
+            }
         });
 
         socket.addEventListener("message", (message: any) => {
@@ -51,12 +57,20 @@ import { Accordion } from "carbon-components-svelte";
         });
 
         setTimeout(() => {
-            if (socket.readyState != 1)
+            if ((socket != null) && (socket.readyState != 1))
                 createSocket();
         }, 5000);
     }
     
     onMount(async () => { createSocket(); });
+
+    onDestroy(() => { 
+        console.log("onDestroy");    
+        if ((socket != null) && (socket.readyState == socket.OPEN)) {
+            socket.close();
+        }    
+        reconnect = false;
+    });
 
     const sendText = (text) => {
         if (socket.readyState == socket.OPEN) {

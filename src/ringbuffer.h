@@ -12,7 +12,7 @@ private:
 
 public:
     Ringbuffer();
-    bool push(const BUFFTYPE * const value) __attribute__ ((noinline));
+    bool push(const BUFFTYPE * const value, bool force = false) __attribute__ ((noinline));
     bool pull(BUFFTYPE &value) __attribute__ ((noinline));
     bool contains(const BUFFTYPE * const value) __attribute__ ((noinline));
     uint16_t counterEqual(const BUFFTYPE * const value);
@@ -34,12 +34,19 @@ Ringbuffer<BUFFTYPE, BUFFSIZE>::Ringbuffer()
 }
 
 template <typename BUFFTYPE, uint16_t BUFFSIZE>
-bool Ringbuffer<BUFFTYPE, BUFFSIZE>::push(const BUFFTYPE * const value)
+bool Ringbuffer<BUFFTYPE, BUFFSIZE>::push(const BUFFTYPE * const value, bool force)
 {
     xSemaphoreTake(_lock, portMAX_DELAY);
     if (size == BUFFSIZE) { 
-        xSemaphoreGive(_lock);
-        return false;
+        if (force) {
+          readPos++;
+          size--;
+          if (readPos == BUFFSIZE) 
+            readPos = 0;        
+        } else {
+          xSemaphoreGive(_lock);
+          return false;
+        }
     }
 
     uint16_t writePos = readPos + size;
