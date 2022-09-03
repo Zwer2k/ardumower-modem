@@ -159,6 +159,7 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling:touch;
 		display: block;
+		padding: 0.3rem 0.3rem 0.5rem 0.3rem;
 	}
 
 	list-content, list-row {

@@ -5,7 +5,19 @@
 #include <esp_bt_main.h>
 #include "log.h"
 
+#define LOG_PREF "PS4controller::Adapter"
+
 using namespace ArduMower::Modem::PS4controller;
+
+void ps4Connected()
+{
+    Log(INFO, "%s connected", LOG_PREF);
+}
+
+void ps4Disconnected()
+{
+    Log(INFO, "%s disconnected", LOG_PREF);
+}
 
 Adapter::Adapter(
     ArduMower::Modem::Settings::Settings &_settings, 
@@ -18,9 +30,13 @@ Adapter::Adapter(
 void Adapter::begin()
 {
     if (!settings.ps4controller.enabled) return;
-
-    if (ps4 == NULL)
+    Log(DBG, "%s::begin", LOG_PREF);
+    
+    if (ps4 == NULL) {
         ps4 = new PS4Controller();
+        ps4->attachOnConnect(ps4Connected);
+        ps4->attachOnDisconnect(ps4Disconnected);
+    }
 
     if (settings.ps4controller.use_ps4_mac) {
         ps4->begin(settings.ps4controller.ps4_mac.c_str());
@@ -77,7 +93,7 @@ void Adapter::loop()
             oldLiniar = liniar;
             oldAngular = angular;
             lastSendTime = millis();
-            Log(DBG, "PS4 stick l.x=%d l.y=%d r.x=%d r.y=%d", ps4->LStickX(), ps4->LStickY(), ps4->RStickX(), ps4->RStickY());
+            Log(DBG, "%s PS4 stick l.x=%d l.y=%d r.x=%d r.y=%d", LOG_PREF, ps4->LStickX(), ps4->LStickY(), ps4->RStickX(), ps4->RStickY());
         }
 
         if (millis() - lastSendTime < PS4_SEND_INTERVAL)
@@ -131,12 +147,13 @@ void Adapter::loop()
                 psButtonPressTime = millis();
         } else if (psButtonPressTime > 0) {
             if (millis() - psButtonPressTime < 800) { // short press
-                Serial.println("disconnect PS4 controller");
+                Log(DBG, "%s disconnect PS4 controller", LOG_PREF);
                 esp_bluedroid_disable();
                 delete ps4;
                 ps4 = NULL;            
                 waitForDisconnect = millis();
             } else { // long press
+                Log(DBG, "%s send power OFF to robot", LOG_PREF);
                 cmd.powerOff();
                 ps4->setLed(255, 0, 0);
                 ps4->setFlashRate(80, 80);

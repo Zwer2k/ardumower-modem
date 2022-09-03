@@ -73,9 +73,10 @@ void LogToUi::marshal(const JsonObject &o)
     String line;
     int lineNr = 0;
     bool hasData = true;
-    while (hasData) {
+    while (hasData && (lineNr < 10)) {
         hasData = pull(line);
         if (hasData) {
+            Serial.println(line);
             o[String(lineNr++)] = line;
         }
     } 

@@ -8,7 +8,8 @@
     let valueDescriptions: ValueDescriptions = null;
     let state: State = null;
     let desiredState: DesiredState = null; 
-    let modemLog: any;
+    let modemLog: ConsoleLog;
+    let modemDebugLevel: number;
 
     let socket: WebSocket = null;
     let reconnect = true;
@@ -77,11 +78,16 @@
             socket.send(text);
         }
     }
+
+    $: { if (socket != null && socket.readyState == socket.OPEN) {
+            socket.send("{modemDebugLevel:" + modemDebugLevel + "}");
+        } 
+    } 
 </script>
 
 <Accordion>
 {#if valueDescriptions != null}
-    <StateCard bind:state={state} bind:desiredState={desiredState} bind:valueDescriptions={valueDescriptions}/>
-    <Console bind:logData={modemLog}/>
+    <StateCard state={state} desiredState={desiredState} valueDescriptions={valueDescriptions}/>
+    <Console logData={modemLog} bind:debugLevel={modemDebugLevel}/>
 {/if}
 </Accordion>
