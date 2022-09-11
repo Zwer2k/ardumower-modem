@@ -1,3 +1,4 @@
+
 export namespace Settings {
   export interface General {
     name: string
@@ -132,7 +133,7 @@ export interface DesiredState {
 
 export interface ConsoleLog { [line: string]: string }
 
-export enum DataType {
+export enum ResponseDataType {
   hello = 0,
   mowerState,
   mowerStats,
@@ -140,7 +141,22 @@ export enum DataType {
   modemLog,
 };
 
-export interface SocketMessage {
-  type: DataType;
-  data: State;
+export interface ResponseSocketMessage {
+  type: ResponseDataType;
+  data: State | DesiredState | ConsoleLog;
+}
+
+
+export enum RequestDataType {
+  hello = 0,
+  modemLogSettings,
+};
+
+export interface ConsoleLogSettings {
+  logLevel: number
+}
+
+export interface RequestSocketMessage {
+  type: RequestDataType;
+  data: ConsoleLogSettings;
 }

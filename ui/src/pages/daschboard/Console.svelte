@@ -1,11 +1,13 @@
 <script lang="ts">
     import type { ConsoleLog } from "../../model";
-    import { AccordionItem, ContentSwitcher, Dropdown, Switch } from "carbon-components-svelte";
+    import { AccordionItem, Dropdown } from "carbon-components-svelte";
     import VirtualList from "../../widget/VirtualList.svelte";
+    import type { DropdownItem } from "carbon-components-svelte/types/Dropdown/Dropdown.svelte";
 
-    export let logData: ConsoleLog = null;
-    export let debugLevel: number = 0; 
-
+    export let logLevels: DropdownItem[];
+    export let logData: ConsoleLog;
+    export let logLevel: number; 
+    
     let items: {
         id: number;
         line: string
@@ -18,17 +20,8 @@
 	let end = 0;
 	let scrollToIndex = undefined;
     let modemLogOpen = false;
-    let debugIndex = 0;
+    let logLevelIndex = 0;
     let logLines = 10000;
-
-    let debugLevels = [
-        { id: "0", text: "none" },
-        { id: "31", text: "debug" },
-        { id: "15", text: "info" },
-        { id: "7", text: "error" },
-        { id: "3", text: "emergency" },
-        { id: "1", text: "critical" },
-    ];
 
     $: if (logData) {
         if (logData != null) {
@@ -52,7 +45,7 @@
         console.log("bottom");
     }
 
-    $: { debugLevel = parseInt(debugLevels[debugIndex].id); }
+    $: { logLevel = parseInt(logLevels[logLevelIndex].id); }
 
 </script>
 
@@ -63,10 +56,11 @@
         </VirtualScroll> -->
         <div class="settings">
             <Dropdown
-                bind:selectedIndex={debugIndex}
+                bind:selectedIndex={logLevelIndex}
+                multiple="{true}"
                 type="inline"
-                titleText="Debug level"
-                items={debugLevels}/>
+                titleText="Log level"
+                items={logLevels}/>
         </div>
         <VirtualList {items}
             height="calc(100% - 40px)"

@@ -38,7 +38,7 @@ size_t LogToUi::printf(const char *format, ...)
         free(temp);
     }
     modemLog->push(&strTemp, true);
-    Serial.println(strTemp);
+    Serial.printf("(%d) %s\r\n", ESP.getFreeHeap(), strTemp.c_str());
 
     timestamp = millis();
     
@@ -76,7 +76,6 @@ void LogToUi::marshal(const JsonObject &o)
     while (hasData && (lineNr < 10)) {
         hasData = pull(line);
         if (hasData) {
-            Serial.println(line);
             o[String(lineNr++)] = line;
         }
     } 

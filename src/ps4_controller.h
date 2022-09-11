@@ -46,6 +46,6 @@ namespace ArduMower
   }
 }
 
-#endif // _IOBROKER_H
+#endif // _PS4_CONTROLLER_H
 
 #endif // ENABLE_PS4_CONTROLLER

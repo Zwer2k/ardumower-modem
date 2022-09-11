@@ -15,13 +15,23 @@ UiSocketItem::UiSocketItem(
   ArduMower::Domain::Robot::StateSource &source) 
   : _socketHandler(socketHandler), _client(client), _source(source) 
 {
-  _socketHandler->sendData(DataType::mowerState, this, true);
-  _socketHandler->sendData(DataType::desiredState, this, true);
+  _socketHandler->sendData(ResponseDataType::mowerState, this, true);
+  _socketHandler->sendData(ResponseDataType::desiredState, this, true);
 }
 
-void UiSocketItem::handleData(DataType dataType, DynamicJsonDocument &jsonData)
+void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jsonData)
 {
-  Log(INFO, "$s handle data type %d", _LOG_, dataType);
+  Log(DBG, "%s handle data type %d", _LOG_, dataType);
+  switch (dataType)
+  {
+  case RequestDataType::modemLogSettings:
+    logToUi.modemLogLevel = jsonData["logLevel"];
+    Log(INFO, "%s set modem log level to %d", _LOG_, logToUi.modemLogLevel);
+    break;
+  
+  default:
+    break;
+  }
 }
 
 UiSocketItem::~UiSocketItem() 
@@ -46,7 +56,7 @@ UiSocketHandler::UiSocketHandler(
 {
   _ws = ws;
 
-  for (int i; i < DataType::dataType_length; i++) {
+  for (int i; i < ResponseDataType::responseDataTypeLength; i++) {
     oldDataTimestamp[i] = 0;
     lastDataRequestTimestamp[i] = defaultStateUpdateInterval;
   }
@@ -62,8 +72,8 @@ void UiSocketHandler::loop()
     return;
 
   stateRequestLoop();
-  sendData(DataType::mowerState);
-  sendData(DataType::desiredState);
+  sendData(ResponseDataType::mowerState);
+  sendData(ResponseDataType::desiredState);
   logToUiLoop();
   //pingClients();
 }
@@ -73,20 +83,20 @@ void UiSocketHandler::stateRequestLoop()
   auto state = _source.state();
 
   if ((millis() - state.timestamp) > defaultStateUpdateInterval) {
-    if ((lastDataRequestTimestamp[DataType::mowerState] > 0) && ((millis() - lastDataRequestTimestamp[DataType::mowerState]) < defaultStateUpdateInterval)) 
+    if ((lastDataRequestTimestamp[ResponseDataType::mowerState] > 0) && ((millis() - lastDataRequestTimestamp[ResponseDataType::mowerState]) < defaultStateUpdateInterval)) 
       return;
     _cmd.requestStatus();
-    lastDataRequestTimestamp[DataType::mowerState] = millis();
+    lastDataRequestTimestamp[ResponseDataType::mowerState] = millis();
   } 
 }
 
-void UiSocketHandler::sendData(DataType dataType, UiSocketItem *sendTo, bool force)
+void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, bool force)
 {
   switch (dataType) {
-    case DataType::mowerState:
+    case ResponseDataType::mowerState:
       sendData(sendTo, dataType, _source.state(), force);
       break;
-    case DataType::desiredState:
+    case ResponseDataType::desiredState:
       sendData(sendTo, dataType, _source.desiredState(), force);
       break;
   }
@@ -94,14 +104,13 @@ void UiSocketHandler::sendData(DataType dataType, UiSocketItem *sendTo, bool for
 
 void UiSocketHandler::logToUiLoop()
 {
-  String line;
   if (logToUi.hasData() && _ws->availableForWriteAll()) {
-    sendData(NULL, DataType::modemLog, logToUi, false);
+    sendData(NULL, ResponseDataType::modemLog, logToUi, false);
   }
 }
 
 template<typename T>
-void UiSocketHandler::sendData(UiSocketItem *sendTo, DataType dataType, T data, bool force)
+void UiSocketHandler::sendData(UiSocketItem *sendTo, ResponseDataType dataType, T data, bool force)
 {
   if ((data.timestamp == 0) || (!force && (data.timestamp == oldDataTimestamp[dataType]))) {
     return;  
@@ -140,7 +149,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     //client connected
     Log(INFO, "%s ws[%s][%u] connect\n", _LOG_, server->url(), client->id());
     DynamicJsonDocument doc(1024);
-    doc["type"] = DataType::hello;
+    doc["type"] = ResponseDataType::responseHello;
     doc["client"] = client->id();
     JsonObject valueDescriptions = doc.createNestedObject("data");
     JsonObject newObj = valueDescriptions.createNestedObject("job");
@@ -241,8 +250,7 @@ void UiSocketHandler::handleData(uint32_t clientId, char *data)
   DynamicJsonDocument doc(strlen(data) * 2);
   DeserializationError error = deserializeJson(doc, data);
   if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.f_str());
+    Log(ERR, "%s deserializeJson() failed: %s", _LOG_, error.f_str());
     return;
   }
 

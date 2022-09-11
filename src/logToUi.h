@@ -4,7 +4,7 @@
 #include <ArduinoJson.h>
 #include "ringbuffer.h"
 
-#define RINGBUFFER_SIZE 30
+#define RINGBUFFER_SIZE 10
 
 class LogToUi {
     public:

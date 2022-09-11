@@ -13,13 +13,19 @@ namespace ArduMower
   {
     namespace Http
     {
-      enum DataType {
-        hello = 0,
+      enum RequestDataType {
+        requestHello = 0,
+        modemLogSettings,
+        requestDataTypeLength
+      };
+
+      enum ResponseDataType {
+        responseHello = 0,
         mowerState,
         mowerStats,
         desiredState,
         modemLog,
-        dataType_length
+        responseDataTypeLength
       };
 
       class UiSocketHandler;
@@ -31,7 +37,7 @@ namespace ArduMower
           UiSocketHandler *socketHandler,
           AsyncWebSocketClient *client, 
           ArduMower::Domain::Robot::StateSource &source);
-        void handleData(DataType dataType, DynamicJsonDocument &jsonData);
+        void handleData(RequestDataType dataType, DynamicJsonDocument &jsonData);
         void sendText(String text);
         void pingClients();
 
@@ -52,7 +58,7 @@ namespace ArduMower
           ArduMower::Domain::Robot::CommandExecutor &cmd);
         
         void loop();
-        void sendData(DataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
+        void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
         void logToUiLoop();
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
@@ -61,8 +67,8 @@ namespace ArduMower
       private:
         AsyncWebSocket *_ws;
 
-        uint32_t oldDataTimestamp[DataType::dataType_length];
-        uint32_t lastDataRequestTimestamp[DataType::dataType_length];
+        uint32_t oldDataTimestamp[ResponseDataType::responseDataTypeLength];
+        uint32_t lastDataRequestTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastclientPing = 0;
         
         ArduMower::Domain::Robot::StateSource &_source;
@@ -73,7 +79,7 @@ namespace ArduMower
 
         void stateRequestLoop();
         template<typename T>
-        void sendData(UiSocketItem *sendTo, DataType dataType, T data, bool force = false);
+        void sendData(UiSocketItem *sendTo, ResponseDataType dataType, T data, bool force = false);
         void pingClients();
       };
     }

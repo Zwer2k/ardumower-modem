@@ -8,8 +8,8 @@
 
 #include "git_version.h"
 
-#ifdef ESP_MODEM_SIM
 #include "log.h"
+#ifdef ESP_MODEM_SIM
 #include "../test/helper/fake_ardumower.h"
 #endif
 
