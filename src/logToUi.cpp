@@ -6,10 +6,15 @@ LogToUi logToUi;
 LogToUi::LogToUi() 
 { 
     modemLogLevel = INFO;
-    modemLog = new Ringbuffer<String, RINGBUFFER_SIZE>(); 
+    modemLog = new Ringbuffer<LogLine, RINGBUFFER_SIZE>(); 
 }
 
 size_t LogToUi::printf(const char *format, ...)
+{
+    return log(DBG, format);
+}
+
+size_t LogToUi::log(const LogLevel logLevel, const char *format, ...)
 {
     char loc_buf[64];
     char * temp = loc_buf;
@@ -33,12 +38,13 @@ size_t LogToUi::printf(const char *format, ...)
     }
     va_end(arg);
 
-    String strTemp = String(temp);
+    auto freeHeap = ESP.getFreeHeap();
+    auto line = LogLine{nr: modemLineNrIn++, level: logLevel, text: temp, freeHeap: freeHeap};
     if(temp != loc_buf){
         free(temp);
     }
-    modemLog->push(&strTemp, true);
-    Serial.printf("(%d) %s\r\n", ESP.getFreeHeap(), strTemp.c_str());
+    modemLog->push(&line, true);
+    Serial.printf("(%d) %s\r\n", freeHeap, line.text.c_str());
 
     timestamp = millis();
     
@@ -54,7 +60,7 @@ bool LogToUi::hasData() {
     }
 } 
 
-bool LogToUi::pull(String &line) 
+bool LogToUi::pull(LogLine &line) 
 {
     if (modemLog->pull(line)) {
         if (!modemLog->isEmpty())
@@ -70,13 +76,20 @@ void LogToUi::marshal(const JsonObject &o)
     if (modemLog->isEmpty())
         return;
     
-    String line;
+    JsonArray logJson = o.createNestedArray("log");
+
+    LogLine line;
     int lineNr = 0;
     bool hasData = true;
-    while (hasData && (lineNr < 10)) {
+    while (hasData && (lineNr < 6)) {
         hasData = pull(line);
         if (hasData) {
-            o[String(lineNr++)] = line;
+            JsonObject jsonLine = logJson.createNestedObject();
+            jsonLine["nr"] = line.nr;
+            jsonLine["level"] = line.level;
+            jsonLine["text"] = line.text;
+            jsonLine["freeHeap"] = line.freeHeap;
+            lineNr++;            
         }
     } 
 }

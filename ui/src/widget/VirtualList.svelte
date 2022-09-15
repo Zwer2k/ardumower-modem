@@ -3,6 +3,7 @@
 
 	// props
 	export let items;
+	export let logLevels;
 	export let height = '100%';
 	export let itemHeight = undefined;
 	// read-only, but visible to consumers via bind:start
@@ -142,8 +143,7 @@
 	style="height: {height};">
 	<list-content
 		bind:this={contents}
-		style="padding-top: {top}px; padding-bottom: {bottom}px;"
-	>
+		style="padding-top: {top}px; padding-bottom: {bottom}px;">
 		{#each visible as row (row.index)}
 			<list-row>
 				<slot item={row.data}>Missing template</slot>

@@ -1,21 +1,22 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
     import { onMount, onDestroy } from 'svelte';
-    import { ConsoleLog, ConsoleLogSettings, DesiredState, RequestDataType, RequestSocketMessage, ResponseDataType, State, ValueDescriptions } from "../../model";
-    import Console, { LogLevelItem } from "./Console.svelte";
+    import { ConsoleLog, ConsoleLogSettings, DesiredState, LogLevelDesc, LogLine, RequestDataType, RequestSocketMessage, ResponseDataType, State, ValueDescriptions } from "../../model";
+    import Console from "./Console.svelte";
     import { Accordion } from "carbon-components-svelte";
+    import type { DropdownItem } from "carbon-components-svelte/types/Dropdown/Dropdown.svelte";
  
     let valueDescriptions: ValueDescriptions = null;
     let state: State = null;
     let desiredState: DesiredState = null; 
-    let modemLog: ConsoleLog;
-    let modemLogLevel: number;
+    let modemLog: LogLine[];
+    let modemDbgLevel: number;
 
     let socket: WebSocket = null;
     let restartTimer = null;
     let reconnect = true;
 
-    let modemLogLevels: LogLevelItem[] = [
+    let modemDbgLevels: DropdownItem[] = [
         { id: "0", text: "none" },
         { id: "31", text: "debug" },
         { id: "15", text: "info" },
@@ -59,7 +60,7 @@
                         desiredState = jsonData.data as DesiredState;
                         break
                     case ResponseDataType.modemLog:
-                        modemLog = jsonData.data as ConsoleLog;
+                        modemLog = (jsonData.data as ConsoleLog).log;
                         break
                     default:
                         console.log("unknown data type");
@@ -104,7 +105,7 @@
     $: { if (socket != null && socket.readyState == socket.OPEN) {
             let settings: RequestSocketMessage = {
                 type: RequestDataType.modemLogSettings,
-                data: { logLevel: modemLogLevel } as ConsoleLogSettings
+                data: { logLevel: modemDbgLevel } as ConsoleLogSettings
             };
 
             socket.send(JSON.stringify(settings));
@@ -115,6 +116,6 @@
 <Accordion>
 {#if valueDescriptions != null}
     <StateCard state={state} desiredState={desiredState} valueDescriptions={valueDescriptions}/>
-    <Console logLevels={modemLogLevels} logData={modemLog} bind:logLevel={modemLogLevel}/>
+    <Console logLevels={LogLevelDesc} dbgLevels={modemDbgLevels} logData={modemLog} bind:dbgLevel={modemDbgLevel}/>
 {/if}
 </Accordion>

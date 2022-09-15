@@ -1,5 +1,14 @@
 #pragma once
 
+enum LogLevel {
+  NONE = 0x32,
+  DBG  = 0x16,
+  INFO = 0x08,
+  ERR  = 0x04,
+  EMR  = 0x02,
+  CRIT = 0x01
+};
+
 #ifndef LOG_H
 #define LOG_H 
 
@@ -14,12 +23,6 @@
 #define LOG_CON Serial
 #endif
 
-#define NONE    0x00
-#define DBG     0x1F
-#define INFO    0x0F
-#define ERR     0x07
-#define EMR     0x03
-#define CRIT    0x01
 
 #if LOG_CON == logToUi
   #define DEBUG_LEVEL logToUi.modemLogLevel
@@ -39,7 +42,7 @@
 #if LOG_CON == logToUi
   #define Log(X, ...) if((DEBUG_LEVEL & X) == X) \
                                     { \
-                                      DEBUG(__VA_ARGS__); \
+                                      LOG_CON.log(X, __VA_ARGS__); \
                                     }
 #else
   #define Log(X, ...) if((DEBUG_LEVEL & X) == X) \

@@ -131,7 +131,35 @@ export interface DesiredState {
   fix_timeout: number;
 }
 
-export interface ConsoleLog { [line: string]: string }
+export interface ConsoleLog {
+  log: LogLine[];
+};
+
+export enum LogLevel {
+  NONE = 0x32,
+  DBG  = 0x16,
+  INFO = 0x08,
+  ERR  = 0x04,
+  EMR  = 0x02,
+  CRIT = 0x01
+};
+
+export type LogLevelDescT = { [nr: number]: string };
+
+export let LogLevelDesc: LogLevelDescT = {
+  0x32: "NONE",
+  0x16: "DBG" ,
+  0x08: "INFO" ,
+  0x04: "ERR",
+  0x02: "EMR",
+  0x01: "CRIT"
+};
+
+export interface LogLine {
+  nr: number;
+  level: LogLevel;
+  text:  String;
+};
 
 export enum ResponseDataType {
   hello = 0,

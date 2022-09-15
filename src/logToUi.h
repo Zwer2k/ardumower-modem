@@ -1,10 +1,18 @@
 #ifndef logToUi_h
 #define logToUi_h
 
+#include "log.h"
 #include <ArduinoJson.h>
 #include "ringbuffer.h"
 
 #define RINGBUFFER_SIZE 10
+
+struct LogLine {
+    uint32_t nr;
+    LogLevel level;
+    String   text;
+    uint32_t freeHeap;
+};
 
 class LogToUi {
     public:
@@ -12,15 +20,16 @@ class LogToUi {
 
         byte modemLogLevel;
         size_t printf(const char *format, ...);
+        size_t log(const LogLevel logLevel, const char *format, ...);
         bool hasData();
-        bool pull(String &line);
+        bool pull(LogLine &line);
         void marshal(const JsonObject &o);
         uint32_t timestamp = 0;
 
     private:
-        Ringbuffer<String, RINGBUFFER_SIZE> *modemLog = NULL;
+        Ringbuffer<LogLine, RINGBUFFER_SIZE> *modemLog = NULL;
 
-        uint32_t lineNrIn = 0;
+        uint32_t modemLineNrIn = 0;
 };
 
 extern LogToUi logToUi;

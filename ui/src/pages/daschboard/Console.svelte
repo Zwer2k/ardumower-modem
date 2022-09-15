@@ -1,17 +1,15 @@
 <script lang="ts">
-    import type { ConsoleLog } from "../../model";
     import { AccordionItem, Dropdown } from "carbon-components-svelte";
     import VirtualList from "../../widget/VirtualList.svelte";
     import type { DropdownItem } from "carbon-components-svelte/types/Dropdown/Dropdown.svelte";
+    import type { LogLevelDescT, LogLine } from "../../model";
 
-    export let logLevels: DropdownItem[];
-    export let logData: ConsoleLog;
-    export let logLevel: number; 
+    export let logLevels: LogLevelDescT;
+    export let dbgLevels: DropdownItem[];
+    export let logData: LogLine[];
+    export let dbgLevel: number; 
     
-    let items: {
-        id: number;
-        line: string
-    }[] = [];
+    let items: LogLine[] = [];
 
     let lineNr = 0;
     let autoscroll = true;
@@ -25,12 +23,11 @@
 
     $: if (logData) {
         if (logData != null) {
-            Object.keys(logData).forEach(key => {
-                items = [...items, { id: lineNr++, line: logData[key] }];
-                let remove = items.length - logLines;
-                if (remove > 0)
-                    items.splice(0, remove); 
-            });
+            items = [...items, ...logData];
+            let remove = items.length - logLines;
+            if (remove > 0)
+                items.splice(0, remove); 
+        
             if (autoscroll && scrollToIndex != undefined) {
                 scrollToIndex(items.length - 1);
             }
@@ -45,7 +42,7 @@
         console.log("bottom");
     }
 
-    $: { logLevel = parseInt(logLevels[logLevelIndex].id); }
+    $: { dbgLevel = parseInt(dbgLevels[logLevelIndex].id); }
 
 </script>
 
@@ -60,13 +57,19 @@
                 multiple="{true}"
                 type="inline"
                 titleText="Log level"
-                items={logLevels}/>
+                items={dbgLevels}/>
         </div>
         <VirtualList {items}
+            logLevels={logLevels}
             height="calc(100% - 40px)"
             bind:scrollToIndex
             let:item>
-            <div class="log-line"><div class="nr">{item.id}:</div><div class="text">{item.line}</div></div>
+            <div class="log-line">
+                <div class="nr">{item.nr}:</div>
+                <div class="level level-{logLevels[item.level]}">{logLevels[item.level]}:</div>
+                <div class="free-heap">{item.freeHeap}:</div>
+                <div class="text">{item.text}</div>
+            </div>
         </VirtualList>
     </div>
 </AccordionItem>
@@ -93,10 +96,32 @@
         padding: 3px;
     }
 
+    .log-line .nr, .log-line .level, .log-line .free-heap {
+        margin-right: 3px;
+    }
+
     .log-line .nr {
         min-width: 30px;
-        text-align: right;
-        margin-right: 10px;
+    }
+
+    .log-line .level {
+        min-width: 39px;
+    }
+
+    .log-line .free-heap {
+        min-width: 50px;
+    }
+
+    .level-INFO {
+        color: blue;
+    }
+
+    .level-ERR {
+        color: orange;
+    }
+
+    .level-EMR, .level-CRIT {
+        color: red;
     }
 
     .log-line .text {

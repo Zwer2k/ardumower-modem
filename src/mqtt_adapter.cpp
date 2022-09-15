@@ -34,16 +34,37 @@ void MqttAdapter::loop(const uint32_t now)
   if (!settings.mqtt.enabled)
     return;
 
-  client.loop();
-  
-  if (!connect(now))
-    return;
+  static byte publishSelector = 0;
 
-  publishState(now);
-  publishProps(now);
-  publishStats(now);
+  switch (publishSelector) { // handle mqtt.loop and publishing only every 20 loops
+    case 0:
+      if (handleConnection(now)) { // Connection check costs a lot of time therefore loop and connect combined
+        publishSelector++;
+      }
+      break;
 
-  if (settings.mqtt.ha) ha.loop(now);
+    case 1:
+      publishState(now);
+      publishSelector++;
+      break;
+
+    case 2:
+      publishProps(now);
+      publishSelector++;
+      break;
+
+    case 3:
+      publishStats(now);
+      publishSelector++;
+      break;
+
+    case 4:
+      if (settings.mqtt.ha) ha.loop(now); // MQTT loop takes a lot of time, so it should not be executed every time
+      break;
+    
+    default:
+      if (publishSelector >= 20) publishSelector = 0;
+  }
 }
 
 static uint32_t betterTime(uint32_t userSettingSeconds, uint32_t minimumMilliseconds)
@@ -182,11 +203,11 @@ void MqttAdapter::onMqttMessage(String topic, String payload)
     cmd.dock();
 }
 
-bool MqttAdapter::connect(const uint32_t now)
+bool MqttAdapter::handleConnection(const uint32_t now)
 {
   static uint32_t last_connected = 0;
   static uint32_t first_disconnected = 0;
-  if (client.connected())
+  if (client.loop())
   {
     last_connected = now;
     backoff.reset();

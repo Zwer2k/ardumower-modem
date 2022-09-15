@@ -32,7 +32,7 @@ namespace ArduMower
       ArduMower::Util::Backoff backoff;
 
       void onMqttMessage(String topic, String payload);
-      bool connect(const uint32_t now);
+      bool handleConnection(const uint32_t now);
       String topic(String postfix);
 
       void publishState(const uint32_t now);
