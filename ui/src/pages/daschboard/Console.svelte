@@ -11,15 +11,15 @@
     
     let items: LogLine[] = [];
 
-    let lineNr = 0;
     let autoscroll = true;
 
 	let start = 0;
 	let end = 0;
 	let scrollToIndex = undefined;
     let modemLogOpen = false;
-    let logLevelIndex = 0;
+    let logLevelIndex = 3;
     let logLines = 10000;
+    let lineCounter = 0;
 
     $: if (logData) {
         if (logData != null) {
@@ -40,6 +40,20 @@
 
     function onBottom() {
         console.log("bottom");
+    }
+
+    function checkLineNr(lineNr: number) {
+        if (lineCounter != lineNr) {
+            lineCounter = lineNr+1;
+            return true;
+        }
+        lineCounter++;
+        return false;
+    }
+
+    function getLineCounter(lineNr: number) {
+        console.log(lineNr, lineCounter)
+        return lineNr;
     }
 
     $: { dbgLevel = parseInt(dbgLevels[logLevelIndex].id); }
@@ -64,7 +78,7 @@
             height="calc(100% - 40px)"
             bind:scrollToIndex
             let:item>
-            <div class="log-line">
+            <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''}">
                 <div class="nr">{item.nr}:</div>
                 <div class="level level-{logLevels[item.level]}">{logLevels[item.level]}:</div>
                 <div class="free-heap">{item.freeHeap}:</div>
@@ -93,7 +107,11 @@
 
     .log-line {
         display: flex;
-        padding: 3px;
+        padding: 3px; 
+    }
+
+    .log-line.ignore  {
+        text-decoration: overline red wavy;
     }
 
     .log-line .nr, .log-line .level, .log-line .free-heap {
@@ -112,16 +130,25 @@
         min-width: 50px;
     }
 
-    .level-INFO {
+    .level-COMM {
         color: blue;
     }
 
-    .level-ERR {
+    .level-INFO {
+        color: green;
+    }
+
+    .level-WARN {
         color: orange;
     }
 
-    .level-EMR, .level-CRIT {
+    .level-ERR {
         color: red;
+    }
+
+    .level-CRIT {
+        color: red;
+        border: 1px solid red;
     }
 
     .log-line .text {

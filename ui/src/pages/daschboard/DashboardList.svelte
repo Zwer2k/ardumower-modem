@@ -17,11 +17,12 @@
     let reconnect = true;
 
     let modemDbgLevels: DropdownItem[] = [
-        { id: "0", text: "none" },
+        { id: "63", text: "all" },
+        { id: "32", text: "comm" },
         { id: "31", text: "debug" },
         { id: "15", text: "info" },
-        { id: "7", text: "error" },
-        { id: "3", text: "emergency" },
+        { id: "7", text: "warn" },
+        { id: "3", text: "error" },
         { id: "1", text: "critical" },
     ];
 
@@ -37,10 +38,12 @@
 
         socket.addEventListener('close', () => {
             console.log("socket close");
-            socket = null;
-            if (reconnect) { 
+            restartTimer = setTimeout(() => {
+            if ((socket != null) && (socket.readyState != socket.OPEN)) {
+                socket = null;
                 createSocket();
             }
+        }, 5000);
         });
 
         socket.addEventListener("message", (message: any) => {
@@ -70,16 +73,16 @@
             }
         });
 
-        if (restartTimer != null) {
-            clearInterval(restartTimer);
-        }
+        // if (restartTimer != null) {
+        //     clearInterval(restartTimer);
+        // }
 
-        restartTimer = setInterval(() => {
-            if ((socket == null) || (socket.readyState != socket.OPEN)) {
-                socket = null;
-                createSocket();
-            }
-        }, 5000);
+        // restartTimer = setInterval(() => {
+        //     if ((socket == null) || (socket.readyState != socket.OPEN)) {
+        //         socket = null;
+        //         createSocket();
+        //     }
+        // }, 5000);
     }
     
     onMount(async () => { createSocket(); });
@@ -92,6 +95,7 @@
 
         if ((socket != null) && (socket.readyState == socket.OPEN)) {
             socket.close();
+            socket = null;
         }    
         reconnect = false;
     });

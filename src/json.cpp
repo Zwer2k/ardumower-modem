@@ -51,19 +51,35 @@ String Json::encode(Stats::Stats &stats)
   String result;
   DynamicJsonDocument doc(1024);
 
-  JsonObject dur = doc.createNestedObject("durations");
-  dur["idle"] = stats.durations.idle;
-  dur["charge"] = stats.durations.charge;
-  dur["mow"] = stats.durations.mow;
-  dur["mow_float"] = stats.durations.mowFloat;
-  dur["mow_fix"] = stats.durations.mowFix;
-  dur["mow_invalid"] = stats.durations.mowInvalid;
+  doc["duration_idle"] = stats.durations.idle;
+  doc["duration_charge"] = stats.durations.charge;
+  doc["duration_mow"] = stats.durations.mow;
+  doc["duration_mow_invalid"] = stats.durations.mowInvalid;
+  doc["duration_mow_float"] = stats.durations.mowFloat;
+  doc["duration_mow_fix"] = stats.durations.mowFix;
 
-  JsonObject obs = doc.createNestedObject("obstacles");
-  obs["count"] = stats.obstacles.count;
-  obs["sonar"] = stats.obstacles.sonar;
-  obs["bumper"] = stats.obstacles.bumper;
-  obs["gps_motion_low"] = stats.obstacles.gpsMotionLow;
+  doc["distance_mow_traveled"] = stats.mowDistanceTraveled;
+  
+  doc["counter_gps_chk_sum_errors"] = stats.gpsChecksumErrors;
+  doc["counter_dgps_chk_sum_errors"] = stats.dgpsChecksumErrors;
+  doc["counter_invalid_recoveries"] = stats.recoveries.mowInvalid;
+  doc["counter_float_recoveries"] = stats.recoveries.mowFloatToFix;
+  doc["counter_gps_jumps"] = stats.gpsJumps;
+  doc["counter_gps_motion_timeout"] = stats.obstacles.gpsMotionLow;
+  doc["counter_imu_triggered"] = stats.recoveries.imu;
+  doc["counter_sonar_triggered"] = stats.obstacles.sonar;
+  doc["counter_bumper_triggered"] = stats.obstacles.bumper;
+  doc["counter_obstacles"] = stats.obstacles.count;
+  
+  doc["time_max_cycle"] = stats.maxMotorControlCycleTime;
+  doc["time_max_dpgs_age"] = stats.mowMaxDgpsAge;
+  
+  doc["serial_buffer_size"] = stats.serialBufferSize;
+  doc["free_memory"] = stats.freeMemory;
+  doc["reset_cause"] = stats.resetCause;
+  
+  doc["temp_min"] = stats.tempMin;
+  doc["temp_max"] = stats.tempMax;
 
   serializeJson(doc, result);
   

@@ -4,6 +4,9 @@
 #include "prometheus_util.h"
 #include "settings.h"
 
+#define _LOG_ "MowerAdapter::"
+#define _LOG_CMD_ "MowerAdapter::command::"
+
 using namespace ArduMower::Modem;
 
 void processCSVResponse(String res, std::function<void(int, String)> fn);
@@ -31,19 +34,20 @@ void MowerAdapter::drainTx(String line, bool &stop)
 
 void MowerAdapter::parseArduMowerResponse(String line)
 {
-  Log(DBG, "MowerAdapter::parseArduMowerResponse(%s)", line.c_str());
+  //Log(DBG, "%sparseArduMowerResponse(%s)", _LOG_, line.c_str());
+  Log(COMM, "<< %s", line.c_str());
 
   if (line.length() < 2 + 4)
   // return;
   {
-    Log(DBG, "MowerAdapter::parseArduMowerResponse::guard::length(%d)", line.length());
+    Log(DBG, "%sparseArduMowerResponse::guard::length(%d)", _LOG_, line.length());
     return;
   }
 
   if (line[1] != ',')
   // return;
   {
-    Log(DBG, "MowerAdapter::parseArduMowerResponse::guard::second-char(%c)", line[1]);
+    Log(DBG, "%sparseArduMowerResponse::guard::second-char(%c)", _LOG_, line[1]);
     return;
   }
 
@@ -53,7 +57,7 @@ void MowerAdapter::parseArduMowerResponse(String line)
   if (!checksumStr.startsWith(",0x"))
   // return;
   {
-    Log(DBG, "MowerAdapter::parseArduMowerResponse::guard::checksum-prefix");
+    Log(DBG, "%sparseArduMowerResponse::guard::checksum-prefix", _LOG_);
     return;
   }
   uint8_t checksum = (checksumStr[3] - '0') << 4 | (checksumStr[4] - '0');
@@ -73,20 +77,20 @@ void MowerAdapter::parseArduMowerResponse(String line)
   else if (payload.startsWith("T,"))
     parseStatisticsResponse(payload);
   else
-    Log(DBG, "MowerAdapter::parseArduMowerResponse::payload-unknown(%s)", payload.c_str());
+    Log(DBG, "%sparseArduMowerResponse::payload-unknown(%s)", _LOG_, payload.c_str());
 }
 
 void MowerAdapter::parseArduMowerCommand(String line)
 {
-  Log(DBG, "MowerAdapter::parseArduMowerCommand(%s)", line.c_str());
-
+  Log(DBG, "%sparseArduMowerCommand(%s)", _LOG_, line.c_str());
   if (!line.startsWith("AT+"))
   {
     char *buffer = strdup(line.c_str());
     enc.decrypt(buffer, line.length());
     line = buffer;
     free(buffer);
-    Log(DBG, "MowerAdapter::parseArduMowerCommand::decrypted(%s)", line.c_str());
+    //Log(DBG, "%sparseArduMowerCommand::decrypted(%s)", _LOG_, line.c_str());
+    Log(COMM, ">> %s", line.c_str());
   }
 
   if (line.startsWith("AT+C"))
@@ -96,7 +100,7 @@ void MowerAdapter::parseArduMowerCommand(String line)
 // start mowing
 bool MowerAdapter::start()
 {
-  Log(DBG, "MowerAdapter::command::start"); 
+  Log(DBG, "%sstart", _LOG_CMD_); 
   //    AT+C,   -1,                   -1,    -1,          -1,                 -1,      0.32,             -1,   -1
   // Command, Mow , start / stop / Dock , Speed, fix timeout, finish and restart, Waypoints, skip waypoint ,sonar
   return sendCommand("AT+C,-1,1,-1,-1,-1,-1,-1,-1");
@@ -105,28 +109,28 @@ bool MowerAdapter::start()
 // stop mowing
 bool MowerAdapter::stop()
 {
-  Log(DBG, "MowerAdapter::command::stop");
+  Log(DBG, "%sstop", _LOG_CMD_);
   return sendCommand("AT+C,-1,0,-1,-1,-1,-1,-1,-1");
 }
 
 // dock mower to station
 bool MowerAdapter::dock()
 {
-  Log(DBG, "MowerAdapter::command::start");
+  Log(DBG, "%sstart", _LOG_CMD_);
   return sendCommand("AT+C,-1,4,-1,-1,-1,-1,-1,-1");
 }
 
 // skip one Waypoint
 bool MowerAdapter::skipWaypoint()
 {
-  Log(DBG, "MowerAdapter::command::skipWaypoint");
+  Log(DBG, "%sskipWaypoint", _LOG_CMD_);
   return sendCommand("AT+C,-1,-1,-1,-1,-1,-1,1,-1");
 }
 
 // set to a waypoint as percent of maximum waypoint
 bool MowerAdapter::setWaypoint(float waypoint)
 {
-  Log(DBG, "MowerAdapter::command::setWaypoint(%.2f)", waypoint);
+  Log(DBG, "%ssetWaypoint(%.2f)", _LOG_CMD_, waypoint);
   char buffer[40];
   snprintf(buffer, sizeof(buffer), "AT+C,-1,-1,-1,-1,-1,%.2f,-1,-1", waypoint);
   String command(buffer);
@@ -136,7 +140,7 @@ bool MowerAdapter::setWaypoint(float waypoint)
 // change mower movement speed
 bool MowerAdapter::changeSpeed(float speed)
 {
-  Log(DBG, "MowerAdapter::command::changeSpeed(%.2f)", speed);
+  Log(DBG, "%schangeSpeed(%.2f)", _LOG_CMD_, speed);
   char buffer[40];
   snprintf(buffer, sizeof(buffer), "AT+C,-1,-1,%.2f,-1,-1,-1,-1,-1", speed);
   String command(buffer);
@@ -146,7 +150,7 @@ bool MowerAdapter::changeSpeed(float speed)
 // set fix Timeout
 bool MowerAdapter::setFixTimeout(int timeout)
 {
-  Log(DBG, "MowerAdapter::command::setFixTimeout(%d)", timeout);
+  Log(DBG, "%ssetFixTimeout(%d)", _LOG_CMD_, timeout);
   String command = "AT+C,-1,-1,-1," + String(timeout) + ",-1,-1,-1,-1";
   return sendCommand(command);
 }
@@ -154,7 +158,7 @@ bool MowerAdapter::setFixTimeout(int timeout)
 // activate and deactivate mowMotor
 bool MowerAdapter::mowerEnabled(bool enabled)
 {
-  Log(DBG, "MowerAdapter::command::mowerEnabled(%d)", enabled);
+  Log(DBG, "%smowerEnabled(%d)", _LOG_CMD_, enabled);
   String command = "AT+C," + String(enabled ? "1" : "0") + ",-1,-1,-1,-1,-1,-1,-1";
 
   return sendCommand(command);
@@ -163,7 +167,7 @@ bool MowerAdapter::mowerEnabled(bool enabled)
 // activate and deactivate finish and restart
 bool MowerAdapter::finishAndRestartEnabled(bool enabled)
 {
-  Log(DBG, "MowerAdapter::command::finishAndRestartEnabled(%d)", enabled);
+  Log(DBG, "%sfinishAndRestartEnabled(%d)", _LOG_CMD_, enabled);
   String command = "AT+C,-1,-1,-1,-1," + String(enabled ? "1" : "0") + ",-1,-1,-1";
 
   return sendCommand(command);
@@ -172,7 +176,7 @@ bool MowerAdapter::finishAndRestartEnabled(bool enabled)
 // activate and deactivate sonar
 bool MowerAdapter::sonarEnabled(bool enabled)
 {
-  Log(DBG, "MowerAdapter::command::finishAndRestartEnabled(%d)", enabled);
+  Log(DBG, "%sfinishAndRestartEnabled(%d)", _LOG_CMD_, enabled);
   String command = "AT+C,-1,-1,-1,-1,-1,-1,-1," + String(enabled ? "1" : "0");
 
   return sendCommand(command);
@@ -181,13 +185,13 @@ bool MowerAdapter::sonarEnabled(bool enabled)
 
 bool MowerAdapter::requestVersion()
 {
-  Log(DBG, "MowerAdapter::requestVersion");
+  Log(DBG, "%srequestVersion", _LOG_);
   return sendCommand("AT+V", false);
 }
 
 bool MowerAdapter::requestStatus()
 {
-  Log(DBG, "MowerAdapter::requestStatus");
+  Log(DBG, "%srequestStatus", _LOG_);
   if (!assertSendIsInitialized())
     return false;
   return sendCommand("AT+S", true);
@@ -195,7 +199,7 @@ bool MowerAdapter::requestStatus()
 
 bool MowerAdapter::requestStats()
 {
-  Log(DBG, "MowerAdapter::requestStats");
+  Log(DBG, "%srequestStats", _LOG_);
   if (!assertSendIsInitialized())
     return false;
   return sendCommand("AT+T", true);
@@ -205,7 +209,7 @@ bool MowerAdapter::requestStats()
 // angular: rad/s
 bool MowerAdapter::manualDrive(float linear, float angular)
 {
-  Log(DBG, "MowerAdapter::manualDrive(%.2f, %.2f)", linear, angular);
+  Log(DBG, "%smanualDrive(%.2f, %.2f)", _LOG_, linear, angular);
   char buffer[40];
   snprintf(buffer, sizeof(buffer), "AT+M,%.2f, %.2f", linear, angular);
   String command(buffer);
@@ -215,27 +219,40 @@ bool MowerAdapter::manualDrive(float linear, float angular)
 // reboot the mower
 bool MowerAdapter::reboot()
 {
-  Log(DBG, "MowerAdapter::reboot()");
+  Log(DBG, "%sreboot()", _LOG_);
   return sendCommand("AT+Y");
 }
 
 // reboot GPS
 bool MowerAdapter::rebootGPS()
 {
-  Log(DBG, "MowerAdapter::rebootGPS()");
+  Log(DBG, "%srebootGPS()", _LOG_);
   return sendCommand("AT+Y2");
 }
 
 // power off the mower
 bool MowerAdapter::powerOff()
 {
-  Log(DBG, "MowerAdapter::powerOff()");
+  Log(DBG, "%spowerOff()", _LOG_);
   return sendCommand("AT+Y3");
+}
+
+// custom command
+bool MowerAdapter::customCmd(String cmd)
+{
+  if(cmd.indexOf("AT+")){
+    Log(ERR, "%scustom command %s is invalid", _LOG_, cmd.c_str());
+    return false;
+  }
+  else {
+    Log(DBG, "%scustom command %s is valid and forwarded", _LOG_, cmd.c_str());
+    return sendCommand(cmd);
+  }
 }
 
 void MowerAdapter::parseStatisticsResponse(String line)
 {
-  Log(DBG, "MowerAdapter::parseStatisticsResponse");
+  Log(DBG, "%sparseStatisticsResponse", _LOG_);
   const auto now = millis();
 
   processCSVResponse(line, [&](int index, String val)
@@ -327,7 +344,7 @@ void MowerAdapter::parseStatisticsResponse(String line)
 
 void MowerAdapter::parseVersionResponse(String line)
 {
-  Log(DBG, "MowerAdapter::parseVersionResponse");
+  Log(DBG, "%sparseVersionResponse", _LOG_);
   const auto now = millis();
 
   processCSVResponse(line, [&](int index, String val)
@@ -356,7 +373,7 @@ void MowerAdapter::parseVersionResponse(String line)
 
 void MowerAdapter::parseStateResponse(String line)
 {
-  Log(DBG, "MowerAdapter::parseStateResponse");
+  Log(DBG, "%sparseStateResponse", _LOG_);
   const auto now = millis();
 
   processCSVResponse(line, [&](int index, String val)
@@ -421,7 +438,7 @@ void MowerAdapter::parseStateResponse(String line)
 
 void MowerAdapter::parseATCCommand(String line)
 {
-  Log(DBG, "MowerAdapter::parseATCCommand");
+  Log(DBG, "%sparseATCCommand", _LOG_);
   const auto now = millis();
 
   processCSVResponse(
@@ -474,12 +491,14 @@ bool MowerAdapter::assertSendIsInitialized()
     return false;
   next_time = now + 1000;
 
-  Log(DBG, "MowerAdapter::assertSendIsInitialized::request-version");
+  Log(DBG, "%sassertSendIsInitialized::request-version", _LOG_);
 
-  if (!requestVersion())
+  if (!requestVersion()) {
+    next_time = now + 5000;
     return false;
+  }
 
-  Log(DBG, "MowerAdapter::assertSendIsInitialized::version-requested");
+  Log(DBG, "%sassertSendIsInitialized::version-requested", _LOG_);
 
   return false;
 }
@@ -491,11 +510,12 @@ bool MowerAdapter::sendCommand(String command, bool encrypt)
 
   char *buffer;
   asprintf(&buffer, "%s,0x%02x", command.c_str(), chk.value());
-
+  Log(COMM, "> %s", buffer);
+  
   if (encrypt)
     enc.encrypt(buffer, strlen(buffer));
 
-  auto result = router.sendWithoutResponse(buffer);
+  auto result = router.sendWithoutResponse(buffer);  
   free(buffer);
 
   return result;

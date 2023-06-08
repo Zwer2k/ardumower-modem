@@ -136,29 +136,30 @@ export interface ConsoleLog {
 };
 
 export enum LogLevel {
-  NONE = 0x32,
-  DBG  = 0x16,
-  INFO = 0x08,
-  ERR  = 0x04,
-  EMR  = 0x02,
-  CRIT = 0x01
+  COMM = 32,
+  DBG  = 16,
+  INFO = 8,
+  WARN = 4,
+  ERR  = 2,
+  CRIT = 1
 };
 
 export type LogLevelDescT = { [nr: number]: string };
 
 export let LogLevelDesc: LogLevelDescT = {
-  0x32: "NONE",
-  0x16: "DBG" ,
-  0x08: "INFO" ,
-  0x04: "ERR",
-  0x02: "EMR",
-  0x01: "CRIT"
+  32: "COMM",
+  16: "DBG" ,
+  8: "INFO",
+  4: "WARN",
+  2: "ERR",
+  1: "CRIT"
 };
 
 export interface LogLine {
   nr: number;
   level: LogLevel;
   text:  String;
+  freeHeap: number;
 };
 
 export enum ResponseDataType {

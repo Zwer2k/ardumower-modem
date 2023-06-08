@@ -92,16 +92,16 @@ void Console::loopInput()
     setFakeTimeout();
   else if (line.startsWith("modem log level "))
     line.replace("modem log level ", "");
-    if (line == "NONE") {
-      logToUi.modemLogLevel = NONE;
+    if (line == "COMM") {
+      logToUi.modemLogLevel = COMM;
     } else if (line == "DBG") {
       logToUi.modemLogLevel = DBG;
     } else if (line == "INFO") {
       logToUi.modemLogLevel = INFO;
+    } else if (line == "WARN") {
+      logToUi.modemLogLevel = WARN;
     } else if (line == "ERR") {
       logToUi.modemLogLevel = ERR;
-    } else if (line == "EMR") {
-      logToUi.modemLogLevel = EMR;
     } else if (line == "CRIT") {
       logToUi.modemLogLevel = CRIT;
     }
@@ -509,7 +509,7 @@ void Console::printHelp()
       "reset settings   reset modem settings to default values\r\n"
       "dump settings    print modem settings to console\r\n"
       "load settings    read modem settings from console\r\n"
-      "modem log level NONE|DBG|INFO|ERR|EMR|CRIT   set modem log level\r\n");
+      "modem log level COMM|DBG|INFO|WARN|ERR|CRIT   set modem log level\r\n");
 }
 
 void Console::printUnknown(String line)

@@ -1,12 +1,12 @@
 #pragma once
 
 enum LogLevel {
-  NONE = 0x32,
-  DBG  = 0x16,
-  INFO = 0x08,
-  ERR  = 0x04,
-  EMR  = 0x02,
-  CRIT = 0x01
+  COMM = 32,
+  DBG  = 16,
+  INFO = 8,
+  WARN = 4,
+  ERR  = 2,
+  CRIT = 1
 };
 
 #ifndef LOG_H

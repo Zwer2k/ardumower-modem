@@ -197,6 +197,8 @@ namespace ArduMower
         virtual bool reboot() = 0;
         virtual bool rebootGPS() = 0;
         virtual bool powerOff() = 0;
+
+        virtual bool customCmd(String cmd) = 0;
       };
     }
   }

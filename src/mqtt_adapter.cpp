@@ -17,7 +17,7 @@ void MqttAdapter::begin()
   if (!settings.mqtt.enabled)
     return;
 
-  Log(DBG, "MqttAdapter::begin");
+  Log(INFO, "MqttAdapter::begin");
   ArduMower::Util::URL url(settings.mqtt.server);
   int port = url.port();
   if (port == -1)
@@ -34,31 +34,25 @@ void MqttAdapter::loop(const uint32_t now)
   if (!settings.mqtt.enabled)
     return;
 
-  static byte publishSelector = 0;
+  if (!handleConnection(now)) { // Connection check costs a lot of time therefore loop and connect combined
+    return;
+  }
 
-  switch (publishSelector) { // handle mqtt.loop and publishing only every 20 loops
+  static byte publishSelector = 0;
+  switch (publishSelector++) { // handle mqtt.loop and publishing only every 20 loops
     case 0:
-      if (handleConnection(now)) { // Connection check costs a lot of time therefore loop and connect combined
-        publishSelector++;
-      }
+      publishState(now);
       break;
 
     case 1:
-      publishState(now);
-      publishSelector++;
+      publishProps(now);
       break;
 
     case 2:
-      publishProps(now);
-      publishSelector++;
+      publishStats(now);
       break;
 
     case 3:
-      publishStats(now);
-      publishSelector++;
-      break;
-
-    case 4:
       if (settings.mqtt.ha) ha.loop(now); // MQTT loop takes a lot of time, so it should not be executed every time
       break;
     
@@ -94,11 +88,13 @@ void MqttAdapter::publishState(const uint32_t now)
     if (now - last_time < 1000)
       return;
 
-    if (!cmd.requestStatus())
+    last_time = now;
+    if (!cmd.requestStatus()) {
+      next_time = now + mqttStatusInterval;
       return;
+    }
 
     Log(DBG, "MqttAdapter::publishState::refresh-requested(%d)", now - state.timestamp);
-    last_time = now;
     return;
   }
 
@@ -156,11 +152,13 @@ void MqttAdapter::publishStats(const uint32_t now)
     if (now - last_time < 1000)
       return;
 
-    if (!cmd.requestStats())
+    last_time = now;
+    if (!cmd.requestStats()) {
+      next_time = now + mqttStatsInterval;
       return;
+    }
 
     Log(DBG, "MqttAdapter::publishStats::backoff::refresh-requested(%d)", now - stats.timestamp);
-    last_time = now;
     return;
   }
 
@@ -176,13 +174,15 @@ void MqttAdapter::onMqttMessage(String topic, String payload)
   Log(DBG, "MqttAdapter::onMqttMessage(topic=%s,payload=%s)", topic.c_str(), payload.c_str());
   if (topic.endsWith("ha/set_fan_speed"))
   {
-    ha.onFanSpeedMessage(payload);
+    if (settings.mqtt.ha)
+      ha.onFanSpeedMessage(payload);
     return;
   }
 
-  if (topic.indexOf("/iob/command/") != -1)
+  if (topic.indexOf("/iob/command/") != -1) 
   {
-    iob.evaluateMessage(topic, payload);
+    if (settings.mqtt.iob)
+      iob.evaluateMessage(topic, payload);
     return;
   }
 
@@ -201,6 +201,12 @@ void MqttAdapter::onMqttMessage(String topic, String payload)
     cmd.stop();
   else if (payload == "dock" || payload == "return_to_base")
     cmd.dock();
+  else if (payload == "reboot")
+    cmd.reboot();
+  else if (payload == "shutdown")
+    cmd.powerOff();
+  else if (payload != "")
+    cmd.customCmd(payload);
 }
 
 bool MqttAdapter::handleConnection(const uint32_t now)
@@ -227,18 +233,24 @@ bool MqttAdapter::handleConnection(const uint32_t now)
     return false;
   next_time = now + backoff.next();
 
-  Log(DBG, "MqttAdapter::connect");
+  Log(INFO, "MqttAdapter::connect");
 
   client.setWill(topic("/online").c_str(), "false");
 
-  if (!client.connect(settings.general.name.c_str(), settings.mqtt.username.c_str(), settings.mqtt.password.c_str()))
+  if (!client.connect(settings.general.name.c_str(), settings.mqtt.username.c_str(), settings.mqtt.password.c_str())) {
+    Log(ERR, "MqttAdapter::can not connect");
     return false;
+  }
 
-  if (!client.subscribe(topic("/command").c_str()))
+  if (!client.subscribe(topic("/command").c_str())) {
+    Log(ERR, "MqttAdapter::can not subscribe /command");
     return false;
+  }
 
-  if (!client.publish(topic("/online").c_str(), "true"))
+  if (!client.publish(topic("/online").c_str(), "true")) {
+    Log(ERR, "MqttAdapter::can not subscribe /online");
     return false;
+  }
 
   if (settings.mqtt.ha)
   {
