@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { AccordionItem, Dropdown } from "carbon-components-svelte";
+    import { AccordionItem, Dropdown, Toggle } from "carbon-components-svelte";
     import VirtualList from "../../widget/VirtualList.svelte";
     import type { DropdownItem } from "carbon-components-svelte/types/Dropdown/Dropdown.svelte";
     import type { LogLevelDescT, LogLine } from "../../model";
@@ -24,6 +24,7 @@
     $: if (logData) {
         if (logData != null) {
             items = [...items, ...logData];
+            logData = [];
             let remove = items.length - logLines;
             if (remove > 0)
                 items.splice(0, remove); 
@@ -72,6 +73,13 @@
                 type="inline"
                 titleText="Log level"
                 items={dbgLevels}/>
+            <Toggle
+                class="autoscroll-toggle"
+                type="inline" 
+                labelText="Autoscroll" 
+                labelA={""}
+                labelB={""}
+                on:toggle={(e) => autoscroll = e.detail.toggled}/>
         </div>
         <VirtualList {items}
             logLevels={logLevels}
@@ -92,6 +100,22 @@
     :global(.bx--accordion__item--active .bx--accordion__content) {
         display: inline;
         padding: 0;
+    }
+
+    :global(.autoscroll-toggle) {
+        display: inline-grid;
+    }
+
+    :global(.autoscroll-toggle label) {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        font-size: .875rem;
+        margin-left: 10px;
+    }
+
+    :global(.autoscroll-toggle label :first-child) {
+        margin: 8px;
     }
 
     .settings {

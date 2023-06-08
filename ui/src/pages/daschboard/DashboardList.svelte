@@ -31,7 +31,7 @@
             return;
         
         let host = location.hostname;
-        socket = new WebSocket("ws://" + (((host == "[::1]") || (host == "127.0.0.1")) ? "192.168.43.186" : host) + "/ws")
+        socket = new WebSocket("ws://" + (((host == "[::1]") || (host == "127.0.0.1") || (host == "localhost")) ? "192.168.43.173" : host) + "/ws")
         socket.addEventListener("open", ()=> {
             console.log("socket open");
         });

@@ -11,7 +11,7 @@
 	<h3>State</h3>
     {#if state != null}
         <div class="item-list">
-            <div class="label">Battery:</div><div>{state.battery_voltage}V/{state.amps}A</div>
+            <div class="label">Battery</div><div>{state.battery_voltage}V/{state.amps}A</div>
             <div class="label">Position</div><div>{state.position.x}E {state.position.y}N</div>
             <div class="label">Satelite</div>
             <div>
@@ -20,14 +20,16 @@
             </div>
             <div class="label">State</div><div>{valueDescriptions.job[state.job]}</div>
         </div>
+        <div class="item-list">
+            <div class="label">OP</div><div>{valueDescriptions.job[desiredState.op]}</div>
+            <div class="label">Speed</div><div>{desiredState.speed}</div>
+        </div>
     {/if}
 </article>
 <article class="state-card">
 	<h3>Controll</h3>
     {#if desiredState != null}
         <div class="controll-buttons">
-            <div class="label">OP</div><div>{valueDescriptions.job[desiredState.op]}</div>
-            <div class="label">Speed</div><div>{desiredState.speed}</div>
             <button style="color: {desiredState.mower_motor_enabled ? 'red' : ''}"><MowMotorIcon /></button>
         </div>
     {/if}

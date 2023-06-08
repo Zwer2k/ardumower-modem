@@ -90,21 +90,24 @@ void Console::loopInput()
     setFakeEnabled(false);
   else if (line == "fake timeout")
     setFakeTimeout();
-  else if (line.startsWith("modem log level "))
-    line.replace("modem log level ", "");
-    if (line == "COMM") {
-      logToUi.modemLogLevel = COMM;
-    } else if (line == "DBG") {
-      logToUi.modemLogLevel = DBG;
-    } else if (line == "INFO") {
-      logToUi.modemLogLevel = INFO;
-    } else if (line == "WARN") {
-      logToUi.modemLogLevel = WARN;
-    } else if (line == "ERR") {
-      logToUi.modemLogLevel = ERR;
-    } else if (line == "CRIT") {
-      logToUi.modemLogLevel = CRIT;
-    }
+  else if (line.startsWith("modem log level ")) {
+      line.replace("modem log level ", "");
+      if (line == "COMM") {
+        logToUi.modemLogLevel = COMM;
+      } else if (line == "DBG") {
+        logToUi.modemLogLevel = DBG;
+      } else if (line == "INFO") {
+        logToUi.modemLogLevel = INFO;
+      } else if (line == "WARN") {
+        logToUi.modemLogLevel = WARN;
+      } else if (line == "ERR") {
+        logToUi.modemLogLevel = ERR;
+      } else if (line == "CRIT") {
+        logToUi.modemLogLevel = CRIT;
+      } else {
+        io.printf("Unknown log level: %s\r\n", line.c_str());
+      }
+  }
   else
     printUnknown(line);
 }
