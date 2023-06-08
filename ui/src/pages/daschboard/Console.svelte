@@ -79,7 +79,7 @@
                 labelText="Autoscroll" 
                 labelA={""}
                 labelB={""}
-                on:toggle={(e) => autoscroll = e.detail.toggled}/>
+                bind:toggled={autoscroll}/>
         </div>
         <VirtualList {items}
             logLevels={logLevels}
