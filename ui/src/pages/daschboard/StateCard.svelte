@@ -20,6 +20,8 @@
             </div>
             <div class="label">State</div><div>{valueDescriptions.job[state.job]}</div>
         </div>
+    {/if}
+    {#if desiredState != null}
         <div class="item-list">
             <div class="label">OP</div><div>{valueDescriptions.job[desiredState.op]}</div>
             <div class="label">Speed</div><div>{desiredState.speed}</div>

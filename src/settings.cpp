@@ -641,17 +641,17 @@ void PropertiesClass::marshal(const JsonObject &o) const
 bool PropertiesClass::initBluetooth() const
 {
   if (!btStart()) {
-    Serial.println("Failed to initialize controller");
+    Log(ERR, "Failed to initialize controller");
     return false;
   }
  
   if (esp_bluedroid_init() != ESP_OK) {
-    Serial.println("Failed to initialize bluedroid");
+    Log(ERR, "Failed to initialize bluedroid");
     return false;
   }
  
   if (esp_bluedroid_enable() != ESP_OK) {
-    Serial.println("Failed to enable bluedroid");
+    Log(ERR, "Failed to enable bluedroid");
     return false;
   }
 

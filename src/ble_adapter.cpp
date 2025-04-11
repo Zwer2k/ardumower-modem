@@ -129,17 +129,17 @@ void BleAdapter::loop()
 bool BleAdapter::initBluetooth()
 {
   if(!btStart()) {
-    Serial.println("Failed to initialize controller");
+    Log(ERR, "Failed to initialize controller");
     return false;
   }
  
   if(esp_bluedroid_init() != ESP_OK) {
-    Serial.println("Failed to initialize bluedroid");
+    Log(ERR, "Failed to initialize bluedroid");
     return false;
   }
  
   if(esp_bluedroid_enable() != ESP_OK) {
-    Serial.println("Failed to enable bluedroid");
+    Log(ERR, "Failed to enable bluedroid");
     return false;
   }
   return true;
@@ -168,12 +168,12 @@ void BleAdapter::clearPairings() {
   // Get the numbers of bonded/paired devices in the BT module
   int count = esp_bt_gap_get_bond_device_num();
   if(!count) {
-    Serial.println("No bonded device found.");
+    Log(ERR, "No bonded device found.");
   } else {
-    Serial.print("Bonded device count: "); Serial.println(count);
+    Log(INFO, "Bonded device count: "); Serial.println(count);
     if(PAIR_MAX_DEVICES < count) {
       count = PAIR_MAX_DEVICES; 
-      Serial.print("Reset bonded device count: "); Serial.println(count);
+      Log(INFO, "Reset bonded device count: "); Serial.println(count);
     }
     esp_err_t tError =  esp_bt_gap_get_bond_device_list(&count, pairedDeviceBtAddr);
     if(ESP_OK == tError) {
@@ -185,9 +185,8 @@ void BleAdapter::clearPairings() {
           if(ESP_OK == tError) {
             //Serial.print("Removed bonded device # "); 
           } else {
-            Serial.print("Failed to remove bonded device # ");
+            Log(ERR, "Failed to remove bonded device # ");
           }
-          Serial.println(i);
         }
       }        
     }

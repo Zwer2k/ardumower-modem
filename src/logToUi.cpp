@@ -91,6 +91,7 @@ void LogToUi::marshal(const JsonObject &o)
             jsonLine["freeHeap"] = line.freeHeap;
             lineNr++;            
         }
-    } 
+    }
+    Serial.printf("(%d)\r\n", lineNr); 
 }
 

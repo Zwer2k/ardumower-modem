@@ -256,7 +256,8 @@ void UiSocketHandler::handleData(uint32_t clientId, char *data)
 
   if (itemMap.find(clientId) != itemMap.end())
   {
-    DynamicJsonDocument jsonData = doc["data"];
+    DynamicJsonDocument jsonData(doc["data"].size());
+    jsonData = doc["data"];
     itemMap[clientId]->handleData(doc["type"], jsonData);
   } 
   else 

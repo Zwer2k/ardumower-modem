@@ -42,7 +42,7 @@ testF(TestPrometheusAdapter, metrics_endpoint)
   String actualMetrics = getActualMetrics(responseCode);
 
   if (responseCode != 200)
-    Serial.println(actualMetrics);
+    Log(ERR, actualMetrics);
   assertEqual(responseCode, 200);
   assertStringContains(actualMetrics, "ardumower_modem_total_runtime ");
   assertStringContains(actualMetrics, "ardumower_modem_heap{type=\"total\"} ");

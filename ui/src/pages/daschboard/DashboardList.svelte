@@ -55,12 +55,15 @@
                 switch (jsonData.type) {
                     case ResponseDataType.hello:
                         valueDescriptions = jsonData.data as ValueDescriptions;
+                        console.log("valueDescriptions", valueDescriptions)
                         break;
                     case ResponseDataType.mowerState:
                         state = jsonData.data as State;
+                        console.log("state", state)
                         break
                     case ResponseDataType.desiredState:
                         desiredState = jsonData.data as DesiredState;
+                        console.log("desiredState", desiredState)
                         break
                     case ResponseDataType.modemLog:
                         modemLog = (jsonData.data as ConsoleLog).log;
