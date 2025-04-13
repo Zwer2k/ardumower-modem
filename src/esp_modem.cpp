@@ -18,6 +18,7 @@
 #ifdef ESP_MODEM_SIM
 #include "conn.h"
 #endif
+#include "console.h"
 #include "esp_os.h"
 #include "http_adapter.h"
 #include "looptime_monitor.h"
@@ -88,7 +89,7 @@ PS4controller::Adapter ps4ControllerAdapter(settings, mowerAdapter, mowerAdapter
 
 void setup() {
   Serial.begin(115200);
-  Serial2.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, 16, 17);
 
   api.begin(&bleAdapter, &relayAdapter);
   settings.begin();

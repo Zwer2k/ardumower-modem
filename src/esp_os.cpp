@@ -5,5 +5,5 @@ using namespace ArduMower::Modem;
 
 void ArduinoESP::restart()
 {
-  //ESP.restart();
+  ESP.restart();
 }

@@ -59,7 +59,8 @@ const char* State::State::posSolutionDesc[State::State::posSolutionDescLen] = { 
 
 bool State::State::operator==(const State &other)
 {
-  return same(other, timestamp) && same(other, batteryVoltage) && same(other, position) && same(other, target) && same(other, job) && same(other, sensor) && same(other, amps) && same(other, mapCrc);
+  return same(other, timestamp) && same(other, batteryVoltage) && same(other, position) && same(other, target) && same(other, job) && same(other, sensor) && same(other, amps) && same(other, mapCrc) &&
+    same(other, temperature) && same(other, chargingMah) && same(other, motorMowMah) && same(other, motorLeftMah) && same(other, motorRightMah);
 }
 
 bool State::Position::operator==(const Position &other)

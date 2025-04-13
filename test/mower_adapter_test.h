@@ -20,6 +20,7 @@ protected:
   
   ArduMower::Domain::Robot::Stats::Stats givenAnATTResponseAndTheExpectedStatistics();
   ArduMower::Domain::Robot::State::State givenAnATSResponseAndTheExpectedState();
+  ArduMower::Domain::Robot::State::State givenACustomATSResponseAndTheExpectedState();
   ArduMower::Domain::Robot::Properties givenAnATVResponseAndTheExpectedProperties();
 };
 
@@ -87,6 +88,41 @@ testF(TestMowerAdapter, parse_ats_response)
 
   assertEqualProp(actualResult, expected, target.x);
   assertEqualProp(actualResult, expected, target.y);
+
+  actualResult.timestamp = expected.timestamp;
+  assertTrue(actualResult == expected);
+}
+
+testF(TestMowerAdapter, parse_ats_custom_response)
+{
+  auto expected = givenACustomATSResponseAndTheExpectedState();
+
+  auto actualResult = uut->state();
+
+  assertEqualProp(actualResult, expected, batteryVoltage);
+  assertEqualProp(actualResult, expected, job);
+  assertEqualProp(actualResult, expected, sensor);
+  assertEqualProp(actualResult, expected, amps);
+  assertEqualProp(actualResult, expected, mapCrc);
+
+  assertEqualProp(actualResult, expected, position.x);
+  assertEqualProp(actualResult, expected, position.y);
+  assertEqualProp(actualResult, expected, position.delta);
+  assertEqualProp(actualResult, expected, position.solution);
+  assertEqualProp(actualResult, expected, position.mowPointIndex);
+  assertEqualProp(actualResult, expected, position.age);
+  assertEqualProp(actualResult, expected, position.accuracy);
+  assertEqualProp(actualResult, expected, position.visibleSatellites);
+  assertEqualProp(actualResult, expected, position.visibleSatellitesDgps);
+
+  assertEqualProp(actualResult, expected, target.x);
+  assertEqualProp(actualResult, expected, target.y);
+
+  assertEqualProp(actualResult, expected, temperature);
+  assertEqualProp(actualResult, expected, chargingMah);
+  assertEqualProp(actualResult, expected, motorMowMah);
+  assertEqualProp(actualResult, expected, motorLeftMah);
+  assertEqualProp(actualResult, expected, motorRightMah);
 
   actualResult.timestamp = expected.timestamp;
   assertTrue(actualResult == expected);
@@ -211,8 +247,8 @@ void TestMowerAdapter::fakeArduMowerOutput(String givenInput)
   Serial1.print(givenInput.c_str());
   Serial1.flush();
   while (Serial2.available())
-    delay(10);
-  delay(10);
+    delay(100);
+  delay(100);
 }
 
 String TestMowerAdapter::fakeArduMowerInputReadLine()
@@ -229,7 +265,7 @@ String TestMowerAdapter::fakeArduMowerInputReadLine()
       
       return line;
     }
-    delay(1);
+    delay(10);
   }
 
   return "timeout";
@@ -343,6 +379,67 @@ ArduMower::Domain::Robot::State::State TestMowerAdapter::givenAnATSResponseAndTh
   expected.position.visibleSatellitesDgps = 29;
   // s += maps.mapCRC;
   expected.mapCrc = -26017;
+
+  return expected;
+}
+
+ArduMower::Domain::Robot::State::State TestMowerAdapter::givenACustomATSResponseAndTheExpectedState()
+{
+  String response = "S,28.12,-10.77,-4.55,2.62,1,2,11,0.05,0,-7.47,-6.46,0.02,36,-0.01,29,-26017,0,-1,0,12043.12,908.12,845.33,8911.12,28.73,0xcc\r\n";
+  fakeArduMowerOutput(response);
+
+  ArduMower::Domain::Robot::State::State expected;
+  // battery.batteryVoltage;
+  expected.batteryVoltage = 28.12;
+  // s += stateX;
+  expected.position.x = -10.77;
+  // s += stateY;
+  expected.position.y = -4.55;
+  // s += stateDelta;
+  expected.position.delta = 2.62;
+  // s += gps.solution;
+  expected.position.solution = 1;
+  // s += stateOp;
+  expected.job = 2;
+  // s += maps.mowPointsIdx;
+  expected.position.mowPointIndex = 11;
+  // s += (millis() - gps.dgpsAge)/1000.0;
+  expected.position.age = 0.05;
+  // s += stateSensor;
+  expected.sensor = 0;
+  // s += maps.targetPoint.x();
+  expected.target.x = -7.47;
+  // s += maps.targetPoint.y();
+  expected.target.y = -6.46;
+  // s += gps.accuracy;
+  expected.position.accuracy = 0.02;
+  // s += gps.numSV;
+  expected.position.visibleSatellites = 36;
+  // if (stateOp == OP_CHARGE)
+  // s += battery.chargingCurrent;
+  // else
+  // s += motor.motorsSenseLP;
+  expected.amps = -0.01;
+  // s += gps.numSVdgps;
+  expected.position.visibleSatellitesDgps = 29;
+  // s += maps.mapCRC;
+  expected.mapCrc = -26017;
+  // lateralError
+  // s += "0,";
+  // timetable
+  // s += "-1,0";
+  // incompatible to upstream Synray:
+  // s += battery.metricChargingMah;
+  expected.chargingMah = 12043.12;
+  // s += motor.metricMotorLeftMah;
+  expected.motorLeftMah = 908.12;
+  // s += motor.metricMotorRightMah;
+  expected.motorRightMah = 845.33;
+  // s += motor.metricMotorMowMah;
+  expected.motorMowMah = 8911.12;
+  // s += stateTemp;
+  expected.temperature = 28.73;
+
 
   return expected;
 }

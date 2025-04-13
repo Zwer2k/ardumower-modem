@@ -101,17 +101,6 @@ resources:
     secret_access_key: ((artifacts.secret_access_key))
     versioned_file: ardumower-modem/rc.tgz
 
-- name: lib-async-tcp
-  <<: *firmware_library
-  source:
-    uri: https://github.com/timotto/AsyncTCP.git
-
-- name: lib-esp-async-web-server
-  <<: *firmware_library
-  source:
-    uri: https://github.com/timotto/ESPAsyncWebServer.git
-    branch: hack/bad-content-type
-
 - name: tool-task
   <<: *github_artifact
   source:
@@ -147,8 +136,6 @@ jobs:
     - get: tool-semver-bumper
       params:
         globs: [semver-bumper-linux-amd64]
-    - get: lib-async-tcp
-    - get: lib-esp-async-web-server
   - in_parallel:
     - do:
       - task: build-ui
@@ -186,21 +173,19 @@ jobs:
       platform: linux
       image_resource:
         type: registry-image
-        source: {repository: arduinoci/ci-arduino-esp32, tag: v1.0.6}
+        source: {repository: arduinoci/ci-arduino-esp32, tag: v2.0.15}
       inputs:
       - name: ci
       - name: package-ui
         path: ardumower-modem
       - name: tool-task
       - name: tool-semver-bumper
-      - name: lib-async-tcp
-        path: lib/AsyncTCP
-      - name: lib-esp-async-web-server
-        path: lib/ESPAsyncWebServer
       outputs:
       - name: firmware
         path: package-ui
       - name: artifacts
+      caches:
+      - path: cache/apt
       run: {path: ci/ci/bin/build-firmware.sh}
   - in_parallel:
     - put: rc-artifacts
@@ -222,6 +207,20 @@ jobs:
       passed: [build]
       params:
         unpack: true
+
+  - task: build-tools
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source: {repository: golang, tag: alpine}
+      inputs:
+      - name: ci
+      - name: tests
+      outputs:
+      - name: test-artifacts
+      run: {path: ci/ci/bin/build-test-tools.sh}
+
   - task: test
     tags: [esp32]
     config:
@@ -231,6 +230,7 @@ jobs:
       - name: tests
       - name: source-code
       - name: rc-artifacts
+      - name: test-artifacts
       params:
         SERIAL_PORT: /dev/ttyUSB0
         VALIDATE_WIFI_STA_SSID: ((test-wifi.ssid))

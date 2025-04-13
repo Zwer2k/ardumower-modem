@@ -57,14 +57,15 @@ void RelayAdapter::setupAuthorizationHeader()
   String plain = settings.relay.username + ":" + settings.relay.password;
   size_t n;
   //unsigned char *encoded = base64_encode((const unsigned char *)plain.c_str(), plain.length(), &n);
-  unsigned char encoded[128];
-  mbedtls_base64_encode(encoded, 64, &n, (const unsigned char*)plain.c_str(), plain.length());
+  unsigned char encodedChr[128];
+  mbedtls_base64_encode(encodedChr, 64, &n, (const unsigned char*)plain.c_str(), plain.length());
+  String encoded = String((char *)encodedChr);
 
   // why does base64_encode append a single "\r" / 0x0a character?
-  if (n > 0)
-    encoded[n - 1] = 0;
+  if (n > 0 && encoded[n-1] == '\r')
+    encoded = encoded.substring(0,n-1);
 
-  String authValue = "Basic " + String((char *)encoded);
+  String authValue = "Basic " + encoded;
   client.addHeader("Authorization", authValue);
   //free(encoded);
 }
