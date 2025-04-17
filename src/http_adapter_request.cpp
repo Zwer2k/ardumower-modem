@@ -9,8 +9,8 @@ Http::CommandRequest::CommandRequest(
     Metrics *metrics,
     AsyncWebServerRequest *_request,
     const uint32_t timeNow)
-    : id(_id), _metrics(metrics), request(_request), timeReceiveHttpRequest(timeNow), state(0), _done(false),
-      httpRequestBody(""), routerResponse("")
+    : _metrics(metrics), id(_id), state(0), httpRequestBody(""), routerResponse(""), request(_request), _done(false), 
+      timeReceiveHttpRequest(timeNow) 
 {
   parseHttpRequestBody();
 }
@@ -47,6 +47,11 @@ void Http::CommandRequest::readHttpRequestBody()
   if (request->_tempObject)
   {
     httpRequestBody = (char*)request->_tempObject;
+    return;
+  }
+
+  if (request->params() > 0) {
+    httpRequestBody = request->getParam(0)->value();
     return;
   }
 

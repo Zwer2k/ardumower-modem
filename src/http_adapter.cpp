@@ -105,7 +105,7 @@ void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 
 void HttpAdapter::handleCommandRequestBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
-  Log(DBG, "HttpAdapter::handleCommandRequest");
+  Log(DBG, "HttpAdapter::handleCommandRequestBody");
   if (total > 0 && request->_tempObject == NULL) {
     request->_tempObject = malloc(total);
   }
