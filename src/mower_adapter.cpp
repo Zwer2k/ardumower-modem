@@ -51,8 +51,6 @@ void MowerAdapter::parseArduMowerResponse(String line)
     return;
   }
 
-  char responseTypeCode = line[0];
-
   String checksumStr = line.substring(line.length() - 5);
   if (!checksumStr.startsWith(",0x"))
   // return;
@@ -60,7 +58,7 @@ void MowerAdapter::parseArduMowerResponse(String line)
     Log(DBG, "%sparseArduMowerResponse::guard::checksum-prefix", _LOG_);
     return;
   }
-  uint8_t checksum = (checksumStr[3] - '0') << 4 | (checksumStr[4] - '0');
+  //uint8_t checksum = (checksumStr[3] - '0') << 4 | (checksumStr[4] - '0');
 
   String payload = line.substring(0, line.length() - 5);
 

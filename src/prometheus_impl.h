@@ -19,6 +19,7 @@ namespace ArduMower
               : ArduMower::Modem::Prometheus::Measurement(key, attrs), value(0) {}
           void inc() { value++; }
           void set(uint32_t v) { value = v; }
+          virtual ~Value() {}
 
         protected:
           virtual unsigned int writeValue(char *buffer, unsigned int size) override

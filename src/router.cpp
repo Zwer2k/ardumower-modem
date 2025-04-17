@@ -86,13 +86,13 @@ void Router::loopReceive()
 {
   while (down.available())
   {
-    char c = down.read();
+    int c = down.read();
     if (c == -1)
       continue;
     
     lastRx = _millis();
 
-    String line = downRx.update(c);
+    String line = downRx.update((char)c);
     if (line == "")
       continue;
 

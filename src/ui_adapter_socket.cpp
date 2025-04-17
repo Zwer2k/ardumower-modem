@@ -56,7 +56,7 @@ UiSocketHandler::UiSocketHandler(
 {
   _ws = ws;
 
-  for (int i; i < ResponseDataType::responseDataTypeLength; i++) {
+  for (int i=0; i < ResponseDataType::responseDataTypeLength; i++) {
     oldDataTimestamp[i] = 0;
     lastDataRequestTimestamp[i] = defaultStateUpdateInterval;
   }
@@ -98,6 +98,8 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       break;
     case ResponseDataType::desiredState:
       sendData(sendTo, dataType, _source.desiredState(), force);
+      break;
+    default:
       break;
   }
 }

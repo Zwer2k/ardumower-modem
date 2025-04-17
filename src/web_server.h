@@ -1,5 +1,4 @@
-#ifndef _LANDING_PAGE_H
-#define _LANDING_PAGE_H
+#pragma once
 
 #include <Arduino.h>
 #include <AsyncTCP.h>
@@ -22,4 +21,3 @@ namespace ArduMower
     };
   }
 }
-#endif

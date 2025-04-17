@@ -49,7 +49,7 @@ namespace ArduMower
         const char *_key;
         Attributes _attrs;
         Measurement(const char *key, Attributes attrs = Attributes());
-        ~Measurement();
+        virtual ~Measurement();
 
         int write(char *buf, int length);
         unsigned int length();

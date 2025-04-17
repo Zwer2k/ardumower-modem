@@ -108,6 +108,7 @@ namespace ArduMower
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 
+#ifdef ENABLE_PS4_CONTROLLER
       class PS4Controller : public Group
       {
       public:
@@ -120,6 +121,7 @@ namespace ArduMower
         virtual bool unmarshal(const JsonObject &o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
+#endif
 
       class Relay : public Group
       {
@@ -178,7 +180,9 @@ namespace ArduMower
         Web web;
         WiFi wifi;
         Bluetooth bluetooth;
+#ifdef ENABLE_PS4_CONTROLLER
         PS4Controller ps4controller;
+#endif
         Relay relay;
         MQTT mqtt;
         Prometheus prometheus;

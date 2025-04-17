@@ -49,8 +49,8 @@ namespace ArduMower
 
       private:
         AsyncWebServerRequest *request;
-        const uint32_t timeReceiveHttpRequest;
         bool _done;
+        const uint32_t timeReceiveHttpRequest;
         void parseHttpRequestBody();
         void readHttpRequestBody();
         void trimHttpRequestBody();
