@@ -23,14 +23,16 @@
   };
 </script>
 
+{#if ps4ControllerSettings != null}
 <p>
   <Button
     on:click={clearPairings}
     icon={IconTrash}
     kind="danger-tertiary"
-    disabled={!bluetoothSettings.pin_enabled && !ps4ControllerSettings.enabled}>Delete all Bluetooth Pairings</Button
+    disabled={!bluetoothSettings.pin_enabled && !ps4ControllerSettings?.enabled}>Delete all Bluetooth Pairings</Button
   >
 </p>
+{/if}
 
 <Modal
   danger
