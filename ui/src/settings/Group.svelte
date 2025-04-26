@@ -19,7 +19,7 @@
 <AccordionItem title={titleMod} {open}>
   <slot />
   {#if settings[enabledKey]}
-    <div transition:slide on:introend={() => (more = true)}>
+    <div transition:slide|global on:introend={() => (more = true)}>
       {#if more}
         <slot name="enabled" />
       {/if}

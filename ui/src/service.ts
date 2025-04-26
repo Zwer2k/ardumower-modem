@@ -197,7 +197,7 @@ const fillSecrets = (s: Settings) => {
   else s.relay.password = ''
 }
 
-export interface ErrorDetails {
+export class ErrorDetails {
   action?: string
   error: string
 }
