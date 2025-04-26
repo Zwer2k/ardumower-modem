@@ -120,7 +120,7 @@ void Adapter::beginSta()
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(_settings.general.name.c_str());
   WiFi.begin(_settings.wifi.sta_ssid.c_str(), _settings.wifi.sta_psk.c_str());
-  WiFi.setAutoConnect(true);
+  //WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
 }
 

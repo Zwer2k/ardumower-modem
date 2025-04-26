@@ -7,7 +7,7 @@
   import CheckboxSetting from "../widget/CheckboxSetting.svelte";
   import SelectSetting from "../widget/SelectSetting.svelte";
   import TextSetting from "../widget/TextSetting.svelte";
-import BluetoothClean from "./BluetoothClean.svelte";
+  import BluetoothClean from "./BluetoothClean.svelte";
   import Group from "./Group.svelte";
 
   export let settings: Settings.PS4Controller;

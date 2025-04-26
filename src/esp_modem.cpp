@@ -16,7 +16,7 @@
 #include "api.h"
 #include "ble_adapter.h"
 #ifdef ESP_MODEM_SIM
-#include "conn.h"
+#include "console.h"
 #endif
 #include "console.h"
 #include "esp_os.h"

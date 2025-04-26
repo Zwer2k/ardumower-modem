@@ -3,11 +3,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <ArduinoJson.h>
-<<<<<<<< HEAD:src/conn.cpp
-#include "conn.h"
-========
 #include "console.h"
->>>>>>>> upstream/main:src/console.cpp
 #include "git_version.h"
 #include "../test/helper/fake_ardumower_h.h"
 #include "logToUi.h"
