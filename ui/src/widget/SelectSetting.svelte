@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Select, SelectItem } from "carbon-components-svelte";
-  import IconClear from "carbon-icons-svelte/lib/CloseOutline16";
+  import IconClear from "carbon-icons-svelte/lib/CloseOutline.svelte";
 import { createEventDispatcher } from "svelte";
 import type { ChangeEventValue } from "../model";
   import type { Option } from "../model/ui";

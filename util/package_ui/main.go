@@ -7,7 +7,7 @@ import (
 )
 
 func dataDirectory() string {
-	return "../../ui/public/"
+	return "../../ui/build/"
 }
 
 func bundleFile() string {

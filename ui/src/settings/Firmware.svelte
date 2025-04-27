@@ -6,7 +6,7 @@
     StructuredListRow,
     StructuredListCell,
   } from "carbon-components-svelte";
-  import IconUpload from "carbon-icons-svelte/lib/CloudUpload16";
+  import IconUpload from "carbon-icons-svelte/lib/CloudUpload.svelte";
   import Group from "./Group.svelte";
   import {InfoStore} from "../stores/info"
   import FirmwareUpload from '../firmware/FirmwareUpload.svelte'

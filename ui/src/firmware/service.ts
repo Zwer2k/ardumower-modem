@@ -1,4 +1,4 @@
-import { Readable, writable } from "svelte/store"
+import { type Readable, writable } from "svelte/store"
 
 export enum FirmwareUploadStatus {
   clear = 0,

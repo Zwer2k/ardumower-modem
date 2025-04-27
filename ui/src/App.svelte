@@ -9,10 +9,10 @@
     SkipToContent,
   } from "carbon-components-svelte";
   import { Router, Route, navigate } from "svelte-routing";
-  import IconHelp from "carbon-icons-svelte/lib/Help16";
-  import IconHome from "carbon-icons-svelte/lib/Home16";
-  //import IconMap from "carbon-icons-svelte/lib/Map16";
-  import IconSettings from "carbon-icons-svelte/lib/Settings16";
+  import IconHelp from "carbon-icons-svelte/lib/Help.svelte";
+  import IconHome from "carbon-icons-svelte/lib/Home.svelte";
+  //import IconMap from "carbon-icons-svelte/lib/Map.svelte";
+  import IconSettings from "carbon-icons-svelte/lib/Settings.svelte";
 
   import DashboardRoute from "./routes/Dashboard.svelte";
   //import MapRoute from "./routes/Map.svelte";

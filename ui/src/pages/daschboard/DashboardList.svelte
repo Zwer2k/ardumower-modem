@@ -1,7 +1,8 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
     import { onMount, onDestroy } from 'svelte';
-    import { ConsoleLog, ConsoleLogSettings, DesiredState, LogLevelDesc, LogLine, RequestDataType, RequestSocketMessage, ResponseDataType, State, ValueDescriptions } from "../../model";
+    import type { ConsoleLog, ConsoleLogSettings, DesiredState, LogLine, RequestSocketMessage, State, ValueDescriptions } from "../../model";
+    import { LogLevelDesc, RequestDataType, ResponseDataType } from "../../model";
     import Console from "./Console.svelte";
     import { Accordion } from "carbon-components-svelte";
     import type { DropdownItem } from "carbon-components-svelte/types/Dropdown/Dropdown.svelte";
@@ -31,7 +32,7 @@
             return;
         
         let host = location.hostname;
-        socket = new WebSocket("ws://" + (((host == "[::1]") || (host == "127.0.0.1") || (host == "localhost")) ? "192.168.43.173" : host) + "/ws")
+        socket = new WebSocket("ws://" + (((host == "[::1]") || (host == "127.0.0.1") || (host == "localhost")) ? "192.168.43.220" : host) + "/ws")
         socket.addEventListener("open", ()=> {
             console.log("socket open");
         });

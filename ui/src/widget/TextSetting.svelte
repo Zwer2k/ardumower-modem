@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, PasswordInput, TextInput } from "carbon-components-svelte";
-  import IconClear from "carbon-icons-svelte/lib/CloseOutline16";
+  import IconClear from "carbon-icons-svelte/lib/CloseOutline.svelte";
   import { Busy } from "../stores/busy";
   import { Invalid } from "../stores/invalid";
   import { TextService } from "../text";

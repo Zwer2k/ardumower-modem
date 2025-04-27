@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Slider } from "carbon-components-svelte";
-  import IconClear from "carbon-icons-svelte/lib/CloseOutline16";
+  import IconClear from "carbon-icons-svelte/lib/CloseOutline.svelte";
   import { Busy } from "../stores/busy";
 
   export let label: string;

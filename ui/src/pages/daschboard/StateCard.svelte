@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { DesiredState, State, ValueDescriptions } from "../../model";
-    import MowMotorIcon from "carbon-icons-svelte/lib/TropicalStormTracks24";
+    import MowMotorIcon from "carbon-icons-svelte/lib/TropicalStormTracks.svelte";
 
     export let state: State = null;
     export let desiredState: DesiredState = null;

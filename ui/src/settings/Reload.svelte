@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Modal } from "carbon-components-svelte";
-  import IconReload from "carbon-icons-svelte/lib/UpdateNow32";
+  import IconReload from "carbon-icons-svelte/lib/UpdateNow.svelte";
 
   import { BackendSettings } from "../stores/backend";
   import { Error } from "../stores/error";

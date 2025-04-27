@@ -1,8 +1,8 @@
 <script lang="ts">
   import "carbon-components-svelte/css/g10.css";
   import { Button } from "carbon-components-svelte";
-  import IconClear from "carbon-icons-svelte/lib/Close16";
-  import IconSave from "carbon-icons-svelte/lib/Checkmark16";
+  import IconClear from "carbon-icons-svelte/lib/Close.svelte";
+  import IconSave from "carbon-icons-svelte/lib/Checkmark.svelte";
 
   import { Busy } from "../stores/busy";
   import { Dirty } from "../stores/dirty";

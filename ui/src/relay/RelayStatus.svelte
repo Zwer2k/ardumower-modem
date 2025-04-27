@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from "carbon-components-svelte";
-  import IconReload from "carbon-icons-svelte/lib/UpdateNow32";
+  import IconReload from "carbon-icons-svelte/lib/UpdateNow.svelte";
   import { StatusStore } from "../stores/status";
   import { InfoService } from "../service";
   import ConnectionStatus from "./ConnectionStatus.svelte";

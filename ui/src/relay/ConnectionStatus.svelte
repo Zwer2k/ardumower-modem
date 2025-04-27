@@ -1,8 +1,8 @@
 <script lang="ts">
-  import ConnectionSignal16 from "carbon-icons-svelte/lib/ConnectionSignal16";
-  import ConnectionSignalOff16 from "carbon-icons-svelte/lib/ConnectionSignalOff16";
-  import Time16 from "carbon-icons-svelte/lib/Time16";
-  import Tools16 from "carbon-icons-svelte/lib/Tools16";
+  import ConnectionSignal16 from "carbon-icons-svelte/lib/ConnectionSignal.svelte";
+  import ConnectionSignalOff16 from "carbon-icons-svelte/lib/ConnectionSignalOff.svelte";
+  import Time16 from "carbon-icons-svelte/lib/Time.svelte";
+  import Tools16 from "carbon-icons-svelte/lib/Tools.svelte";
   import type { Status } from "../model";
 
   export let status: Status;

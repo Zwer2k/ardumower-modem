@@ -1,37 +1,26 @@
 {
-  "name": "svelte-app",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "build": "rollup -c",
-    "dev": "rollup -c -w",
-    "start": "sirv public --no-clear --single"
-  },
-  "devDependencies": {
-    "@rollup/plugin-commonjs": "^17.0.0",
-    "@rollup/plugin-node-resolve": "^11.0.0",
-    "@rollup/plugin-typescript": "^8.5.0",
-    "@tsconfig/svelte": "^2.0.1",
-    "carbon-components-svelte": "^0.46.0",
-    "carbon-icons-svelte": "^10.38.0",
-    "carbon-preprocess-svelte": "^0.6.0",
-    "rollup": "^2.79.1",
-    "rollup-plugin-css-only": "^3.1.0",
-    "rollup-plugin-dev": "^2.0.0",
-    "rollup-plugin-livereload": "^2.0.0",
-    "rollup-plugin-svelte": "^7.0.0",
-    "rollup-plugin-terser": "^7.0.0",
-    "svelte": "^3.59.1",
-    "svelte-check": "^2.10.3",
-    "svelte-preprocess": "^4.10.7",
-    "svelte-virtual-scroll-list": "^1.1.0",
-    "typescript": "^4.9.5"
-  },
-  "dependencies": {
-    "@svelte-parts/zoom": "^0.0.20",
-    "@sveltejs/svelte-virtual-list": "^3.0.1",
-    "sirv-cli": "^1.0.0",
-    "svelte-routing": "^1.6.0",
-    "tslib": "^2.5.1"
-  }
+	"name": "ui",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^6.0.0",
+		"@sveltejs/kit": "^2.16.0",
+		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"svelte": "^5.0.0",
+		"vite": "^6.2.6"
+	},
+	"dependencies": {
+		"@sveltejs/adapter-static": "^3.0.8",
+		"@sveltejs/svelte-virtual-list": "^3.0.1",
+		"carbon-components-svelte": "^0.89.1",
+		"carbon-icons-svelte": "^13.3.0",
+		"svelte-routing": "^2.13.0"
+	}
 }

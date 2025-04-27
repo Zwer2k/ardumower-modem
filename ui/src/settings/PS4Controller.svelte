@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Modal } from "carbon-components-svelte";
-  import IconTrash from "carbon-icons-svelte/lib/TrashCan16";
+  import IconTrash from "carbon-icons-svelte/lib/TrashCan.svelte";
   import type { ChangeEventValue, Info, Settings } from "../model";
   import type { Option } from "../model/ui";
   import { BluetoothService } from "../service";
