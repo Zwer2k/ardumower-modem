@@ -2,6 +2,7 @@
     import "carbon-components-svelte/css/g10.css";
     import {
         Button,
+        Content,
         Header,
         HeaderUtilities,
         Loading,
@@ -62,18 +63,15 @@
         <Toasts />
     </HeaderUtilities>
 </Header>
-
+<Content>
+    {@render children()}    
+</Content>
 <HelpDialog bind:open={helpOpen} />
 
 <style lang="scss">
 
-:global(.bx--body--with-modal-open) {
-    padding: 2rem;
-}
 
-:global(.bx--header) {
-    width: 100vw;
-}
+
 
 :global(.bx--toggle-input__label .bx--toggle__switch) {
     margin-top: 0.5rem !important;
@@ -89,5 +87,3 @@
     display: none;
 }
 </style>
-
-{@render children()}

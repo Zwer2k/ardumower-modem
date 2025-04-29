@@ -4,7 +4,7 @@
 
 	// props
 	export let items: LogLine[];
-	export let logLevels: LogLevelDescT;
+	//export let logLevels: LogLevelDescT;
 	export let height: string = '100%';
 	export let itemHeight: number | undefined = undefined;
 	// read-only, but visible to consumers via bind:start
