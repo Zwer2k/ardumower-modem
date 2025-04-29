@@ -15,7 +15,7 @@
   export let disabled: boolean = false;
   export let readonly: boolean = false;
 
-  export let placeholder: string = undefined;
+  export let placeholder: string | undefined = undefined;
   export let required: boolean = true;
 
   export let kind: "text" | "password" = "text";
@@ -78,12 +78,11 @@
       iconDescription="Revert changes"
       kind="ghost"
       icon={IconClear}
-      hasIconOnly={true}
     />
   {/if}
 </main>
 
-<style>
+<style lang="scss">
   main {
     display: flex;
     flex-direction: row;

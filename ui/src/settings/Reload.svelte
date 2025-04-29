@@ -34,7 +34,7 @@
   </div>
 {/if}
 
-<style>
+<style lang="scss">
   p {
     padding: 1em;
   }

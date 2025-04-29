@@ -50,7 +50,7 @@
   </ul>
 </Modal>
 
-<style>
+<style lang="scss">
   p {
     padding-top: 0.25em;
     padding-bottom: 0.25em;

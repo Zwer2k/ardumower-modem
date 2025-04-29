@@ -46,7 +46,7 @@
   {/if}
 </main>
 
-<style>
+<style lang="scss">
   p {
     padding-left: 1em;
     padding-right: 1em;

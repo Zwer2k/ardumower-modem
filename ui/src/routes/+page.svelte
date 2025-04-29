@@ -1,6 +1,6 @@
-<script lang="ts">
-    import App from "../App.svelte";
+<script>
+    import DashboardList from "../pages/daschboard/DashboardList.svelte";
 </script>
 
-<!-- <App /> -->
-  test
+<DashboardList>
+</DashboardList>

@@ -1,26 +1,27 @@
-<script>
+<script lang="ts">
 	import { onMount, tick } from 'svelte';
+    import type { LogLevelDescT, LogLine } from '../model';
 
 	// props
-	export let items;
-	export let logLevels;
-	export let height = '100%';
-	export let itemHeight = undefined;
+	export let items: LogLine[];
+	export let logLevels: LogLevelDescT;
+	export let height: string = '100%';
+	export let itemHeight: number | undefined = undefined;
 	// read-only, but visible to consumers via bind:start
 	export let start = 0;
 	export let end = 0;
 	// local state
-	let height_map = [];
-	let rows;
-	let viewport;
-	let contents;
-	let viewport_height = 0;
-	let visible;
-	let mounted;
+	let height_map: number[] = [];
+	let rows: HTMLCollectionOf<HTMLElement>;
+	let viewport: HTMLElement;
+	let contents: HTMLElement;
+	let viewport_height: number = 0;
+	let visible: { index: number, data: LogLine }[];
+	let mounted: boolean;
 
-	let top = 0;
-	let bottom = 0;
-	let average_height;
+	let top: number = 0;
+	let bottom: number = 0;
+	let average_height: number;
 
 	$: visible = items.slice(start, end).map((data, i) => {
 		return { index: i + start, data };
@@ -29,7 +30,7 @@
 	// whenever `items` changes, invalidate the current heightmap
 	$: if (mounted) refresh(items, viewport_height, itemHeight);
 
-	async function refresh(items, viewport_height, itemHeight) {
+	async function refresh(items: LogLine[], viewport_height: number, itemHeight: number | undefined) {
 		const isStartOverflow = items.length < start
 		
 		if (isStartOverflow) {
@@ -112,7 +113,7 @@
 		// more. maybe we can just call handle_scroll again?
 	}
 
-	export async function scrollToIndex (index, opts) {
+	export async function scrollToIndex (index: number, opts: ScrollToOptions) {
 		const {scrollTop, scrollHeight} = viewport;
 		const itemsDelta = index - start;
 		const _itemHeight = itemHeight || average_height;
@@ -131,7 +132,7 @@
 	
 	// trigger initial refresh
 	onMount(() => {
-		rows = contents.getElementsByTagName('list-row');
+		rows = contents.getElementsByTagName('list-row') as any as HTMLCollectionOf<HTMLElement>;
 		mounted = true;
 	});
 </script>
@@ -153,7 +154,7 @@
 </list-viewport>
 
 
-<style>
+<style lang="scss">
 	list-viewport {
 		position: relative;
 		overflow-y: auto;

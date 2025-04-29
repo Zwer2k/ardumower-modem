@@ -5,16 +5,16 @@
     import { LogLevelDesc, RequestDataType, ResponseDataType } from "../../model";
     import Console from "./Console.svelte";
     import { Accordion } from "carbon-components-svelte";
-    import type { DropdownItem } from "carbon-components-svelte/types/Dropdown/Dropdown.svelte";
- 
-    let valueDescriptions: ValueDescriptions = null;
-    let state: State = null;
-    let desiredState: DesiredState = null; 
+    import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
+    
+    let valueDescriptions: ValueDescriptions | null = null;
+    let state: State | null = null;
+    let desiredState: DesiredState | null = null; 
     let modemLog: LogLine[];
     let modemDbgLevel: number;
 
-    let socket: WebSocket = null;
-    let restartTimer = null;
+    let socket: WebSocket | null = null;
+    let restartTimer: NodeJS.Timeout | null = null;
     let reconnect = true;
 
     let modemDbgLevels: DropdownItem[] = [
@@ -91,8 +91,7 @@
     
     onMount(async () => { createSocket(); });
 
-    onDestroy(() => { 
-        console.log("onDestroy");    
+    onDestroy(() => {
         if (restartTimer != null) {
             clearInterval(restartTimer);
         }
@@ -104,8 +103,8 @@
         reconnect = false;
     });
 
-    const sendText = (text) => {
-        if (socket.readyState == socket.OPEN) {
+    const sendText = (text:string) => {
+        if ((socket != null) && (socket.readyState == socket.OPEN)) {
             socket.send(text);
         }
     }

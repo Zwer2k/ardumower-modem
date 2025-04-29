@@ -2,9 +2,9 @@
     import type { DesiredState, State, ValueDescriptions } from "../../model";
     import MowMotorIcon from "carbon-icons-svelte/lib/TropicalStormTracks.svelte";
 
-    export let state: State = null;
-    export let desiredState: DesiredState = null;
-    export let valueDescriptions: ValueDescriptions = null;
+    export let state: State | null = null;
+    export let desiredState: DesiredState | null = null;
+    export let valueDescriptions: ValueDescriptions;
 </script>
 
 <article class="state-card">
@@ -37,7 +37,7 @@
     {/if}
 </article>
 
-<style>
+<style lang="scss">
 	.state-card {
 		width: 100%;
 		border: 1px solid #aaa;

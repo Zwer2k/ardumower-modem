@@ -1,8 +1,8 @@
 <script lang="ts">
     import { AccordionItem, Dropdown, Toggle } from "carbon-components-svelte";
     import VirtualList from "../../widget/VirtualList.svelte";
-    import type { DropdownItem } from "carbon-components-svelte/types/Dropdown/Dropdown.svelte";
     import type { LogLevelDescT, LogLine } from "../../model";
+    import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
 
     export let logLevels: LogLevelDescT;
     export let dbgLevels: DropdownItem[];
@@ -15,7 +15,7 @@
 
 	let start = 0;
 	let end = 0;
-	let scrollToIndex = undefined;
+	let scrollToIndex: ((index: any, opts: any) => Promise<void>) | undefined = undefined;
     let modemLogOpen = false;
     let logLevelIndex = 3;
     let logLines = 10000;
@@ -30,7 +30,7 @@
                 items.splice(0, remove); 
         
             if (autoscroll && scrollToIndex != undefined) {
-                scrollToIndex(items.length - 1);
+                scrollToIndex(items.length - 1, { behavior: 'smooth' });
             }
         }
     }
@@ -68,14 +68,12 @@
         </VirtualScroll> -->
         <div class="settings">
             <Dropdown
-                bind:selectedIndex={logLevelIndex}
-                multiple="{true}"
+                bind:selectedId={dbgLevel}
                 type="inline"
                 titleText="Log level"
                 items={dbgLevels}/>
             <Toggle
                 class="autoscroll-toggle"
-                type="inline" 
                 labelText="Autoscroll" 
                 labelA={""}
                 labelB={""}
@@ -96,7 +94,7 @@
     </div>
 </AccordionItem>
 
-<style>
+<style lang="scss">
     :global(.bx--accordion__item--active .bx--accordion__content) {
         display: inline;
         padding: 0;

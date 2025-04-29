@@ -12,7 +12,7 @@
   import type { Settings } from "../model";
 
   interface settable {
-    commit(it: Settings);
+    commit(it: Settings): any;
   }
 
   const copy = (from: Readable<Settings>, to: settable) =>

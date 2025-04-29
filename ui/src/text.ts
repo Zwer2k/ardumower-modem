@@ -2,7 +2,7 @@ class TextServiceClass {
 
   private _lang = 'en'
 
-  public invalidTextFor(settingsKey: string): string {
+  public invalidTextFor(settingsKey: string): string | undefined {
     const keyParts = settingsKey.split('.')
 
     const result = crawl(texts.language[this._lang].settings, [...keyParts, 'invalidText'])
@@ -29,9 +29,9 @@ class TextServiceClass {
   }
 }
 
-const crawl = (o: any, path: string[]) => (!o || !path || !path.length) ? o : crawl(o[path[0]], path.slice(1))
+const crawl = (o: any, path: string[]): any => (!o || !path || !path.length) ? o : crawl(o[path[0]], path.slice(1))
 
-const texts = {
+const texts: { language: { [language: string]: any } } = {
   language: {
     en: {
       actions: {

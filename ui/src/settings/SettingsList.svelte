@@ -38,7 +38,7 @@ import Relay from "./Relay.svelte";
         bind:original={$original.bluetooth}
         bind:ps4ControllerSettings={$settings.ps4controller}
       />
-      {#if !$settings.bluetooth.enabled}
+      {#if !$settings.bluetooth.enabled && $settings.ps4controller && $original.ps4controller}
         <PS4ControllerSettings
           bind:settings={$settings.ps4controller}
           bind:original={$original.ps4controller}
