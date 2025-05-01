@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
 namespace ArduMower
@@ -9,15 +8,18 @@ namespace ArduMower
   namespace Modem
   {
     class WebServer
-    {
-    private:
-      AsyncWebServer _server;
+    {      
+    private:   
+      AsyncWebServer *_server = new AsyncWebServer(80);
 
     public:
-      WebServer() : _server(AsyncWebServer(80)) {}
+      WebServer() {}
+      ~WebServer(){
+        delete _server;
+      }
 
       void begin();
-      AsyncWebServer &server() { return _server; }
+      AsyncWebServer &server() { return *_server; }
     };
   }
 }

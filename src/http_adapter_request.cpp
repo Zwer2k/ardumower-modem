@@ -51,7 +51,7 @@ void Http::CommandRequest::readHttpRequestBody()
   }
 
   if (request->params() > 0) {
-    httpRequestBody = request->getParam(0)->value();
+    httpRequestBody = request->getParam((size_t)0)->value();
     return;
   }
 

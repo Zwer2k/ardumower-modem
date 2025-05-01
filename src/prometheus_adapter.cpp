@@ -50,7 +50,7 @@ void Adapter::metrics(AsyncWebServerRequest *request)
       index += it->write(&buffer[index], size - index);
     }
     request->_tempObject = buffer;
-    request->send_P(200, "text/plain", (const unsigned char *)buffer, index);
+    request->send(200, "text/plain", (const unsigned char *)buffer, index);
   };
 
   auto status = _source.state();

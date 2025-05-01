@@ -38,9 +38,9 @@ UiSocketItem::~UiSocketItem()
 {   
 }
 
-void UiSocketItem::sendText(String text)
+bool UiSocketItem::sendText(String text)
 {
-  _client->printf(text.c_str());
+  return _client->text(text.c_str());
 }
 
 void UiSocketItem::pingClients()
@@ -147,6 +147,8 @@ void UiSocketHandler::pingClients()
 
 void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void * arg, uint8_t *data, size_t len)
 {
+  Log(INFO, "%s ws[%s][%u] event %d\n", _LOG_, server->url(), client->id(), type);
+
   if(type == WS_EVT_CONNECT){
     //client connected
     Log(INFO, "%s ws[%s][%u] connect\n", _LOG_, server->url(), client->id());
@@ -245,6 +247,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
       }
     }
   }
+  _ws->cleanupClients(); // cleanup disconnected clients
 }
 
 void UiSocketHandler::handleData(uint32_t clientId, char *data) 

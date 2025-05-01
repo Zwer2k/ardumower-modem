@@ -26,6 +26,7 @@ UiAdapter::~UiAdapter()
 
 void UiAdapter::begin()
 {
+  
   _server.on("/api/modem/info", HTTP_GET, std::bind(&UiAdapter::handleApiGetModemInfo, this, std::placeholders::_1));
   _server.on("/api/modem/status", HTTP_GET, std::bind(&UiAdapter::handleApiGetModemStatus, this, std::placeholders::_1));
 
@@ -71,7 +72,7 @@ bool UiAdapter::servePath(AsyncWebServerRequest *request, const String &path)
       }
     }
 
-    auto *response = request->beginResponse_P(200, asset->mime, asset->data, asset->size);
+    auto *response = request->beginResponse(200, asset->mime, asset->data, asset->size);
     response->addHeader("Connection", "close");
     response->addHeader("Content-Encoding", "gzip");
     response->addHeader("ETag", asset->etag);

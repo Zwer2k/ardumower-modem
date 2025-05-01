@@ -99,7 +99,6 @@ void setup() {
   wifiAdapter.begin();
   router.begin();
   modemCli.begin();
-  webServer.begin();
   // ota.begin();
   otaHttpServer.begin();
   bleAdapter.begin();
@@ -109,6 +108,7 @@ void setup() {
   mqttAdapter.begin();
   prometheusAdapter.begin();
   ui.begin();
+  webServer.begin();
 #ifdef ENABLE_PS4_CONTROLLER
   ps4ControllerAdapter.begin();
 #endif
