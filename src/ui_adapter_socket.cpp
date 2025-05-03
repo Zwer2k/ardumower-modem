@@ -35,7 +35,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
 }
 
 UiSocketItem::~UiSocketItem() 
-{   
+{
 }
 
 bool UiSocketItem::sendText(String text)
@@ -43,9 +43,14 @@ bool UiSocketItem::sendText(String text)
   return _client->text(text.c_str());
 }
 
-void UiSocketItem::pingClients()
+void UiSocketItem::ping()
 {
   _client->ping();
+}
+
+AwsClientStatus UiSocketItem::status()
+{
+  return _client->status();
 }
 
 UiSocketHandler::UiSocketHandler(
@@ -106,7 +111,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 
 void UiSocketHandler::logToUiLoop()
 {
-  if (logToUi.hasData() && _ws->availableForWriteAll()) {
+  if (logToUi.hasData()) {
     sendData(NULL, ResponseDataType::modemLog, logToUi, false);
   }
 }
@@ -131,7 +136,10 @@ void UiSocketHandler::sendData(UiSocketItem *sendTo, ResponseDataType dataType, 
   if (sendTo != NULL) {
     sendTo->sendText(stateStr);
   } else {
-    _ws->textAll(stateStr);
+    auto status = _ws->textAll(stateStr);    
+    if (status != AsyncWebSocket::ENQUEUED) {
+      _ws->cleanupClients(); // cleanup disconnected clients
+    }
   }
 }
 
@@ -140,18 +148,31 @@ void UiSocketHandler::pingClients()
   if (millis() - lastclientPing < clientPingInterval)
     return;
 
-  _ws->pingAll();
+  //_ws->pingAll();
+  
+  for (std::map<uint32_t, UiSocketItem*>::iterator it = itemMap.begin(); it != itemMap.end(); ++it)
+  {
+    if (it->second->status() == WS_CONNECTED) {
+      it->second->ping();
+    } else {
+      Log(DBG, "%s not more connected\n", _LOG_); 
+      if (itemMap.find(it->first) != itemMap.end()) {
+        delete itemMap[it->first];
+        itemMap.erase(it->first);
+      } 
+    }
+  }
 
   lastclientPing = millis();
 }
 
 void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void * arg, uint8_t *data, size_t len)
 {
-  Log(INFO, "%s ws[%s][%u] event %d\n", _LOG_, server->url(), client->id(), type);
-
   if(type == WS_EVT_CONNECT){
     //client connected
     Log(INFO, "%s ws[%s][%u] connect\n", _LOG_, server->url(), client->id());
+    client->keepAlivePeriod(10);
+
     DynamicJsonDocument doc(1024);
     doc["type"] = ResponseDataType::responseHello;
     doc["client"] = client->id();
@@ -175,6 +196,8 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
 
     client->ping();
     itemMap[client->id()] = new UiSocketItem(this, client, _source);
+
+    _ws->cleanupClients(); // cleanup disconnected clients
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
     Log(INFO, "%s ws[%s][%u] disconnect\n", _LOG_, server->url(), client->id());
@@ -247,7 +270,6 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
       }
     }
   }
-  _ws->cleanupClients(); // cleanup disconnected clients
 }
 
 void UiSocketHandler::handleData(uint32_t clientId, char *data) 

@@ -10,14 +10,15 @@ dotenv: ['.env']
 tasks:
   clean:
     cmds:
-    - rm -rf ui/public/build
-  
+    - rm -rf ui/build
+
   build-ui:
     cmds:
     - npm run build
     dir: ui
     generates:
-    - public/build/**/*
+    - build/**/*
+    #- public/build/**/*
     sources:
     - public/index.html
     - public/smui.css
@@ -30,7 +31,7 @@ tasks:
     - npm run dev
     dir: ui
     generates:
-    - public/build/**/*
+    - build/**/*
     sources:
     - public/index.html
     - public/smui.css
@@ -47,7 +48,7 @@ tasks:
     generates:
     - ../../src/asset_bundle.h
     sources:
-    - ../../ui/public/**/*
+    - ../../ui/build/**/*
     - ./**/*
 
   compile:

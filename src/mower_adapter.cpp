@@ -101,7 +101,7 @@ bool MowerAdapter::start()
   Log(DBG, "%sstart", _LOG_CMD_); 
   //    AT+C,   -1,                   -1,    -1,          -1,                 -1,      0.32,             -1,   -1
   // Command, Mow , start / stop / Dock , Speed, fix timeout, finish and restart, Waypoints, skip waypoint ,sonar
-  return sendCommand("AT+C,-1,1,-1,-1,-1,-1,-1,-1");
+  return sendCommand("AT+C,-1,1,0.2,100,0,-1,-1,1");
 }
 
 // stop mowing
@@ -114,8 +114,8 @@ bool MowerAdapter::stop()
 // dock mower to station
 bool MowerAdapter::dock()
 {
-  Log(DBG, "%sstart", _LOG_CMD_);
-  return sendCommand("AT+C,-1,4,-1,-1,-1,-1,-1,-1");
+  Log(DBG, "%sdock", _LOG_CMD_);
+  return sendCommand("AT+C,-1,4,-1,-1,-1,-1,-1,1");
 }
 
 // skip one Waypoint

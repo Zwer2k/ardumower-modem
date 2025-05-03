@@ -39,7 +39,8 @@ namespace ArduMower
           ArduMower::Domain::Robot::StateSource &source);
         void handleData(RequestDataType dataType, DynamicJsonDocument &jsonData);
         bool sendText(String text);
-        void pingClients();
+        void ping();
+        AwsClientStatus status();
 
         ~UiSocketItem();
       

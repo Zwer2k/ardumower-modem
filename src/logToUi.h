@@ -5,7 +5,7 @@
 #include <ArduinoJson.h>
 #include "ringbuffer.h"
 
-#define RINGBUFFER_SIZE 15
+#define RINGBUFFER_SIZE 10
 
 struct LogLine {
     uint32_t nr;

@@ -1,7 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
-import { optimizeImports } from "carbon-preprocess-svelte";
+import { visualizer } from 'rollup-plugin-visualizer';
 
 const production = false;
 
@@ -21,6 +20,19 @@ export default defineConfig({
 	}),
 	plugins: [
 		sveltekit(),
+		// visualizer({
+		// 	emitFile: true,
+		// 	filename: 'stats.html'
+		// })
 	],
+	build: {
+		rollupOptions: {
+			output: {
+				manualChunks: (id) => {
+					return 'my-app';
+				}
+			}
+		}
+	}
 });
 
