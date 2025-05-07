@@ -138,6 +138,7 @@ void UiSocketHandler::sendData(UiSocketItem *sendTo, ResponseDataType dataType, 
   } else {
     auto status = _ws->textAll(stateStr);    
     if (status != AsyncWebSocket::ENQUEUED) {
+      Log(DBG, "cleanup old clients\n", _LOG_); 
       _ws->cleanupClients(); // cleanup disconnected clients
     }
   }
@@ -155,7 +156,7 @@ void UiSocketHandler::pingClients()
     if (it->second->status() == WS_CONNECTED) {
       it->second->ping();
     } else {
-      Log(DBG, "%s not more connected\n", _LOG_); 
+      Log(DBG, "%s client %u not more connected\n", _LOG_, it->first); 
       if (itemMap.find(it->first) != itemMap.end()) {
         delete itemMap[it->first];
         itemMap.erase(it->first);
@@ -171,8 +172,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
   if(type == WS_EVT_CONNECT){
     //client connected
     Log(INFO, "%s ws[%s][%u] connect\n", _LOG_, server->url(), client->id());
-    client->keepAlivePeriod(10);
-
+    
     DynamicJsonDocument doc(1024);
     doc["type"] = ResponseDataType::responseHello;
     doc["client"] = client->id();
@@ -188,6 +188,8 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     for (const char *item: ArduMower::Domain::Robot::State::State::posSolutionDesc) {
       newObj[String(i++)] = item;
     }
+
+    valueDescriptions["logLevel"] = logToUi.modemLogLevel;
 
     String dataStr;
     serializeJson(doc, dataStr);

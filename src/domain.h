@@ -20,6 +20,7 @@ namespace ArduMower
 
         bool operator==(const Properties &other);
         bool operator!=(const Properties &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
       };
 
       namespace Stats
@@ -31,6 +32,7 @@ namespace ArduMower
 
           bool operator==(const Durations &other);
           bool operator!=(const Durations &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Recoveries
@@ -42,6 +44,7 @@ namespace ArduMower
 
           bool operator==(const Recoveries &other);
           bool operator!=(const Recoveries &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Obstacles
@@ -54,6 +57,7 @@ namespace ArduMower
 
           bool operator==(const Obstacles &other);
           bool operator!=(const Obstacles &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Stats
@@ -77,6 +81,7 @@ namespace ArduMower
 
           bool operator==(const Stats &other);
           bool operator!=(const Stats &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
       }
 

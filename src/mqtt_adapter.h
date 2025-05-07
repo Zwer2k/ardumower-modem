@@ -40,6 +40,7 @@ namespace ArduMower
       void publishStats(const uint32_t now);
 
       bool publishTo(const String &topicPostfix, const String &message);
+      bool publishWithSubtopics(JsonObject& data, const String baseTopic);
 
     public:
       MqttAdapter(Settings::Settings &_settings,

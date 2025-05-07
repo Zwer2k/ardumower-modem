@@ -110,6 +110,7 @@ export interface Position extends Point {
 export interface ValueDescriptions {
   job: { [jobId: number]: string };
   posSolution: { [jobId: number]: string };  
+  logLevel: number;
 }
 
 export interface State {

@@ -2,6 +2,40 @@
 
 using namespace ArduMower::Domain::Robot;
 
+const char * _t_props_firmware = "firmware";
+const char * _t_props_version = "version";
+
+const char * _t_duration_idle = "idle";
+const char * _t_duration_charge = "charge";
+const char * _t_duration_mow = "mow";
+const char * _t_duration_mow_invalid = "mow_invalid";
+const char * _t_duration_mow_float = "mow_float";
+const char * _t_duration_mow_fix = "mow_fix";
+
+const char * _t_recoveries_invalid_recoveries = "invalid_recoveries";
+const char * _t_recoveries_float_recoveries = "float_recoveries";
+const char * _t_recoveries_imu_triggered = "imu_triggered";
+
+const char * _t_obstacles_gps_motion_timeout = "gps_motion_timeout";
+const char * _t_obstacles_sonar_triggered = "sonar_triggered";
+const char * _t_obstacles_bumper_triggered = "bumper_triggered";
+const char * _t_obstacles_obstacles = "obstacles";
+
+const char * _t_state_durations = "durations";
+const char * _t_stats_mow_traveled = "mow_traveled";
+const char * _t_stats_gps_chk_sum_errors = "gps_chk_sum_errors";
+const char * _t_stats_dgps_chk_sum_errors = "dgps_chk_sum_errors";
+const char * _t_stats_recoveries = "recoveries";
+const char * _t_stats_obstacles = "obstacles";
+const char * _t_stats_gps_jumps = "gps_jumps";
+const char * _t_stats_max_cycle = "max_cycle";
+const char * _t_stats_max_dpgs_age = "max_dpgs_age";
+const char * _t_stats_serial_buffer_size = "serial_buffer_size";
+const char * _t_stats_free_memory = "free_memory";
+const char * _t_stats_reset_cause = "reset_cause";
+const char * _t_stats_temp_min = "temp_min";
+const char * _t_stats_temp_max = "temp_max";
+
 const char * _t_state_batteryVoltage = "battery_voltage";
 const char * _t_state_position = "position";
 const char * _t_state_target = "target";
@@ -71,6 +105,58 @@ bool State::Position::operator==(const Position &other)
 bool State::Point::operator==(const Point &other)
 {
   return same(other, x) && same(other, y);
+}
+
+void Stats::Durations::marshal(const JsonObject &o) const
+{
+  o[_t_duration_idle] = idle;
+  o[_t_duration_charge] = charge;
+  o[_t_duration_mow] = mow;
+  o[_t_duration_mow_invalid] = mowInvalid;
+  o[_t_duration_mow_float] = mowFloat;
+  o[_t_duration_mow_fix] = mowFix;
+}
+
+void Stats::Recoveries::marshal(const JsonObject &o) const
+{
+  o[_t_recoveries_invalid_recoveries] = mowInvalid;
+  o[_t_recoveries_float_recoveries] = mowFloatToFix;
+  o[_t_recoveries_imu_triggered] = imu;
+}
+
+void Stats::Obstacles::marshal(const JsonObject &o) const
+{
+  o[_t_obstacles_gps_motion_timeout] = gpsMotionLow;
+  o[_t_obstacles_sonar_triggered] = sonar;
+  o[_t_obstacles_bumper_triggered] = bumper;
+  o[_t_obstacles_obstacles] = count;
+}
+
+void Stats::Stats::marshal(const JsonObject &o) const
+{
+  o.createNestedObject(_t_state_durations);
+  durations.marshal(o[_t_state_durations]);
+  o[_t_stats_mow_traveled] = mowDistanceTraveled;
+  o[_t_stats_gps_chk_sum_errors] = gpsChecksumErrors;
+  o[_t_stats_dgps_chk_sum_errors] = dgpsChecksumErrors;
+  o.createNestedObject(_t_stats_recoveries);
+  recoveries.marshal(o[_t_stats_recoveries]);
+  o.createNestedObject(_t_stats_obstacles);
+  obstacles.marshal(o[_t_stats_obstacles]);
+  o[_t_stats_gps_jumps] = gpsJumps;
+  o[_t_stats_max_cycle] = maxMotorControlCycleTime;
+  o[_t_stats_max_dpgs_age] = mowMaxDgpsAge;
+  o[_t_stats_serial_buffer_size] = serialBufferSize;
+  o[_t_stats_free_memory] = freeMemory;
+  o[_t_stats_reset_cause] = resetCause;  
+  o[_t_stats_temp_min] = tempMin;
+  o[_t_stats_temp_max] = tempMax;
+}
+
+void Properties::marshal(const JsonObject &o) const
+{
+  o[_t_props_firmware] = firmware;
+  o[_t_props_version] = version;
 }
 
 void State::State::marshal(const JsonObject &o) const

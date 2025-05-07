@@ -17,7 +17,7 @@
 	let end = 0;
 	let scrollToIndex: ((index: any, opts: any) => Promise<void>) | undefined = undefined;
     let modemLogOpen = false;
-    let logLevelIndex = 3;
+    let logLevelIndex: number | undefined;
     let logLines = 10000;
     let lineCounter = 0;
 
@@ -39,6 +39,11 @@
     //     autoscroll = list.getOffset() > list.getScrollSize() - list.getClientSize() - 10;
     // }
 
+    logLevelIndex = dbgLevels.findIndex(item => item.id == dbgLevel);
+    if (logLevelIndex == -1)  {
+        logLevelIndex = 3;
+    }
+
     function onBottom() {
         console.log("bottom");
     }
@@ -57,7 +62,7 @@
         return lineNr;
     }
 
-    $: { dbgLevel = parseInt(dbgLevels[logLevelIndex].id); }
+    $: { dbgLevel = dbgLevels[logLevelIndex].id; }
 
 </script>
 
@@ -80,7 +85,6 @@
                 bind:toggled={autoscroll}/>
         </div>
         <VirtualList {items}
-            logLevels={logLevels}
             height="calc(100% - 40px)"
             bind:scrollToIndex
             let:item>

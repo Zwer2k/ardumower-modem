@@ -562,7 +562,7 @@ void MQTT::marshal(const JsonObject &o) const
   o[_t_password] = password;
 
   o[_t_publish_status] = publishStatus;
-  o[_t_publish_format] = publishFormat;
+  o[_t_publish_format] = (publishFormat == 1 ? _t_json : (publishFormat == 2 ? _t_text : _t_both));
   o[_t_publish_interval] = publishInterval;
 
   o[_t_ha] = ha;

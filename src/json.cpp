@@ -27,12 +27,9 @@ String Json::encode(Properties &p)
 {
   String result;
   DynamicJsonDocument doc(1024);
-
-  doc["firmware"] = p.firmware;
-  doc["version"] = p.version;
-
+  p.marshal(doc.to<JsonObject>());
   serializeJson(doc, result);
-
+  
   return result;
 }
 

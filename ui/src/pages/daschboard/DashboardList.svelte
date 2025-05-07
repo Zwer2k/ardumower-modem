@@ -18,13 +18,13 @@
     let reconnect = true;
 
     let modemDbgLevels: DropdownItem[] = [
-        { id: "63", text: "all" },
-        { id: "32", text: "comm" },
-        { id: "31", text: "debug" },
-        { id: "15", text: "info" },
-        { id: "7", text: "warn" },
-        { id: "3", text: "error" },
-        { id: "1", text: "critical" },
+        { id: 63, text: "all" },
+        { id: 32, text: "comm" },
+        { id: 31, text: "debug" },
+        { id: 15, text: "info" },
+        { id: 7, text: "warn" },
+        { id: 3, text: "error" },
+        { id: 1, text: "critical" },
     ];
 
     function createSocket() {
@@ -57,6 +57,7 @@
                     case ResponseDataType.hello:
                         valueDescriptions = jsonData.data as ValueDescriptions;
                         console.log("valueDescriptions", valueDescriptions)
+                        modemDbgLevel = valueDescriptions.logLevel;
                         break;
                     case ResponseDataType.mowerState:
                         state = jsonData.data as State;
@@ -115,7 +116,7 @@
                 data: { logLevel: modemDbgLevel } as ConsoleLogSettings
             };
 
-            socket.send(JSON.stringify(settings));
+            socket.send(JSON.stringify(settings));            
         } 
     } 
 </script>
