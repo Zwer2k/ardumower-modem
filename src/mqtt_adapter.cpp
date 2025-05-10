@@ -328,7 +328,6 @@ String MqttAdapter::topic(String postfix)
 
 
 bool MqttAdapter::publishWithSubtopics(JsonObject& data, const String baseTopic) {
-  bool success = true;
   for (JsonPair pair : data) {
     String subTopic = baseTopic + "/" + pair.key().c_str();
     String value;

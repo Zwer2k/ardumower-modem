@@ -40,18 +40,22 @@ void Http::CommandRequest::parseHttpRequestBody()
   readHttpRequestBody();
   trimHttpRequestBody();
   validateHttpRequestBody();
+  serialRequest = request->pause();
 }
 
 void Http::CommandRequest::readHttpRequestBody()
 {
   if (request->_tempObject)
   {
-    httpRequestBody = (char*)request->_tempObject;
+    httpRequestBody = *(String *)request->_tempObject;
+    Log(DBG, "body 1 %s", httpRequestBody.c_str());
     return;
   }
 
+  
   if (request->params() > 0) {
     httpRequestBody = request->getParam((size_t)0)->value();
+    Log(DBG, "body 2 %s", httpRequestBody.c_str());
     return;
   }
 
@@ -77,7 +81,8 @@ void Http::CommandRequest::validateHttpRequestBody()
 void Http::CommandRequest::reject(int code, String text)
 {
   _done = true;
-  respondWithCors(request, code, "text/plain", text);
+  auto request = serialRequest.lock();
+  respondWithCors(request.get(), code, "text/plain", text);
   _metrics->countStatusCode(code);
 }
 
@@ -88,6 +93,7 @@ void Http::CommandRequest::onRouterResponse(String response)
   response += "\r\n";
   _done = true;
 
-  respondWithCors(request, 200, "text/html; charset=UTF-8", response);
+  auto request = serialRequest.lock();
+  respondWithCors(request.get(), 200, "text/html; charset=UTF-8", response);
   _metrics->countStatusCode(200);
 }

@@ -4,8 +4,11 @@
 #include "settings.h"
 #include "json.h"
 #include <ArduinoJson.h>
+#include <ticker.h>
 
 using namespace ArduMower::Modem::Http;
+
+static Ticker deferred;
 
 UiAdapter::UiAdapter(Api::Api &api,
                      Settings::Settings &settings,
@@ -178,9 +181,10 @@ void UiAdapter::handleApiPostModemSettings(AsyncWebServerRequest *request, JsonV
   DynamicJsonDocument doc(1024);
   uploaded.marshal(doc.to<JsonObject>());
   serializeJson(doc, *response);
+
   request->send(response);
 
-  delayedRestart();
+  deferred.once_ms(500, &UiAdapter::delayedRestart, this);
 }
 
 void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
@@ -201,7 +205,7 @@ void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
   serializeJson(doc, *response);
   request->send(response);
 
-  delayedRestart();
+  deferred.once_ms(500, &UiAdapter::delayedRestart, this);
 }
 
 void UiAdapter::handleApiGetRobotDesiredState(AsyncWebServerRequest *request)
@@ -222,12 +226,10 @@ void UiAdapter::handleApiResetModemBluetoothPairings(AsyncWebServerRequest *requ
   _api.ble->clearPairings();
   request->send(200, "application/json", "{\"result\":\"ok\"}");
 
-  delayedRestart();
+  deferred.once_ms(500, &UiAdapter::delayedRestart, this);
 }
 
-void UiAdapter::delayedRestart()
+void UiAdapter::delayedRestart(UiAdapter* instancePtr)
 {
-  delay(100);
-
-  _api.os.restart();
+  instancePtr->_api.os.restart();
 }

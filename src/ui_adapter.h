@@ -50,7 +50,7 @@ namespace ArduMower
         void handleApiResetModemBluetoothPairings(AsyncWebServerRequest *request);
   
 
-        void delayedRestart();
+        static void delayedRestart(UiAdapter* instancePtr);
       };
     }
   }

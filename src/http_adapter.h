@@ -49,6 +49,7 @@ namespace ArduMower
 
       private:
         AsyncWebServerRequest *request;
+        AsyncWebServerRequestPtr serialRequest;
         bool _done;
         const uint32_t timeReceiveHttpRequest;
         void parseHttpRequestBody();

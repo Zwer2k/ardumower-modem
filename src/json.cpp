@@ -4,24 +4,24 @@
 using namespace ArduMower::Domain::Robot;
 using namespace ArduMower::Domain;
 
-static void encodeInto(JsonObject& doc, State::Point &p)
-{
-  doc["x"] = p.x;
-  doc["y"] = p.y;
-}
+// static void encodeInto(JsonObject& doc, State::Point &p)
+// {
+//   doc["x"] = p.x;
+//   doc["y"] = p.y;
+// }
 
-static void encodeInto(JsonObject& doc, State::Position &p)
-{
-  doc["x"] = p.x;
-  doc["y"] = p.y;
-  doc["delta"] = p.delta;
-  doc["solution"] = p.solution;
-  doc["age"] = p.age;
-  doc["accuracy"] = p.accuracy;
-  doc["visible_satellites"] = p.visibleSatellites;
-  doc["visible_satellites_dgps"] = p.visibleSatellitesDgps;
-  doc["mow_point_index"] = p.mowPointIndex;
-}
+// static void encodeInto(JsonObject& doc, State::Position &p)
+// {
+//   doc["x"] = p.x;
+//   doc["y"] = p.y;
+//   doc["delta"] = p.delta;
+//   doc["solution"] = p.solution;
+//   doc["age"] = p.age;
+//   doc["accuracy"] = p.accuracy;
+//   doc["visible_satellites"] = p.visibleSatellites;
+//   doc["visible_satellites_dgps"] = p.visibleSatellitesDgps;
+//   doc["mow_point_index"] = p.mowPointIndex;
+// }
 
 String Json::encode(Properties &p)
 {
