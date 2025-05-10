@@ -101,25 +101,31 @@
 </div>
 
 <style lang="scss">
-    .modem-log :global(.bx--accordion__item--active .bx--accordion__content) {
-        display: inline;
-        padding: 0;
-    }
+    .modem-log {
+        :global(.bx--accordion__item--active .bx--accordion__content) {
+            display: inline;
+            padding: 0;
+        }
 
-    :global(.autoscroll-toggle) {
-        display: inline-grid;
-    }
+        :global(.bx--toggle-input__label .bx--toggle__switch) {
+            margin-top: 0;
+        }
 
-    :global(.autoscroll-toggle label) {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        font-size: .875rem;
-        margin-left: 10px;
-    }
+        :global(.autoscroll-toggle) {
+            display: inline-grid;
+        }
 
-    :global(.autoscroll-toggle label :first-child) {
-        margin: 8px;
+        :global(.autoscroll-toggle label) {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            font-size: .875rem;
+            margin-left: 10px;
+        }
+
+        :global(.autoscroll-toggle label :first-child) {
+            margin: 8px;
+        }
     }
 
     .settings {
