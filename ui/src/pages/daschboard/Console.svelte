@@ -66,40 +66,42 @@
 
 </script>
 
-<AccordionItem title="Modem Log" bind:open={modemLogOpen}>
-    <div class="log-list">
-        <!-- <VirtualScroll bind:this={list} data={logBuffer} let:data start={-1} on:scroll={onScroll} on:bottom={onBottom}>
-            <div class="log-line"><div class="nr">{data.id}:</div><div class="text">{data.line}</div></div>
-        </VirtualScroll> -->
-        <div class="settings">
-            <Dropdown
-                bind:selectedId={dbgLevel}
-                type="inline"
-                titleText="Log level"
-                items={dbgLevels}/>
-            <Toggle
-                class="autoscroll-toggle"
-                labelText="Autoscroll" 
-                labelA={""}
-                labelB={""}
-                bind:toggled={autoscroll}/>
-        </div>
-        <VirtualList {items}
-            height="calc(100% - 40px)"
-            bind:scrollToIndex
-            let:item>
-            <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''}">
-                <div class="nr">{item.nr}:</div>
-                <div class="level level-{logLevels[item.level]}">{logLevels[item.level]}:</div>
-                <div class="free-heap">{item.freeHeap}:</div>
-                <div class="text">{item.text}</div>
+<div class="modem-log">
+    <AccordionItem title="Modem Log" bind:open={modemLogOpen}>
+        <div class="log-list">
+            <!-- <VirtualScroll bind:this={list} data={logBuffer} let:data start={-1} on:scroll={onScroll} on:bottom={onBottom}>
+                <div class="log-line"><div class="nr">{data.id}:</div><div class="text">{data.line}</div></div>
+            </VirtualScroll> -->
+            <div class="settings">
+                <Dropdown
+                    bind:selectedId={dbgLevel}
+                    type="inline"
+                    titleText="Log level"
+                    items={dbgLevels}/>
+                <Toggle
+                    class="autoscroll-toggle"
+                    labelText="Autoscroll" 
+                    labelA={""}
+                    labelB={""}
+                    bind:toggled={autoscroll}/>
             </div>
-        </VirtualList>
-    </div>
-</AccordionItem>
+            <VirtualList {items}
+                height="calc(100% - 40px)"
+                bind:scrollToIndex
+                let:item>
+                <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''}">
+                    <div class="nr">{item.nr}:</div>
+                    <div class="level level-{logLevels[item.level]}">{logLevels[item.level]}:</div>
+                    <div class="free-heap">{item.freeHeap}:</div>
+                    <div class="text">{item.text}</div>
+                </div>
+            </VirtualList>
+        </div>
+    </AccordionItem>
+</div>
 
 <style lang="scss">
-    :global(.bx--accordion__item--active .bx--accordion__content) {
+    .modem-log :global(.bx--accordion__item--active .bx--accordion__content) {
         display: inline;
         padding: 0;
     }

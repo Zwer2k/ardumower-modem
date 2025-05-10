@@ -70,16 +70,9 @@
 
 <style lang="scss">
 
-
-
-
-:global(.bx--toggle-input__label .bx--toggle__switch) {
-    margin-top: 0.5rem !important;
-}
-
 @media only screen and ( max-width: 500px ) {
     :global(#main-content) {
-    padding: 0;
+        padding: 0;
     }
 }
 
