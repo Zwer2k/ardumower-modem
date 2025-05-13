@@ -29,5 +29,6 @@
   {stroke}
   {fill}
   stroke-width={strokeWidth}
+  role="none"
   on:click={click}
 />

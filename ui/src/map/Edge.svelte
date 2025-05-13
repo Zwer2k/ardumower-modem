@@ -19,11 +19,12 @@
 </script>
 
 <line
-  on:click={click}
   x1={value.begin.x}
   y1={value.begin.y}
   x2={value.end.x}
   y2={value.end.y}
   {stroke}
   stroke-width={strokeWidth}
+  role="none"
+  on:click={click}
 />

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ZoomSvg from "@svelte-parts/zoom/svg";
+  import { ZoomSvg } from "svelte-parts/zoom";
 
   import type { MapPresentation } from "./model";
   import { MapStore } from "./service";

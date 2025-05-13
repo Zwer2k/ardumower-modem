@@ -22,8 +22,8 @@
   }
 
   let edit = false;
-  let selectedIndex = -1;
-  let editItemId: null | string = null;
+  let selectedId: string | null = null;
+  let editItemId: string | null = null;
   let editItems: EditItem[] = [];
 
   let editPoint = false;
@@ -62,7 +62,7 @@
     ]),
   ].reduce((a, b) => [...a, ...b], []);
 
-  function shouldFilterItem(item, value) {
+  function shouldFilterItem(item: EditItem, value: string) {
     if (!value) return true;
     return item.text.toLowerCase().includes(value.toLowerCase());
   }
@@ -83,6 +83,14 @@
     editItemId = null;
   }
 
+  function onDeleteClick() {  
+    if (selectedId != null) {
+      $MapStore.map.perimeter.points.splice(0, 1);
+      console.log("delete point", $MapStore.map.perimeter.points);
+    
+    }
+  }
+
   function omg(item: null | string) {
     if (item == uiEditId) return;
 
@@ -92,7 +100,7 @@
       .map((item, index) => (item.id === editItemId ? index : -1))
       .reduce((a, b) => (a > b ? a : b), -1);
 
-    selectedIndex = editItemIndex;
+    selectedId = editItemIndex > -1 ? editItems[editItemIndex].id : null;
     updateButtonAvailability();
   }
 
@@ -110,7 +118,7 @@
           disabled={!edit}
           placeholder="Select item to edit"
           items={editItems}
-          bind:selectedIndex
+          bind:selectedId
           on:select={selectEditItem}
           on:clear={clearEditItem}
           {shouldFilterItem}
@@ -126,7 +134,8 @@
         <Button
           kind="danger"
           size="small"
-          disabled={!edit || selectedIndex === -1}>Delete</Button
+          disabled={!edit || selectedId === null}
+          on:click={onDeleteClick}>Delete</Button
         >
         <!-- </ButtonSet> -->
       </Column>
