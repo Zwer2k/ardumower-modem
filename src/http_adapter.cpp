@@ -96,12 +96,6 @@ bool HttpAdapter::queueIsFull()
 void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 {
   Log(DBG, "%shandleCommandRequest", _LOG_);
-  if (!((String *)request->_tempObject)->length()) {
-    Log(DBG, "%shandleCommandRequest is empty", _LOG_);
-    request->send(400);
-    return;
-  }
-
   Http::CommandRequest *req = new Http::CommandRequest(requestId++, _metrics, request, millis());
   if (req->done(millis()))
   {
@@ -115,25 +109,13 @@ void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 
 void HttpAdapter::handleCommandRequestBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
-  Log(DBG, "%shandleCommandRequestBody", _LOG_);
-  // if (total > 0 && request->_tempObject == NULL) {
-  //   request->_tempObject = malloc(total);
-  // }
-  // if (request->_tempObject != NULL) {
-  //   memcpy((uint8_t*)(request->_tempObject) + index, data, len);
-  // }
-
-  if (!index) {
-    // log_d("Start body parsing");
-    request->_tempObject = new String();
-    // cast request->_tempObject pointer to String and reserve total size
-    ((String *)request->_tempObject)->reserve(total);
-    // set timeout 30s
-    request->client()->setRxTimeout(30);
+  Log(DBG, "%shandleCommandRequest", _LOG_);
+  if (total > 0 && request->_tempObject == NULL) {
+    request->_tempObject = malloc(total);
   }
-
-  // log_d("Append body data");
-  ((String *)request->_tempObject)->concat((const char *)data, len);
+  if (request->_tempObject != NULL) {
+    memcpy((uint8_t*)(request->_tempObject) + index, data, len);
+  }
 }
 
 void HttpAdapter::handleCORSPreflightRequest(AsyncWebServerRequest *request)

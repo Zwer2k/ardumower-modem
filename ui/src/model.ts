@@ -33,13 +33,6 @@ export namespace Settings {
     use_ps4_mac: boolean;
     ps4_mac: string;
   }
-  export interface Relay {
-    enabled: boolean
-    url: string
-    username: string
-    password: string
-    has_password: boolean
-  }
   export interface Mqtt {
     enabled: boolean
     server: string
@@ -66,7 +59,6 @@ export interface Settings {
   wifi: Settings.WiFi
   bluetooth: Settings.Bluetooth
   ps4controller: Settings.PS4Controller
-  relay: Settings.Relay
   mqtt: Settings.Mqtt
   prometheus: Settings.Prometheus
 }
@@ -81,10 +73,6 @@ export interface Info {
 
 export interface Status {
   uptime: number
-  relay_connected: boolean
-  relay_connect_count: number
-  relay_connect_time: number
-  relay_rtt: number
 }
 
 export interface ChangeEventValue {

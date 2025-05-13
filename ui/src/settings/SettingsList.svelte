@@ -12,7 +12,6 @@
   import { BackendSettings as original } from "../stores/backend";
   import { InfoStore as info } from "../stores/info";
   import Reload from "./Reload.svelte";
-import Relay from "./Relay.svelte";
 
   let debug;
   $: debug = JSON.stringify($settings, null, 2);
@@ -47,10 +46,6 @@ import Relay from "./Relay.svelte";
             bind:info={$info}
           />
         {/if}
-        <Relay
-          bind:settings={$settings.relay}
-          bind:original={$original.relay}
-        />
         <MqttSettings
           bind:settings={$settings.mqtt}
           bind:original={$original.mqtt}

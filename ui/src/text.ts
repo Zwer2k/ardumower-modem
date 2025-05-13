@@ -120,20 +120,6 @@ const texts: { language: { [language: string]: any } } = {
             label: "PS4 BT MAC address (When switching on the Controller, the PS4 should be far enough away)"
           }
         },
-        relay: {
-          enabled: {
-            label: "Connect to your ArduMower through a Relay server"
-          },
-          url: {
-            label: "WebSocket URL of the relay, eg wss://fluffy-unicorn-8422.relay.example.com"
-          },
-          username: {
-            label: "Username"
-          },
-          password: {
-            label: "Password"
-          },
-        },
         mqtt: {
           enabled: {
             label: "Enabled"

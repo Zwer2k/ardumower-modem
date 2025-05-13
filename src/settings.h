@@ -122,25 +122,6 @@ namespace ArduMower
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 #endif
-
-      class Relay : public Group
-      {
-      public:
-        Relay() : enabled(false) {}
-
-        bool enabled;
-        String url;
-        String username;
-        String password;
-        uint32_t pingInterval;
-
-        bool valid(String & invalid) const;
-
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
-        virtual void stripSecrets(const JsonObject &o) const override;
-      };
-
       class MQTT : public Group
       {
       public:
@@ -183,7 +164,6 @@ namespace ArduMower
 #ifdef ENABLE_PS4_CONTROLLER
         PS4Controller ps4controller;
 #endif
-        Relay relay;
         MQTT mqtt;
         Prometheus prometheus;
 

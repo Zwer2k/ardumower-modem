@@ -15,9 +15,6 @@
 
 #include "api.h"
 #include "ble_adapter.h"
-#ifdef ESP_MODEM_SIM
-#include "console.h"
-#endif
 #include "console.h"
 #include "esp_os.h"
 #include "http_adapter.h"
@@ -29,7 +26,6 @@
 #include "ota_arduinoota.h"
 #include "ota_http_server.h"
 #include "prometheus_adapter.h"
-#include "relay_adapter.h"
 #include "router.h"
 #include "settings.h"
 #include "ui_adapter.h"
@@ -69,8 +65,6 @@ Router router(Serial2);
 BleAdapter bleAdapter(settings, router);
 // HTTP endpoint for app
 HttpAdapter httpAdapter(router, webServer.server());
-// Relay endpoint for app
-RelayAdapter relayAdapter(settings, router);
 // emulates the behavior of the previous generation Bluetooth UART modules
 Cli modemCli(router);
 // ArduMower protocol interpreter, keeps state
@@ -91,7 +85,7 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, 16, 17);
 
-  api.begin(&bleAdapter, &relayAdapter);
+  api.begin(&bleAdapter);
   settings.begin();
 #ifdef ESP_MODEM_SIM
   con.begin();
@@ -103,7 +97,6 @@ void setup() {
   otaHttpServer.begin();
   bleAdapter.begin();
   httpAdapter.begin();
-  relayAdapter.begin();
   mowerAdapter.begin();
   mqttAdapter.begin();
   prometheusAdapter.begin();
@@ -122,7 +115,6 @@ void setup() {
   looptime.add("ota_http", std::bind(&Ota::HttpServer::loop, &otaHttpServer));
   looptime.add("router", std::bind(&Router::loop, &router));
   looptime.add("ble", std::bind(&BleAdapter::loop, &bleAdapter));
-  looptime.add("relay", std::bind(&RelayAdapter::loop, &relayAdapter));
   looptime.add("ui", std::bind(&Http::UiAdapter::loop, &ui));
   looptime.add("mqtt", [&](){mqttAdapter.loop(millis());});
 #ifdef ENABLE_PS4_CONTROLLER

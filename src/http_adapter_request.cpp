@@ -47,15 +47,7 @@ void Http::CommandRequest::readHttpRequestBody()
 {
   if (request->_tempObject)
   {
-    httpRequestBody = *(String *)request->_tempObject;
-    Log(DBG, "body 1 %s", httpRequestBody.c_str());
-    return;
-  }
-
-  
-  if (request->params() > 0) {
-    httpRequestBody = request->getParam((size_t)0)->value();
-    Log(DBG, "body 2 %s", httpRequestBody.c_str());
+    httpRequestBody = (char*)request->_tempObject;
     return;
   }
 
