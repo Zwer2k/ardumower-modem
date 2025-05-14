@@ -84,10 +84,19 @@
   }
 
   function onDeleteClick() {  
-    if (selectedId != null) {
-      $MapStore.map.perimeter.points.splice(0, 1);
-      console.log("delete point", $MapStore.map.perimeter.points);
-    
+    if (editItemId != null) {    
+      if (editPoint) {
+        let index = parseInt(editItemId.replace(/.*-point-([0-9]+)/, "$1"));
+        if (editItemId.indexOf("-perimeter-") !== -1) {
+          $MapStore.map.perimeter.points.splice(index, 1);
+          console.log("delete point", editItemId, index, $MapStore.map.perimeter.points);
+        } else {
+          let exclusion = parseInt(editItemId.replace(/.*-exclusion-([0-9]+).*/, "$1"));
+          $MapStore.map.exclusions[exclusion].points.splice(index, 1);
+          console.log("delete point", editItemId, index, $MapStore.map.perimeter.points);
+        }
+        $MapStore.map.perimeter = $MapStore.map.perimeter;
+      }
     }
   }
 

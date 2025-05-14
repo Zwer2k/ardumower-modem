@@ -4,11 +4,15 @@
 #include "settings.h"
 #include "json.h"
 #include <ArduinoJson.h>
+#if __has_include("ticker.h")
 #include <ticker.h>
+#endif
 
 using namespace ArduMower::Modem::Http;
 
+#if __has_include("ticker.h")
 static Ticker deferred;
+#endif
 
 UiAdapter::UiAdapter(Api::Api &api,
                      Settings::Settings &settings,
@@ -178,7 +182,9 @@ void UiAdapter::handleApiPostModemSettings(AsyncWebServerRequest *request, JsonV
 
   request->send(response);
 
-  deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #if __has_include("ticker.h")
+    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #endif
 }
 
 void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
@@ -199,7 +205,9 @@ void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
   serializeJson(doc, *response);
   request->send(response);
 
-  deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #if __has_include("ticker.h")
+    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #endif
 }
 
 void UiAdapter::handleApiGetRobotDesiredState(AsyncWebServerRequest *request)
@@ -220,7 +228,9 @@ void UiAdapter::handleApiResetModemBluetoothPairings(AsyncWebServerRequest *requ
   _api.ble->clearPairings();
   request->send(200, "application/json", "{\"result\":\"ok\"}");
 
-  deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #if __has_include("ticker.h")
+    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #endif
 }
 
 void UiAdapter::delayedRestart(UiAdapter* instancePtr)

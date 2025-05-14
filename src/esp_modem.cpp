@@ -122,7 +122,11 @@ void setup() {
 #endif
   
 #ifdef ESP_MODEM_SIM
-  Serial1.begin(115200, SERIAL_8N1, 23, 22); // loop to Serial2
+  #if CONFIG_IDF_TARGET_ESP32S3
+    Serial1.begin(115200); // loop to Serial2
+  #elif
+    Serial1.begin(115200, SERIAL_8N1, 23, 22); // loop to Serial2
+  #endif
   setup_fake_ardumower();
   FakeArduMower.active = true;
 #endif

@@ -9,7 +9,7 @@
   export let strokeChoose = "black";
   export let strokeActive = "black";
   export let strokePassive = "grey";
-  export let strokeWidth = 0.2;
+  export let strokeWidth = 0.1;
 
   $: stroke = editItemId === null ? strokeChoose : mapItemId === editItemId ? strokeActive : strokePassive
 

@@ -284,12 +284,12 @@ void Console::printStatus()
 
   title("Modem Status");
   io.printf(
-      "Uptime: %u\r\n"
+      "Uptime: %lu\r\n"
       "Heap:\r\n"
-      " Size    : %u\r\n"
-      " Free    : %u\r\n"
-      " MinFree : %u\r\n"
-      " MaxAlloc: %u\r\n",
+      " Size    : %d\r\n"
+      " Free    : %d\r\n"
+      " MinFree : %d\r\n"
+      " MaxAlloc: %d\r\n",
       millis(),
       ESP.getHeapSize(),
       ESP.getFreeHeap(),
