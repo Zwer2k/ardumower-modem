@@ -34,6 +34,9 @@ namespace ArduMower
       bool sendCommand(String command, bool encrypt = true);
       bool assertSendIsInitialized();
 
+      int containsNonUTF8(const String& input);
+      String bytesToHexString(const String& byteString);
+
     public:
       MowerAdapter(Settings::Settings &_settings, Router &_router);
 

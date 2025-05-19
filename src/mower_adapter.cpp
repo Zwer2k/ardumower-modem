@@ -80,7 +80,7 @@ void MowerAdapter::parseArduMowerResponse(String line)
 
 void MowerAdapter::parseArduMowerCommand(String line)
 {
-  Log(DBG, "%sparseArduMowerCommand(%s)", _LOG_, line.c_str());
+  Log(DBG, "%sparseArduMowerCommand", _LOG_);
   if (!line.startsWith("AT+"))
   {
     char *buffer = strdup(line.c_str());
@@ -88,7 +88,21 @@ void MowerAdapter::parseArduMowerCommand(String line)
     line = buffer;
     free(buffer);
     //Log(DBG, "%sparseArduMowerCommand::decrypted(%s)", _LOG_, line.c_str());
-    Log(COMM, ">> %s", line.c_str());
+  }
+
+  if (line.startsWith("AT+")) {
+    int badChar = containsNonUTF8(line);
+    if (badChar == -1) {
+      Log(COMM, ">> %s", line.c_str());
+    } else {
+      String plainPart = line.substring(0, badChar);
+      String hexPart = line.substring(badChar);
+      String hexString = bytesToHexString(hexPart);
+      Log(COMM, ">> %s(%s)", plainPart.c_str(),  hexString.c_str());
+    }
+  } else {
+    String hexString = bytesToHexString(line);
+    Log(COMM, ">> (%s)", hexString.c_str());
   }
 
   if (line.startsWith("AT+C"))
@@ -516,6 +530,40 @@ bool MowerAdapter::assertSendIsInitialized()
   Log(DBG, "%sassertSendIsInitialized::version-requested", _LOG_);
 
   return false;
+}
+
+int MowerAdapter::containsNonUTF8(const String& input) {
+  const uint8_t* data = (const uint8_t*)input.c_str();
+  size_t len = input.length();
+  int i = 0;
+  while (i < len) {
+    if ((data[i] & 0x80) == 0x00) { // 0xxxxxxx (single byte)
+      i++;
+    } else if ((data[i] & 0xE0) == 0xC0) { // 110xxxxx (two bytes)
+      if (i + 1 >= len || (data[i + 1] & 0xC0) != 0x80) return i;
+      i += 2;
+    } else if ((data[i] & 0xF0) == 0xE0) { // 1110xxxx (three bytes)
+      if (i + 2 >= len || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80) return i;
+      i += 3;
+    } else if ((data[i] & 0xF8) == 0xF0) { // 11110xxx (four bytes)
+      if (i + 3 >= len || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80 || (data[i + 3] & 0xC0) != 0x80) return i;
+      i += 4;
+    } else { // Invalid starting byte
+      return i;
+    }
+  }
+  return -1;
+}
+
+String MowerAdapter::bytesToHexString(const String& byteString) {
+  String hexString = "";
+  for (size_t i = 0; i < byteString.length(); ++i) {
+    byte currentByte = byteString.charAt(i);
+    char hexBuffer[3]; // Platz für zwei Hex-Ziffern und das Nullterminierungszeichen
+    sprintf(hexBuffer, "%02X", currentByte); // %02X formatiert als zweistellige Hex-Zahl mit führender Null
+    hexString += String(hexBuffer);
+  }
+  return hexString;
 }
 
 bool MowerAdapter::sendCommand(String command, bool encrypt)
