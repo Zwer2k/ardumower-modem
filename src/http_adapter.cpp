@@ -95,7 +95,7 @@ bool HttpAdapter::queueIsFull()
 
 void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 {
-  Log(DBG, "%shandleCommandRequest", _LOG_);
+  Log(DBG, "%shandleCommandRequest ID %d", _LOG_, requestId);
   Http::CommandRequest *req = new Http::CommandRequest(requestId++, _metrics, request, millis());
   if (req->done(millis()))
   {
@@ -109,7 +109,7 @@ void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 
 void HttpAdapter::handleCommandRequestBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
-  Log(DBG, "%shandleCommandRequest", _LOG_);
+  Log(DBG, "%shandleCommandRequestBody", _LOG_);
   if (total > 0 && request->_tempObject == NULL) {
     request->_tempObject = malloc(total);
   }
@@ -130,7 +130,6 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
   switch (req->state)
   {
   case 0:
-    Log(DBG, "%sprocessRequest::send(id=%d)", _LOG_, id);
     // command from http request body has not been sent to the router yet
 
     // send http request body as command to modem
@@ -177,8 +176,10 @@ void HttpAdapter::apiReboot(AsyncWebServerRequest *req)
 
 void respondWithCors(AsyncWebServerRequest *req, int status, String contentType, String responseBody)
 {
-  AsyncWebServerResponse *res = req->beginResponse(status, contentType, responseBody);
-  res->addHeader("Access-Control-Allow-Origin", "*");
-  res->addHeader("Access-Control-Allow-Headers", "authorization");
-  req->send(res);
+  if (req->client()->connected()) {
+    AsyncWebServerResponse *res = req->beginResponse(status, contentType, responseBody);
+    res->addHeader("Access-Control-Allow-Origin", "*");
+    res->addHeader("Access-Control-Allow-Headers", "authorization");
+    req->send(res);
+  }
 }

@@ -37,10 +37,10 @@ bool Http::CommandRequest::timeout(const uint32_t now)
 void Http::CommandRequest::parseHttpRequestBody()
 {
   Log(DBG, "Http::CommandRequest::parseHttpRequestBody");
+  serialRequest = request->pause();
   readHttpRequestBody();
   trimHttpRequestBody();
   validateHttpRequestBody();
-  serialRequest = request->pause();
 }
 
 void Http::CommandRequest::readHttpRequestBody()
@@ -72,6 +72,8 @@ void Http::CommandRequest::validateHttpRequestBody()
 
 void Http::CommandRequest::reject(int code, String text)
 {
+  Log(DBG, "Http::CommandRequest::reject code=%d %s", code, text.c_str());
+
   _done = true;
   auto request = serialRequest.lock();
   respondWithCors(request.get(), code, "text/plain", text);
