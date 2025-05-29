@@ -26,9 +26,11 @@
 #include "ota_arduinoota.h"
 #include "ota_http_server.h"
 #include "prometheus_adapter.h"
+#include "terminal.h"
 #include "router.h"
 #include "settings.h"
 #include "ui_adapter.h"
+#include "ui_adapter_socket.h"
 #include "web_server.h"
 #include "wifi_adapter.h"
 
@@ -50,6 +52,9 @@ Wifi::Adapter wifiAdapter(settings);
 #ifdef ESP_MODEM_SIM
 // console is used during validation tests and enabled on simulator target only
 Console con(Serial, api, settings);
+#elif MOWER_TERMINAL
+// establishes a terminal connection to the mover via web interface
+Terminal terminal(Serial1);
 #endif
 
 WebServer webServer;
@@ -63,14 +68,16 @@ Ota::HttpServer otaHttpServer(settings, webServer.server());
 Router router(Serial2);
 // Bluetooth LE endpoint for app
 BleAdapter bleAdapter(settings, router);
-// HTTP endpoint for app
-HttpAdapter httpAdapter(router, webServer.server());
 // emulates the behavior of the previous generation Bluetooth UART modules
 Cli modemCli(router);
 // ArduMower protocol interpreter, keeps state
 MowerAdapter mowerAdapter(settings, router);
+// HTTP endpoint for app
+HttpAdapter httpAdapter(router, webServer.server());
 // serves the web frontend
 Http::UiAdapter ui(api, settings, webServer.server(), mowerAdapter, mowerAdapter);
+// handle socket connection with web client
+Http::UiSocketHandler socketHandler(terminal, webServer.server(), mowerAdapter, mowerAdapter);
 // publish state on MQTT, receive commands on MQTT
 MqttAdapter mqttAdapter(settings, router, mowerAdapter, mowerAdapter);
 // metrics available for use with Prometheus
@@ -96,6 +103,8 @@ void setup() {
   settings.begin();
 #ifdef ESP_MODEM_SIM
   con.begin();
+#elif MOWER_TERMINAL
+  terminal.begin();
 #endif
   wifiAdapter.begin();
   router.begin();
@@ -108,6 +117,7 @@ void setup() {
   mqttAdapter.begin();
   prometheusAdapter.begin();
   ui.begin();
+  socketHandler.begin();
   webServer.begin();
 #ifdef ENABLE_PS4_CONTROLLER
   ps4ControllerAdapter.begin();
@@ -115,6 +125,8 @@ void setup() {
 
 #ifdef ESP_MODEM_SIM
   looptime.add("con", std::bind(&Console::loop, &con));
+#elif MOWER_TERMINAL
+  looptime.add("terminal", std::bind(&Terminal::loop, &terminal));
 #endif
   looptime.add("wifi", [&](){wifiAdapter.loop();});
   looptime.add("http", std::bind(&HttpAdapter::loop, &httpAdapter));
@@ -123,6 +135,7 @@ void setup() {
   looptime.add("router", std::bind(&Router::loop, &router));
   looptime.add("ble", std::bind(&BleAdapter::loop, &bleAdapter));
   looptime.add("ui", std::bind(&Http::UiAdapter::loop, &ui));
+  looptime.add("socket_handler", std::bind(&Http::UiSocketHandler::loop, &socketHandler));
   looptime.add("mqtt", [&](){mqttAdapter.loop(millis());});
 #ifdef ENABLE_PS4_CONTROLLER
   looptime.add("ps4_controller", std::bind(&PS4controller::Adapter::loop, &ps4ControllerAdapter));
@@ -136,6 +149,8 @@ void setup() {
   #endif
   setup_fake_ardumower();
   FakeArduMower.active = true;
+#elif MOWER_TERMINAL
+  Serial1.begin(115200, SERIAL_8N1, 16, 15); // connection to mower serial port
 #endif
 }
 

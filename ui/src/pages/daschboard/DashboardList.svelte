@@ -1,16 +1,20 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
     import { onMount, onDestroy } from 'svelte';
-    import type { ConsoleLog, ConsoleLogSettings, DesiredState, LogLine, RequestSocketMessage, State, ValueDescriptions } from "../../model";
+    import type { ModemLog, ModemLogSettings, DesiredState, LogLine, RequestSocketMessage, State, ValueDescriptions, ConsoleLine, ConsoleResponseData, ConsoleRequestData } from "../../model";
     import { LogLevelDesc, RequestDataType, ResponseDataType } from "../../model";
     import Console from "./Console.svelte";
-    import { Accordion } from "carbon-components-svelte";
+    import { Accordion, AccordionItem } from "carbon-components-svelte";
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
+    import Terminal from "./Terminal.svelte";
     
     let valueDescriptions: ValueDescriptions | null = null;
     let state: State | null = null;
     let desiredState: DesiredState | null = null; 
+    let modemLogOpen = false;
     let modemLog: LogLine[];
+    let consoleLines: ConsoleLine[];
+    let consoleCmd: string;
     let modemDbgLevel: number;
 
     let socket: WebSocket | null = null;
@@ -68,7 +72,10 @@
                         console.log("desiredState", desiredState)
                         break
                     case ResponseDataType.modemLog:
-                        modemLog = (jsonData.data as ConsoleLog).log;
+                        modemLog = (jsonData.data as ModemLog).log;
+                        break
+                    case ResponseDataType.mowerConsole:
+                        consoleLines = (jsonData.data as ConsoleResponseData).lines;
                         break
                     default:
                         console.log("unknown data type");
@@ -110,20 +117,53 @@
         }
     }
 
+    function handleOutputDone() {
+        consoleLines = [];
+    }
+
     $: { if (socket != null && socket.readyState == socket.OPEN) {
             let settings: RequestSocketMessage = {
                 type: RequestDataType.modemLogSettings,
-                data: { logLevel: modemDbgLevel } as ConsoleLogSettings
+                data: { logLevel: modemDbgLevel } as ModemLogSettings
             };
 
             socket.send(JSON.stringify(settings));            
         } 
     } 
+
+    $: { if (socket != null && socket.readyState == socket.OPEN) {
+            let req: RequestSocketMessage = {
+                type: RequestDataType.mowerConsoleRequest,
+                data: { cmd: consoleCmd } as ConsoleRequestData
+            };
+
+            socket.send(JSON.stringify(req));
+        }
+    }
 </script>
+
+{#if valueDescriptions != null}
+    <StateCard state={state} desiredState={desiredState} valueDescriptions={valueDescriptions}/>
+{/if}
 
 <Accordion>
 {#if valueDescriptions != null}
-    <StateCard state={state} desiredState={desiredState} valueDescriptions={valueDescriptions}/>
-    <Console logLevels={LogLevelDesc} dbgLevels={modemDbgLevels} logData={modemLog} bind:dbgLevel={modemDbgLevel}/>
+    <AccordionItem title="Modem Log" bind:open={modemLogOpen}>
+        <Console logLevels={LogLevelDesc} dbgLevels={modemDbgLevels} logData={modemLog} bind:dbgLevel={modemDbgLevel}/>
+    </AccordionItem>
+    <AccordionItem title="Mower console">
+        <Terminal 
+            consoleLines={consoleLines} 
+            bind:sendCmd={consoleCmd}
+            onOutputDone={handleOutputDone}
+        />
+    </AccordionItem>
 {/if}
 </Accordion>
+
+<style lang="scss">
+    :global(.bx--accordion__item--active .bx--accordion__content) {
+        display: inline;
+        padding: 0;
+    }
+</style>

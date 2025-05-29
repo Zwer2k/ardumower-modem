@@ -19,7 +19,6 @@
 	},
 	"dependencies": {
 		"@sveltejs/adapter-static": "^3.0.8",
-		"@sveltejs/svelte-virtual-list": "^3.0.1",
 		"carbon-components-svelte": "^0.89.1",
 		"carbon-icons-svelte": "^13.3.0",
 		"carbon-preprocess-svelte": "^0.11.11",

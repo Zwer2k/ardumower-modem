@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { AccordionItem, Dropdown, Toggle } from "carbon-components-svelte";
+    import { Dropdown, Toggle } from "carbon-components-svelte";
     import VirtualList from "../../widget/VirtualList.svelte";
     import type { LogLevelDescT, LogLine } from "../../model";
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
@@ -13,10 +13,7 @@
 
     let autoscroll = true;
 
-	let start = 0;
-	let end = 0;
 	let scrollToIndex: ((index: any, opts: any) => Promise<void>) | undefined = undefined;
-    let modemLogOpen = false;
     let logLevelIndex: number | undefined;
     let logLines = 10000;
     let lineCounter = 0;
@@ -67,46 +64,36 @@
 </script>
 
 <div class="modem-log">
-    <AccordionItem title="Modem Log" bind:open={modemLogOpen}>
-        <div class="log-list">
-            <!-- <VirtualScroll bind:this={list} data={logBuffer} let:data start={-1} on:scroll={onScroll} on:bottom={onBottom}>
-                <div class="log-line"><div class="nr">{data.id}:</div><div class="text">{data.line}</div></div>
-            </VirtualScroll> -->
-            <div class="settings">
-                <Dropdown
-                    bind:selectedId={dbgLevel}
-                    type="inline"
-                    titleText="Log level"
-                    items={dbgLevels}/>
-                <Toggle
-                    class="autoscroll-toggle"
-                    labelText="Autoscroll" 
-                    labelA={""}
-                    labelB={""}
-                    bind:toggled={autoscroll}/>
-            </div>
-            <VirtualList {items}
-                height="calc(100% - 40px)"
-                bind:scrollToIndex
-                let:item>
-                <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''}">
-                    <div class="nr">{item.nr}:</div>
-                    <div class="level level-{logLevels[item.level]}">{logLevels[item.level]}:</div>
-                    <div class="free-heap">{item.freeHeap}:</div>
-                    <div class="text">{item.text}</div>
-                </div>
-            </VirtualList>
+    <div class="log-list">
+        <div class="settings">
+            <Dropdown
+                bind:selectedId={dbgLevel}
+                type="inline"
+                titleText="Log level"
+                items={dbgLevels}/>
+            <Toggle
+                class="autoscroll-toggle"
+                labelText="Autoscroll" 
+                labelA={""}
+                labelB={""}
+                bind:toggled={autoscroll}/>
         </div>
-    </AccordionItem>
+        <VirtualList {items}
+            height="calc(100% - 40px)"
+            bind:scrollToIndex
+            let:item>
+            <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''}">
+                <div class="nr">{item.nr}:</div>
+                <div class="level level-{logLevels[(item as LogLine).level]}">{logLevels[(item as LogLine).level]}:</div>
+                <div class="free-heap">{(item as LogLine).freeHeap}:</div>
+                <div class="text">{item.text}</div>
+            </div>
+        </VirtualList>
+    </div>
 </div>
 
 <style lang="scss">
     .modem-log {
-        :global(.bx--accordion__item--active .bx--accordion__content) {
-            display: inline;
-            padding: 0;
-        }
-
         :global(.bx--toggle-input__label .bx--toggle__switch) {
             margin-top: 0;
         }

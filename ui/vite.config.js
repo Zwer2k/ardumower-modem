@@ -11,11 +11,11 @@ export default defineConfig({
 			port: 5000,
 			proxy: {
 				'/api': {
-					target: 'http://192.168.43.180',
+					target: 'http://192.168.43.220',
 					changeOrigin: true,
 				},
 				'/ws': {
-					target: 'ws://192.168.43.180',
+					target: 'ws://192.168.43.220',
 					ws: true, // Wichtig für WebSocket-Proxying
 					changeOrigin: true, // Empfohlen für Cross-Origin-Szenarien
 				},

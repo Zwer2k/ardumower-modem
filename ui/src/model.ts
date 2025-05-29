@@ -120,9 +120,10 @@ export interface DesiredState {
   fix_timeout: number;
 }
 
-export interface ConsoleLog {
+export interface ModemLog {
   log: LogLine[];
 };
+
 
 export enum LogLevel {
   COMM = 32,
@@ -151,30 +152,46 @@ export interface LogLine {
   freeHeap: number;
 };
 
+export interface ConsoleLine {
+  nr: number;
+  isSend: boolean; 
+  text: string;
+}
+
+export interface ConsoleResponseData {
+  lines: ConsoleLine[];
+};
+
 export enum ResponseDataType {
   hello = 0,
   mowerState,
   mowerStats,
   desiredState,
   modemLog,
+  mowerConsole,
 };
 
 export interface ResponseSocketMessage {
   type: ResponseDataType;
-  data: State | DesiredState | ConsoleLog;
+  data: State | DesiredState | ModemLog | ConsoleResponseData;
 }
 
 
 export enum RequestDataType {
   hello = 0,
   modemLogSettings,
+  mowerConsoleRequest,
 };
 
-export interface ConsoleLogSettings {
+export interface ModemLogSettings {
   logLevel: number
+}
+
+export interface ConsoleRequestData {
+  cmd: string
 }
 
 export interface RequestSocketMessage {
   type: RequestDataType;
-  data: ConsoleLogSettings;
+  data: ModemLogSettings | ConsoleRequestData;
 }

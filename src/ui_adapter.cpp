@@ -21,14 +21,10 @@ UiAdapter::UiAdapter(Api::Api &api,
                      ArduMower::Domain::Robot::CommandExecutor &cmd)
     : Common(settings), _api(api), _settings(settings), _server(server), _source(source), _cmd(cmd)
 {
-  _ws = new AsyncWebSocket("/ws");
-  socketHandler = new UiSocketHandler(_ws, _source, _cmd);
 }
 
 UiAdapter::~UiAdapter()
 {
-  delete socketHandler;
-  delete _ws;
 }
 
 void UiAdapter::begin()
@@ -47,17 +43,12 @@ void UiAdapter::begin()
   _server.on("/api/modem/bluetooth/reset", HTTP_POST, std::bind(&UiAdapter::handleApiResetModemBluetoothPairings, this, std::placeholders::_1));
 
   _server.on("/api/robot/desired_state", HTTP_GET, std::bind(&UiAdapter::handleApiGetRobotDesiredState, this, std::placeholders::_1));
-
-  _ws->onEvent(std::bind(&ArduMower::Modem::Http::UiSocketHandler::wsEvent, socketHandler, std::placeholders::_1, 
-    std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
-  _server.addHandler(_ws);
-  
+ 
   _server.onNotFound(std::bind(&UiAdapter::handleRequest, this, std::placeholders::_1));
 }
 
 void UiAdapter::loop()
 {
-  socketHandler->loop();
 }
 
 bool UiAdapter::servePath(AsyncWebServerRequest *request, const String &path)

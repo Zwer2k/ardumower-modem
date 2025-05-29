@@ -7,7 +7,6 @@
 #include "domain.h"
 #include "http_common.h"
 #include "settings.h"
-#include "ui_adapter_socket.h"
 
 namespace ArduMower
 {
@@ -36,8 +35,6 @@ namespace ArduMower
         ArduMower::Domain::Robot::StateSource &_source;
         ArduMower::Domain::Robot::CommandExecutor &_cmd;
         AsyncCallbackJsonWebHandler *_settingsHandler;
-        AsyncWebSocket *_ws;
-        UiSocketHandler *socketHandler;
 
         void handleRequest(AsyncWebServerRequest *request);
         bool servePath(AsyncWebServerRequest *request, const String &path);

@@ -1,22 +1,23 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-    import type { LogLevelDescT, LogLine } from '../model';
+    import type { ConsoleLine, LogLevelDescT, LogLine } from '../model';
 
 	// props
-	export let items: LogLine[];
+	export let items: (LogLine | ConsoleLine)[];
 	//export let logLevels: LogLevelDescT;
 	export let height: string = '100%';
 	export let itemHeight: number | undefined = undefined;
 	// read-only, but visible to consumers via bind:start
 	export let start = 0;
 	export let end = 0;
+
 	// local state
 	let height_map: number[] = [];
 	let rows: HTMLCollectionOf<HTMLElement>;
 	let viewport: HTMLElement;
 	let contents: HTMLElement;
 	let viewport_height: number = 0;
-	let visible: { index: number, data: LogLine }[];
+	let visible: { index: number, data: (LogLine | ConsoleLine) }[];
 	let mounted: boolean;
 
 	let top: number = 0;
@@ -30,7 +31,7 @@
 	// whenever `items` changes, invalidate the current heightmap
 	$: if (mounted) refresh(items, viewport_height, itemHeight);
 
-	async function refresh(items: LogLine[], viewport_height: number, itemHeight: number | undefined) {
+	async function refresh(items: (LogLine | ConsoleLine)[], viewport_height: number, itemHeight: number | undefined) {
 		const isStartOverflow = items.length < start
 		
 		if (isStartOverflow) {

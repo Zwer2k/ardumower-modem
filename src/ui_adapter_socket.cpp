@@ -2,7 +2,7 @@
 #include "json.h"
 #include "log.h"
 
-#define _LOG_ "Ui::Adapter::Socket"
+#define _LOG_ "UiSocket::"
 
 uint32_t clientPingInterval = 10000;
 uint32_t defaultStateUpdateInterval = 10000;
@@ -27,6 +27,10 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
   case RequestDataType::modemLogSettings:
     logToUi.modemLogLevel = jsonData["logLevel"];
     Log(INFO, "%s set modem log level to %d", _LOG_, logToUi.modemLogLevel);
+    break;
+
+  case RequestDataType::mowerConsoleRequest:
+    _socketHandler->cmdToMower(jsonData["cmd"]);
     break;
   
   default:
@@ -54,21 +58,40 @@ AwsClientStatus UiSocketItem::status()
 }
 
 UiSocketHandler::UiSocketHandler(
-  AsyncWebSocket *ws,
+  ArduMower::Modem::Terminal &terminal,
+  AsyncWebServer &server,
   ArduMower::Domain::Robot::StateSource &source,
-  ArduMower::Domain::Robot::CommandExecutor &cmd) 
-  : _source(source), _cmd(cmd)
+  ArduMower::Domain::Robot::CommandExecutor &cmd
+) 
+  : _terminal(terminal), _server(server), _source(source), _cmd(cmd)
 {
-  _ws = ws;
+  _ws = new AsyncWebSocket("/ws");
 
   for (int i=0; i < ResponseDataType::responseDataTypeLength; i++) {
     oldDataTimestamp[i] = 0;
     lastDataRequestTimestamp[i] = defaultStateUpdateInterval;
   }
+
+  _terminal.addRxHandler(std::bind(&UiSocketHandler::sendTerminalLine, this, std::placeholders::_1));
 }
+
+void UiSocketHandler::sendTerminalLine(String line) 
+{
+  auto message = TerminalMessage(line);
+  Log(DBG, "%s mower console message %s", _LOG_, line.c_str());
+  this->sendData(NULL, ResponseDataType::mowerConsole, message, false);
+} 
 
 UiSocketHandler::~UiSocketHandler() 
 {   
+  delete _ws;
+}
+
+void UiSocketHandler::begin()
+{
+  _ws->onEvent(std::bind(&ArduMower::Modem::Http::UiSocketHandler::wsEvent, this, std::placeholders::_1, 
+    std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
+  _server.addHandler(_ws);
 }
 
 void UiSocketHandler::loop()
@@ -116,6 +139,15 @@ void UiSocketHandler::logToUiLoop()
   }
 }
 
+bool UiSocketHandler::cmdToMower(String cmd) {
+  Log(DBG, "%s mower console cmd %s", _LOG_, cmd.c_str());
+  bool success = _terminal.sendWithoutResponse(cmd);
+  if (success) {
+    Log(DBG, "%s sends cmd success", _LOG_);
+  }
+  return success;
+}
+
 template<typename T>
 void UiSocketHandler::sendData(UiSocketItem *sendTo, ResponseDataType dataType, T data, bool force)
 {
@@ -138,7 +170,7 @@ void UiSocketHandler::sendData(UiSocketItem *sendTo, ResponseDataType dataType, 
   } else {
     auto status = _ws->textAll(stateStr);    
     if (status != AsyncWebSocket::ENQUEUED) {
-      Log(DBG, "cleanup old clients\n", _LOG_); 
+      Log(DBG, "%ssendData cleanup old clients\n", _LOG_); 
       _ws->cleanupClients(); // cleanup disconnected clients
     }
   }
