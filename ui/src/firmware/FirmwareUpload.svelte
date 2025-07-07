@@ -8,9 +8,10 @@
     FileUploaderButton,
   } from "carbon-components-svelte";
   import type { Readable } from "svelte/store";
-  import { FirmwareUploader, FirmwareUploadStatus } from "./service";
+  import { FirmwareUploader, FirmwareUploadStatus, FirmwareUploadType } from "./service";
 
   export let open: boolean = false;
+  export let uploadType: FirmwareUploadType = FirmwareUploadType.modem;
 
   let ref: null | HTMLInputElement;
 
@@ -18,7 +19,7 @@
 
   let uploader = new FirmwareUploader();
 
-  function uploadChange(e) {
+  function uploadChange(e: CustomEvent<ReadonlyArray<File>>) {
     if (!(ref && ref.files && ref.files.length > 0)) {
       uploader.file = null;
       return;
@@ -27,7 +28,7 @@
     uploader.file = file;
     fileSize = file.size;
 
-    if (file !== null) uploader.upload();
+    if (file !== null) uploader.upload(uploadType);
   }
 
   async function primary() {
@@ -49,7 +50,7 @@
     <ProgressBar
       value={$uploaderProgress}
       max={100}
-      disabled={$uploaderStatus < FirmwareUploadStatus.uploading}
+      status={$uploaderStatus == FirmwareUploadStatus.success ? 'finished' : $uploaderStatus == FirmwareUploadStatus.error ? 'error' : undefined }
     />
     <p>Select the firmware update file on your computer.</p>
     <p>
@@ -73,11 +74,11 @@
     {/if}
     {#if $uploaderStatus === FirmwareUploadStatus.expectReboot}
       <p>The firmware has been uploaded successfully.</p>
-      <p>Waiting for the modem to restart...</p>
+      <p>Waiting for the {uploadType} to restart...</p>
     {/if}
 
     {#if $uploaderStatus === FirmwareUploadStatus.error}
-      <p>The update failed!</p>
+      <p>The update for the {uploadType} failed!</p>
       <p>The error message is <i>{uploader.error}</i></p>
     {/if}
 

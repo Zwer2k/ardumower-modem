@@ -66,6 +66,7 @@ namespace ArduMower
       void loop();
       bool send(String _command, responseCb _cb);
       bool sendWithoutResponse(String line);
+      bool inAction();
     };
 
   }

@@ -62,7 +62,7 @@ WebServer webServer;
 // firmware update via Arduino IDE with buggy WiFiUDP
 // Ota::ArduinoOta ota;
 // upload firmware as POST multipart body aka. form file upload
-Ota::HttpServer otaHttpServer(settings, webServer.server());
+Ota::HttpServer otaHttpServer(settings, webServer.server(), terminal, Serial1);
 
 // provides request/response communication with the robot
 Router router(Serial2);
@@ -150,7 +150,7 @@ void setup() {
   setup_fake_ardumower();
   FakeArduMower.active = true;
 #elif MOWER_TERMINAL
-  Serial1.begin(115200, SERIAL_8N1, 16, 15); // connection to mower serial port
+  Serial1.begin(115200, SERIAL_8N1); // connection to mower serial port
 #endif
 }
 

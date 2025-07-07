@@ -57,6 +57,11 @@ bool Router::sendWithoutResponse(String line)
   return true;
 }
 
+bool Router::inAction()
+{
+  return (sendCommand || expectResponse);
+}
+
 void Router::loopSend()
 {
   if (!sendCommand) return;

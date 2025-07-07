@@ -29,11 +29,26 @@ void Terminal::begin()
 
 void Terminal::loop()
 {
+  if (suspended && !prepareSuspended) {
+    return;
+  }
+
   _terminalRouter->loop();
+
+  if (prepareSuspended && !_terminalRouter->inAction()) 
+  {
+    prepareSuspended = false;
+    suspended = true;
+    _suspendDone();
+  }
 }
 
 bool Terminal::sendWithoutResponse(String line) 
 {
+  if (prepareSuspended || suspended) {
+    return false;
+  }
+
   return _terminalRouter->sendWithoutResponse(line);
 }
 
@@ -45,6 +60,18 @@ void Terminal::addRxHandler(RxHandler handler)
 void Terminal::addTxHandler(TxHandler handler) 
 {
   _txHandler = handler;
+}
+
+void Terminal::suspend(SuspendDone suspendDone)
+{
+  prepareSuspended = true;
+  _suspendDone = suspendDone;
+}
+
+void Terminal::resume()
+{
+  suspended = false;
+  prepareSuspended = false;
 }
 
 void Terminal::drainRx(String line, bool &stop)

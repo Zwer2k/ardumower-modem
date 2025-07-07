@@ -10,15 +10,22 @@
   import Group from "./Group.svelte";
   import {InfoStore} from "../stores/info"
   import FirmwareUpload from '../firmware/FirmwareUpload.svelte'
+    import { FirmwareUploadType } from "../firmware/service";
 
-  let dialogOpen = false;
+  let dialogModemFwOpen = false;
+  let dialogMowerFwOpen = false;
 
-  function upload() {
-    dialogOpen = true;
+  function uploadModemFw() {
+    dialogModemFwOpen = true;
+  }
+
+  function uploadMowerFw() {
+    dialogMowerFwOpen = true;
   }
 </script>
 
-<FirmwareUpload bind:open={dialogOpen} />
+<FirmwareUpload bind:open={dialogModemFwOpen} bind:uploadType={FirmwareUploadType.modem} />
+<FirmwareUpload bind:open={dialogMowerFwOpen} bind:uploadType={FirmwareUploadType.mower} />
 <Group title="Firmware" open={true}>
   {#if $InfoStore}
     <StructuredList>
@@ -38,5 +45,6 @@
       </StructuredListBody>
     </StructuredList>
   {/if}
-  <Button on:click={upload} icon={IconUpload}>Upload modem firmware</Button>
+  <Button on:click={uploadModemFw} icon={IconUpload}>Upload modem firmware</Button>
+  <Button on:click={uploadMowerFw} icon={IconUpload}>Upload mower firmware</Button>
 </Group>

@@ -9,8 +9,13 @@ export enum FirmwareUploadStatus {
   success,
 }
 
+export enum FirmwareUploadType {
+  modem = 'modem',
+  mower = 'mower'
+}
+
 export class FirmwareUploader {
-  private _req: XMLHttpRequest
+  private _req: XMLHttpRequest | null = null;
   private _file: null | File = null
   private _rebootAwaiter: null | (() => Promise<void>) = null
 
@@ -31,7 +36,11 @@ export class FirmwareUploader {
     this._status.set(s)
   }
 
-  public async upload() {
+  public async upload(uploadType: FirmwareUploadType) {
+    if (this._file == null) {
+      this._status.set(FirmwareUploadStatus.error);
+      return
+    }
     const data = uploadRequest(this._file)
 
     this._progress.set(0)
@@ -39,14 +48,14 @@ export class FirmwareUploader {
 
     this._rebootAwaiter = await makeRebootAwaiter()
 
-    this._req = new XMLHttpRequest()
-    this._req.open('POST', '/api/modem/ota/upload')
+    this._req = new XMLHttpRequest();
+    this._req.open('POST', '/api/modem/ota/upload?type=' + uploadType)
     this._req.upload.addEventListener('progress', this.onUploadProgress.bind(this))
     this._req.addEventListener('load', this.onLoad.bind(this))
     this._req.addEventListener('error', this.onError.bind(this))
     try {
       this._req.send(data)
-    } catch (err) {
+    } catch (err: any) {
       this._error = `Upload failed (${err.message})`
       this._status.set(FirmwareUploadStatus.error)
     }
@@ -58,6 +67,9 @@ export class FirmwareUploader {
   }
 
   private onLoad(_: ProgressEvent<XMLHttpRequestEventTarget>) {
+    if (this._req == null) 
+      return;
+
     if (this._req.status >= 400) this.onBadResponseStatus()
     else this.onGoodResponseStatus()
   }
@@ -68,6 +80,9 @@ export class FirmwareUploader {
   }
 
   private async onGoodResponseStatus() {
+    if (this._req == null || this._rebootAwaiter == null) 
+      return;
+
     try {
       const res: FirmwareUploadResponse = JSON.parse(this._req.responseText)
       if (!res.success) {
@@ -79,13 +94,16 @@ export class FirmwareUploader {
       this._status.set(FirmwareUploadStatus.expectReboot)
       await this._rebootAwaiter()
       this._status.set(FirmwareUploadStatus.success)
-    } catch (err) {
+    } catch (err: any) {
       this._error = err.message
       this._status.set(FirmwareUploadStatus.error)
     }
   }
 
   private onBadResponseStatus() {
+    if (this._req == null) 
+      return;
+
     this._error = `bad response result: ${this._req.status}`
     this._status.set(FirmwareUploadStatus.error)
   }
