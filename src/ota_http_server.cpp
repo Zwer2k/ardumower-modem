@@ -9,8 +9,8 @@ using namespace std::placeholders;
 
 const char *resultToString(Http::Result r);
 
-HttpServer::HttpServer(Settings::Settings &settings, AsyncWebServer &server, Terminal &terminal, HardwareSerial &mowerFirmwareSerial)
-    : ArduMower::Modem::Http::Common(settings), _server(server), _terminal(terminal), _mowerFirmwareSerial(mowerFirmwareSerial), 
+HttpServer::HttpServer(Settings::Settings &settings, AsyncWebServer &server, MowerUpdater &mowerUpdater)
+    : ArduMower::Modem::Http::Common(settings), _server(server), _mowerUpdater(mowerUpdater),
     _active(false), _failed(false), _restart(false), _restartTime(0) {}
 
 void HttpServer::begin()
@@ -107,14 +107,9 @@ void HttpServer::beginMowerUpdate(AsyncWebServerRequest *request, String filenam
   if (!auth(request))
     return;
 
-  auto session = new Http::MowerUploadSession(this, filename, _mowerFirmwareSerial);
+  auto session = new Http::MowerUploadSession(this, filename, _mowerUpdater);
   request->_tempObject = session;
   session->handle(index, data, len, final);
-
-  _terminal.suspend([session] {
-    Log(INFO, "Http::UploadSession::beginMowerUpdate terminal suspend done");
-    session->setSerialPortReady(true);
-  });
 }
 
 void HttpServer::continueUpdate(AsyncWebServerRequest *request, size_t index, uint8_t *data, size_t len, bool final)
@@ -250,6 +245,7 @@ bool Http::ModemUploadSession::verifyHeader(uint8_t *data, size_t len)
 
 static const char *result_success = "success";
 static const char *result_started = "started";
+static const char *result_flash_file = "flash_file";
 static const char *result_incomplete = "incomplete";
 static const char *result_error = "error";
 static const char *result_index_mismatch = "index_mismatch";
@@ -268,6 +264,9 @@ const char *resultToString(Http::Result r)
 
   case Http::Result::STARTED:
     return result_started;
+
+  case Http::Result::FLASH_FILE:
+    return result_flash_file;
 
   case Http::Result::INCOMPLETE:
     return result_incomplete;
@@ -297,8 +296,8 @@ const char *resultToString(Http::Result r)
 
 // Http::MowerUploadSession
 
-Http::MowerUploadSession::MowerUploadSession(HttpServer *server, String filename, HardwareSerial &serial) : 
-  _server(server), _filename(filename), result(Result::PENDING), _index(0), _serial(serial), firmwareWriter(FirmwareWriterSTM32(serial)) 
+Http::MowerUploadSession::MowerUploadSession(HttpServer *server, String filename, MowerUpdater &mowerUpdater) : 
+  _server(server), _filename(filename), _mowerUpdater(mowerUpdater), result(Result::PENDING), _index(0) 
 {
   if(!SPIFFS.begin(true)){
     Log(ERR, "Http::MowerUploadSession::MowerUploadSession can't init SPIFFS");
@@ -314,7 +313,7 @@ void Http::MowerUploadSession::respond(AsyncWebServerRequest *request)
   auto res = new AsyncJsonResponse();
   auto o = res->getRoot();
 
-  auto success = result == Result::SUCCESS;
+  auto success = result == Result::SUCCESS || result == Result::FLASH_FILE;
 
   // TODO unify with error handling from http_common.h
   o["success"] = success;
@@ -330,17 +329,6 @@ void Http::MowerUploadSession::respond(AsyncWebServerRequest *request)
     _server->requestRestart();
   else
     Update.abort();
-}
-
-void Http::MowerUploadSession::setSerialPortReady(bool serialPortReady) 
-{ 
-  _serialPortReady = serialPortReady;
-  
-  Log(DBG, "Http::MowerUploadSession::setSerialPortReady (fileUploaded=%u serialPortReady=%u)", _fileUploaded, _serialPortReady);
-
-  if (_fileUploaded) {
-    updateFirmware();
-  }
 }
 
 void Http::MowerUploadSession::handle(size_t index, uint8_t *data, size_t len, bool final)
@@ -360,7 +348,7 @@ void Http::MowerUploadSession::handle(size_t index, uint8_t *data, size_t len, b
     handleListFiles();
 
     if (SPIFFS.exists(_filename)) {
-      Log(INFO, "Ota::Http::MowerUploadSession::handle remove file");
+      Log(DBG, "Ota::Http::MowerUploadSession::handle remove file");
       SPIFFS.remove(_filename);
     }
 
@@ -372,7 +360,7 @@ void Http::MowerUploadSession::handle(size_t index, uint8_t *data, size_t len, b
       return;
     }
 
-    Log(INFO, "Ota::Http::MowerUploadSession::handle::upload-begin %s", _filename.c_str());
+    Log(DBG, "Ota::Http::MowerUploadSession::handle::upload-begin %s", _filename.c_str());
     result = Result::STARTED;
   }
 
@@ -397,31 +385,18 @@ void Http::MowerUploadSession::handle(size_t index, uint8_t *data, size_t len, b
     return;
 
   fsUploadFile.close();
-  _fileUploaded = true;
-
-  Log(DBG, "Ota::Http::MowerUploadSession::handle written %u (fileUploaded=%u serialPortReady=%u)", _index, _fileUploaded, _serialPortReady);
+  result = Result::FLASH_FILE;
   
-  if (_serialPortReady) {
-    updateFirmware();    
-  }
-}
-
-bool Http::MowerUploadSession::updateFirmware()
-{
-  String err = handleFlash();
-  if (err != "")
-  {
-    Log(ERR, "Ota::Http::MowerUploadSession::handle::update-error(%s)", err.c_str());
-    result = Result::UPDATE_END_FAILED;
-    return false;
-  }
-
-  Log(INFO, "Ota::Http::MowerUploadSession::handle::update-end");
-  result = Result::SUCCESS;
-
-  _server->resumeTerminal();
-
-  return true;
+  Log(DBG, "Ota::Http::MowerUploadSession::handle written %u", _index);
+  
+  _mowerUpdater.startUpdate(_filename, [this](String updateResult) {
+    if (updateResult == "") {
+      Log(INFO, "Ota::Http::MowerUploadSession::handle success");
+    } else {
+      Log(ERR, "Ota::Http::MowerUploadSession::handle faild with error %s", updateResult.c_str());
+    }
+    result = updateResult == "" ? Result::SUCCESS : Result::UPDATE_END_FAILED;
+  });
 }
 
 bool Http::MowerUploadSession::verifyHeader(uint8_t *data, size_t len)
@@ -432,14 +407,9 @@ bool Http::MowerUploadSession::verifyHeader(uint8_t *data, size_t len)
 
 void Http::MowerUploadSession::handleListFiles()
 {
-  String fileList = "Bootloader Ver: ";
+  String fileList = "File list: ";
   String Listcode;
-  char blversion = 0;
   File dir = SPIFFS.open("/");
-  blversion = firmwareWriter.version();
-  fileList += String((blversion >> 4) & 0x0F) + "." + String(blversion & 0x0F) + " MCU: ";
-  fileList += firmwareWriter.getId();
-  fileList += " File:";
   File file = dir.openNextFile();
   while (file)
   {
@@ -452,118 +422,3 @@ void Http::MowerUploadSession::handleListFiles()
   Log(INFO, fileList.c_str());
 }
 
-String Http::MowerUploadSession::handleFlash()
-{
-  Log(DBG, "Http::MowerUploadSession::handleFlash %s", _filename.c_str());
-
-  const size_t blockSize = 256;
-  uint8_t binread[blockSize];
-  fsUploadFile = SPIFFS.open(_filename, "r");
-  Log(DBG, "Http::MowerUploadSession::handleFlash file open");
-
-  if (fsUploadFile) {
-    auto bini = fsUploadFile.size() / blockSize;
-    auto lastbuf = fsUploadFile.size() % blockSize;
-    
-    Log(DBG, "Http::MowerUploadSession::handleFlash file is open size=%u", fsUploadFile.size());
-
-    if (!firmwareWriter.switchToFlashMode()) {
-      firmwareWriter.switchToRunMode();
-      return "error-init";
-    }
-
-    // if (!firmwareWriter.checkFlashMode()) {
-    //   return "error-connection check";
-    // }
-
-    Log(DBG, "Http::MowerUploadSession::handleFlash bootloader is ready, earse flash");
-    if (!firmwareWriter.erase()) {
-      firmwareWriter.switchToRunMode();
-      return "error-earse-flash";
-    }
-
-    Log(DBG, "Http::MowerUploadSession::handleFlash flash firmware");
-
-    uint32_t currentAddress = STM32STADDR; // Start address for flashing
-
-    for (int i = 0; i < bini; i++) { // Loop for full blockSize-byte blocks
-        unsigned long iterationStartTime = millis(); // Startzeit der Iteration
-
-        fsUploadFile.read(binread, blockSize); // Read blockSize bytes
-        yield();
-        //Log(DBG, "Writing block %d at address 0x%x", i, currentAddress);
-
-        // 1. Send 0x31 (Write Memory) command
-        if (!firmwareWriter.sendCommand(STM32WR, 2000)) { // STM32WR is 0x31
-            Log(ERR, "Failed to send 0x31 command for block %d", i);
-            firmwareWriter.switchToRunMode();
-            return "error-write-command-0x31";
-        }
-        yield();
-
-        // 2. Send 4-byte address
-        if (!firmwareWriter.sendAddress(currentAddress, 1000)) {
-            Log(ERR, "Failed to send address 0x%x for block %d", currentAddress, i);
-            firmwareWriter.switchToRunMode();
-            return "error-write-address";
-        }
-        yield();
-
-        // 3. Send data block (blockSize bytes)
-        // The sendDataBlock function handles the N-1 byte, data, and checksum, then waits for the final ACK.
-        if (!firmwareWriter.sendDataBlock(binread, blockSize, 2000)) { // blockSize bytes
-            Log(ERR, "Failed to send data block %d at address 0x%x", i, currentAddress);
-            firmwareWriter.switchToRunMode();
-            return "error-write-data-block";
-        }
-
-        currentAddress += blockSize; // Increment address for the next block
-        yield();
-
-        Log(DBG, "Flash-Loop Block %d dauerte %lu ms", i, millis() - iterationStartTime);
-    }
-
-    // Handle the last partial block
-    if (lastbuf > 0) {
-        fsUploadFile.read(binread, lastbuf); // Read remaining bytes
-
-        //Log(DBG, "Writing last partial block at address 0x%x (len=%d)", currentAddress, lastbuf);
-
-        // 1. Send 0x31 (Write Memory) command
-        if (!firmwareWriter.sendCommand(STM32WR, 2000)) {
-            Log(ERR, "Failed to send 0x31 command for last block");
-            firmwareWriter.switchToRunMode();
-            return "error-write-command-0x31-last";
-        }
-
-        // 2. Send 4-byte address
-        if (!firmwareWriter.sendAddress(currentAddress, 1000)) {
-            Log(ERR, "Failed to send address 0x%x for last block", currentAddress);
-            firmwareWriter.switchToRunMode();
-            return "error-write-address-last";
-        }
-
-        // 3. Send data block (lastbuf bytes)
-        if (!firmwareWriter.sendDataBlock(binread, lastbuf, 2000)) {
-            Log(ERR, "Failed to send last partial data block");
-            firmwareWriter.switchToRunMode();
-            return "error-write-data-block-last";
-        }
-    }
-
-    fsUploadFile.close();
-    Log(DBG, "Http::MowerUploadSession::handleFlash enable firmware");
-  }
-
-  firmwareWriter.switchToRunMode();
-
-  Log(DBG, "Http::MowerUploadSession::handleFlash enable firmware");
-
-  if (firmwareWriter.run() == STM32ERR) {
-    return "error-enable-firmware";
-  }
-
-  Log(DBG, "Http::MowerUploadSession::handleFlash done");
-
-  return "";
-}

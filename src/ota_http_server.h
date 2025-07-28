@@ -4,8 +4,7 @@
 #include "http_common.h"
 #include "ota.h"
 #include "settings.h"
-#include "terminal.h"
-#include "stm32ota/stm32ota.h"
+#include "ota_mower_updater.h"
 
 namespace ArduMower
 {
@@ -27,6 +26,7 @@ namespace ArduMower
           SUCCESS = 0,
           PENDING,
           STARTED,
+          FLASH_FILE,
           INCOMPLETE,
           ERROR,
           INDEX_MISMATCH,
@@ -66,27 +66,20 @@ namespace ArduMower
         private:
           HttpServer *_server;
           String _filename;
+          MowerUpdater &_mowerUpdater;
           File fsUploadFile;
           Result result;
           size_t _index;
-          HardwareSerial _serial;
-          FirmwareWriterSTM32 firmwareWriter;
-
-          bool _serialPortReady = false;
-          bool _fileUploaded = false;
-
+          
           bool verifyHeader(uint8_t *data, size_t len);
-          bool updateFirmware();
           String handleFlash();
           void handleListFiles();
 
         public:
-          MowerUploadSession(HttpServer *_s, String filename, HardwareSerial &serial);
+          MowerUploadSession(HttpServer *_s, String filename, MowerUpdater &mowerUpdater);
 
           void handle(size_t index, uint8_t *data, size_t len, bool final);
           void respond(AsyncWebServerRequest *request);
-
-          void setSerialPortReady(bool serialPortReady);
         };
       }
 
@@ -94,8 +87,7 @@ namespace ArduMower
       {
       private:
         AsyncWebServer &_server;
-        Terminal &_terminal;
-        HardwareSerial &_mowerFirmwareSerial;
+        MowerUpdater &_mowerUpdater;
         bool _active;
         bool _failed;
         bool _restart;
@@ -115,14 +107,14 @@ namespace ArduMower
         FirmwareUploadType getUploadType(AsyncWebServerRequest *request);
 
       public:
-        HttpServer(Settings::Settings &settings, AsyncWebServer &server, Terminal &terminal, HardwareSerial &mowerFirmwareSerial);
+        HttpServer(Settings::Settings &settings, AsyncWebServer &server, MowerUpdater &mowerUpdater);
 
         virtual void begin() override;
         virtual void loop() override;
         virtual bool active() override { return _active; };
 
         void requestRestart();
-        void resumeTerminal() { _terminal.resume(); }
+        
       };
     }
   }

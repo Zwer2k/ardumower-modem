@@ -58,12 +58,13 @@ AwsClientStatus UiSocketItem::status()
 }
 
 UiSocketHandler::UiSocketHandler(
-  ArduMower::Modem::Terminal &terminal,
+  Terminal &terminal,
   AsyncWebServer &server,
   ArduMower::Domain::Robot::StateSource &source,
-  ArduMower::Domain::Robot::CommandExecutor &cmd
+  ArduMower::Domain::Robot::CommandExecutor &cmd,
+  Ota::MowerUpdater &mowerUpdater
 ) 
-  : _terminal(terminal), _server(server), _source(source), _cmd(cmd)
+  : _terminal(terminal), _server(server), _source(source), _cmd(cmd), _mowerUpdater(mowerUpdater)
 {
   _ws = new AsyncWebSocket("/ws");
 
@@ -73,14 +74,20 @@ UiSocketHandler::UiSocketHandler(
   }
 
   _terminal.addRxHandler(std::bind(&UiSocketHandler::sendTerminalLine, this, std::placeholders::_1));
+  _mowerUpdater.addStatusHandler(std::bind(&UiSocketHandler::uploadStatusHandler, this, std::placeholders::_1));
 }
 
 void UiSocketHandler::sendTerminalLine(String line) 
 {
   auto message = TerminalMessage(line);
-  Log(DBG, "%s mower console message %s", _LOG_, line.c_str());
-  this->sendData(NULL, ResponseDataType::mowerConsole, message, false);
-} 
+  this->sendData(ResponseDataType::mowerConsole, NULL, message, false);
+}
+
+void UiSocketHandler::uploadStatusHandler(byte progress) 
+{
+  auto message = Ota::StatusMessage(progress);
+  this->sendData(ResponseDataType::mowerConsole, NULL, message, false);
+}
 
 UiSocketHandler::~UiSocketHandler() 
 {   
@@ -122,10 +129,10 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 {
   switch (dataType) {
     case ResponseDataType::mowerState:
-      sendData(sendTo, dataType, _source.state(), force);
+      sendData(dataType, sendTo, _source.state(), force);
       break;
     case ResponseDataType::desiredState:
-      sendData(sendTo, dataType, _source.desiredState(), force);
+      sendData(dataType, sendTo, _source.desiredState(), force);
       break;
     default:
       break;
@@ -135,7 +142,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 void UiSocketHandler::logToUiLoop()
 {
   if (logToUi.hasData()) {
-    sendData(NULL, ResponseDataType::modemLog, logToUi, false);
+    sendData(ResponseDataType::modemLog, NULL, logToUi, false);
   }
 }
 
@@ -149,7 +156,7 @@ bool UiSocketHandler::cmdToMower(String cmd) {
 }
 
 template<typename T>
-void UiSocketHandler::sendData(UiSocketItem *sendTo, ResponseDataType dataType, T data, bool force)
+void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force)
 {
   if ((data.timestamp == 0) || (!force && (data.timestamp == oldDataTimestamp[dataType]))) {
     return;  

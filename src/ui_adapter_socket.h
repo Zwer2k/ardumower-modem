@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include "domain.h"
 #include "terminal.h"
+#include "ota_mower_updater.h"
 
 namespace ArduMower
 {
@@ -57,19 +58,20 @@ namespace ArduMower
       {
       public:
         UiSocketHandler(
-          ArduMower::Modem::Terminal &terminal,
+          Terminal &terminal,
           AsyncWebServer &server,
           ArduMower::Domain::Robot::StateSource &source,
-          ArduMower::Domain::Robot::CommandExecutor &cmd          
+          ArduMower::Domain::Robot::CommandExecutor &cmd,
+          Ota::MowerUpdater &mowerUpdater
         );
 
         ~UiSocketHandler();
         
         void begin();
         void loop();
-        void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
         void logToUiLoop();
         bool cmdToMower(String cmd);
+        void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
       private:
@@ -79,19 +81,21 @@ namespace ArduMower
         uint32_t lastDataRequestTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastclientPing = 0;
         
-        ArduMower::Modem::Terminal &_terminal;
+        Terminal &_terminal;
         AsyncWebServer &_server;
         ArduMower::Domain::Robot::StateSource &_source;
         ArduMower::Domain::Robot::CommandExecutor &_cmd;
+        Ota::MowerUpdater &_mowerUpdater;
 
         void handleData(uint32_t clientId, char *data);
         std::map<uint32_t, UiSocketItem*> itemMap;  
 
         void stateRequestLoop();
         template<typename T>
-        void sendData(UiSocketItem *sendTo, ResponseDataType dataType, T data, bool force = false);
+        void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         void pingClients();
         void sendTerminalLine(String line);
+        void uploadStatusHandler(byte progress); 
       };
     }
   }

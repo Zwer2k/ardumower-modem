@@ -8,7 +8,7 @@
     FileUploaderButton,
   } from "carbon-components-svelte";
   import type { Readable } from "svelte/store";
-  import { FirmwareUploader, FirmwareUploadStatus, FirmwareUploadType } from "./service";
+  import { FirmwareFlashStatus, FirmwareUploader, FirmwareUploadStatus, FirmwareUploadType } from "./service";
 
   export let open: boolean = false;
   export let uploadType: FirmwareUploadType = FirmwareUploadType.modem;
@@ -35,9 +35,43 @@
     open = false;
   }
 
+  let flashProgress: number | null = null;
+  let flashStatus: FirmwareFlashStatus | null = null;
+  let host = location.host;
+  let ws = new WebSocket("ws://" + host + "/ws");
+
+  ws.onopen = (event) => {
+    console.log('WebSocket verbunden', event);
+    // Optional: Sende eine erste Nachricht an den Server, um den Fortschritt anzufordern
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data && typeof data.progress === 'number') {
+        flashProgress = data.progress;
+        if (flashProgress != null && flashProgress >= 100) {
+          ws.close();
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Parsen der WebSocket-Nachricht:', error);
+    }
+  };
+
+  ws.onclose = (event) => {
+    console.log('WebSocket getrennt', event);
+    // Optional: Wiederverbindungslogik hier implementieren
+  };
+
+  ws.onerror = (error) => {
+    console.error('WebSocket Fehler:', error);
+  };
+
   function close() {
     if ($uploaderStatus === FirmwareUploadStatus.success)
       document.location.reload()
+    ws.close();
   }
 
   let uploaderStatus: Readable<FirmwareUploadStatus> = uploader.status;
@@ -52,6 +86,13 @@
       max={100}
       status={$uploaderStatus == FirmwareUploadStatus.success ? 'finished' : $uploaderStatus == FirmwareUploadStatus.error ? 'error' : undefined }
     />
+    {#if flashProgress != null}
+      <ProgressBar
+        value={flashProgress}
+        max={100}
+        status={flashStatus == FirmwareUploadStatus.success ? 'finished' : flashStatus == FirmwareUploadStatus.error ? 'error' : undefined }
+      />
+    {/if}
     <p>Select the firmware update file on your computer.</p>
     <p>
       You can download the latest firmware updates on the <a
@@ -62,6 +103,7 @@
     <FileUploaderButton
       bind:ref
       on:change={uploadChange}
+      disabled={fileSize > 0}
       accept={[".bin"]}
       labelText="Select..."
     />

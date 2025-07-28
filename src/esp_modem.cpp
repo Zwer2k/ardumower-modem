@@ -25,6 +25,7 @@
 #include "ota.h"
 #include "ota_arduinoota.h"
 #include "ota_http_server.h"
+#include "ota_mower_updater.h"
 #include "prometheus_adapter.h"
 #include "terminal.h"
 #include "router.h"
@@ -62,7 +63,8 @@ WebServer webServer;
 // firmware update via Arduino IDE with buggy WiFiUDP
 // Ota::ArduinoOta ota;
 // upload firmware as POST multipart body aka. form file upload
-Ota::HttpServer otaHttpServer(settings, webServer.server(), terminal, Serial1);
+Ota::MowerUpdater mowerUpdater(terminal, Serial1); 
+Ota::HttpServer otaHttpServer(settings, webServer.server(), mowerUpdater);
 
 // provides request/response communication with the robot
 Router router(Serial2);
@@ -77,7 +79,7 @@ HttpAdapter httpAdapter(router, webServer.server());
 // serves the web frontend
 Http::UiAdapter ui(api, settings, webServer.server(), mowerAdapter, mowerAdapter);
 // handle socket connection with web client
-Http::UiSocketHandler socketHandler(terminal, webServer.server(), mowerAdapter, mowerAdapter);
+Http::UiSocketHandler socketHandler(terminal, webServer.server(), mowerAdapter, mowerAdapter, mowerUpdater);
 // publish state on MQTT, receive commands on MQTT
 MqttAdapter mqttAdapter(settings, router, mowerAdapter, mowerAdapter);
 // metrics available for use with Prometheus
@@ -132,6 +134,7 @@ void setup() {
   looptime.add("http", std::bind(&HttpAdapter::loop, &httpAdapter));
   // looptime.add("ota_arduino", std::bind(&Ota::ArduinoOta::loop, &ota));
   looptime.add("ota_http", std::bind(&Ota::HttpServer::loop, &otaHttpServer));
+  looptime.add("ota_mower", std::bind(&Ota::MowerUpdater::loop, &mowerUpdater));
   looptime.add("router", std::bind(&Router::loop, &router));
   looptime.add("ble", std::bind(&BleAdapter::loop, &bleAdapter));
   looptime.add("ui", std::bind(&Http::UiAdapter::loop, &ui));

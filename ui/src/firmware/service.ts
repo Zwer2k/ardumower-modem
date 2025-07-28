@@ -9,6 +9,12 @@ export enum FirmwareUploadStatus {
   success,
 }
 
+export enum FirmwareFlashStatus {
+  clear = 0,
+  error,
+  success,
+}
+
 export enum FirmwareUploadType {
   modem = 'modem',
   mower = 'mower'
