@@ -97,6 +97,13 @@ export class FirmwareUploader {
         return
       }
 
+      // For mower uploads, "flash_file" means the file was uploaded and flashing starts
+      // For modem uploads, we expect reboot after successful upload
+      if (res.result === "flash_file") {
+        this._status.set(FirmwareUploadStatus.success) // Indicate upload completed, flashing will start
+        return
+      }
+
       this._status.set(FirmwareUploadStatus.expectReboot)
       await this._rebootAwaiter()
       this._status.set(FirmwareUploadStatus.success)
