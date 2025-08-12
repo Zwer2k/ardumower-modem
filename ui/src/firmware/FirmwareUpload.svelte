@@ -6,15 +6,21 @@
     ModalBody,
     ProgressBar,
     FileUploaderButton,
+    Dropdown,
   } from "carbon-components-svelte";
   import type { Readable } from "svelte/store";
   import { onDestroy } from "svelte";
   import { FirmwareFlashStatus, FirmwareUploader, FirmwareUploadStatus, FirmwareUploadType } from "./service";
 
   export let open: boolean = false;
-  export let uploadType: FirmwareUploadType = FirmwareUploadType.modem;
 
+  let uploadType: FirmwareUploadType = FirmwareUploadType.modem;
   let ref: null | HTMLInputElement;
+
+  const uploadTypeOptions = [
+    { id: FirmwareUploadType.modem, text: "Modem Firmware" },
+    { id: FirmwareUploadType.mower, text: "Mower Firmware" }
+  ];
 
   let fileSize = 0;
 
@@ -31,6 +37,23 @@
 
     if (file !== null) {
       uploader.upload(uploadType);
+    }
+  }
+
+  function handleUploadTypeChange(e: CustomEvent<{ selectedId: FirmwareUploadType }>) {
+    uploadType = e.detail.selectedId;
+    // Reset upload state when changing type
+    resetUploadState();
+  }
+
+  function resetUploadState() {
+    uploader.file = null;
+    fileSize = 0;
+    flashProgress = null;
+    flashStatus = null;
+    closeWebSocket();
+    if (ref) {
+      ref.value = '';
     }
   }
 
@@ -87,10 +110,10 @@
             console.log('Mower progress update:', progress);
             flashProgress = progress;
             
-            if (flashProgress >= 100) {
+            if (flashProgress !== null && flashProgress >= 100) {
               flashStatus = FirmwareFlashStatus.success;
               closeWebSocket();
-            } else if (flashProgress > 0) {
+            } else if (flashProgress !== null && flashProgress > 0) {
               flashStatus = FirmwareFlashStatus.clear; // In Progress
             }
           }
@@ -100,10 +123,10 @@
           console.log('Modem progress update:', data.status.progress);
           flashProgress = data.status.progress;
           
-          if (flashProgress >= 100) {
+          if (flashProgress !== null && flashProgress >= 100) {
             flashStatus = FirmwareFlashStatus.success;
             closeWebSocket();
-          } else if (flashProgress > 0) {
+          } else if (flashProgress !== null && flashProgress > 0) {
             flashStatus = FirmwareFlashStatus.clear; // In Progress
           }
         }
@@ -145,10 +168,7 @@
     
     if (isSuccess)
       document.location.reload()
-    closeWebSocket();
-    // Reset flash progress und status
-    flashProgress = null;
-    flashStatus = null;
+    resetUploadState();
   }
 
   let uploaderStatus: Readable<FirmwareUploadStatus> = uploader.status;
@@ -174,18 +194,57 @@
   :global(.progress-bar-container .bx--progress-bar__track) {
     width: 100% !important;
   }
+
+  /* Fix for 100% progress bar width */
+  :global(.progress-bar-container .bx--progress-bar--finished .bx--progress-bar__bar) {
+    transform: scaleX(1) !important;
+  }
+
+  :global(.progress-bar-container .bx--progress-bar__bar[style*="100"]) {
+    transform: scaleX(1) !important;
+  }
+  
+  /* Ensure dropdown doesn't cause scrollbars */
+  :global(.bx--modal-container) {
+    overflow: visible !important;
+  }
+  
+  :global(.bx--modal-content) {
+    overflow: visible !important;
+  }
+  
+  :global(.bx--dropdown__wrapper) {
+    z-index: 9999;
+  }
 </style>
 
 <ComposedModal on:click:button--primary={primary} bind:open on:close={close}>
-  <ModalHeader title="Upload modem firmware" />
+  <ModalHeader title="Upload Firmware" />
   <ModalBody hasForm={true}>
+    {#if $uploaderStatus < FirmwareUploadStatus.fileSelected}
+      <div style="width: 100%; margin-bottom: 1rem; position: relative; z-index: 1000;">
+        <Dropdown
+          titleText="Select firmware type"
+          items={uploadTypeOptions}
+          selectedId={uploadType}
+          on:select={handleUploadTypeChange}
+          direction="bottom"
+        />
+      </div>
+    {/if}
     <div style="width: 100%;">
-      {#if $uploaderStatus >= FirmwareUploadStatus.fileSelected && $uploaderStatus < FirmwareUploadStatus.success && $uploaderStatus !== FirmwareUploadStatus.expectReboot}
+      {#if $uploaderStatus >= FirmwareUploadStatus.fileSelected}
         <div class="progress-bar-container" style="width: 100%; margin-bottom: 1rem;">
           <ProgressBar
             value={$uploaderProgress}
             max={100}
-            status={$uploaderStatus == FirmwareUploadStatus.success ? 'finished' : $uploaderStatus == FirmwareUploadStatus.error ? 'error' : undefined }
+            status={
+              $uploaderStatus == FirmwareUploadStatus.error ? 'error' :
+              (uploadType === FirmwareUploadType.modem && flashStatus === FirmwareFlashStatus.success) ? 'finished' :
+              (uploadType === FirmwareUploadType.mower && $uploaderStatus === FirmwareUploadStatus.success) ? 'finished' :
+              (uploadType === FirmwareUploadType.modem && $uploaderStatus === FirmwareUploadStatus.success) ? 'finished' :
+              undefined
+            }
             helperText="Upload progress"
           />
         </div>
@@ -193,22 +252,24 @@
       {#if flashProgress != null || (uploadType === FirmwareUploadType.mower && $uploaderStatus === FirmwareUploadStatus.success)}
         <div class="progress-bar-container" style="width: 100%; margin-bottom: 1rem;">
           <ProgressBar
-            value={flashProgress != null ? Math.min(Math.max(flashProgress, 0), 100) : 0}
+            value={flashStatus === FirmwareFlashStatus.success ? 100 : (flashProgress != null ? Math.round(Math.min(Math.max(flashProgress, 0), 100)) : 0)}
             max={100}
             status={flashStatus == FirmwareFlashStatus.success ? 'finished' : flashStatus == FirmwareFlashStatus.error ? 'error' : undefined }
-            helperText="Firmware wird geflasht... ({flashProgress ?? 0}%)"
+            helperText="Firmware wird geflasht... ({flashStatus === FirmwareFlashStatus.success ? 100 : (flashProgress != null ? Math.round(flashProgress) : 0)}%)"
           />
         </div>
       {/if}
     </div>
     {#if $uploaderStatus < FirmwareUploadStatus.uploading}
       <p>Select the firmware update file on your computer.</p>
-      <p>
-        You can download the latest firmware updates on the <a
-          href="https://github.com/timotto/ardumower-modem/releases"
-          target="_blank">GitHub Releases</a
-        > page.
-      </p>
+      {#if uploadType === FirmwareUploadType.modem}
+        <p>
+          You can download the latest firmware updates on the <a
+            href="https://github.com/timotto/ardumower-modem/releases"
+            target="_blank">GitHub Releases</a
+          > page.
+        </p>
+      {/if}
     {/if}
     <FileUploaderButton
       bind:ref
@@ -222,15 +283,15 @@
     {/if}
 
     {#if $uploaderStatus === FirmwareUploadStatus.uploading}
-      <p>Uploading the firmware update...</p>
+      <p>Uploading the {uploadType} firmware update...</p>
     {/if}
     {#if $uploaderStatus === FirmwareUploadStatus.success && uploadType === FirmwareUploadType.mower && flashStatus !== FirmwareFlashStatus.success}
-      <p>The firmware has been uploaded successfully.</p>
+      <p>The {uploadType} firmware has been uploaded successfully.</p>
       <p>Flashing {uploadType} firmware in progress...</p>
     {/if}
     
     {#if $uploaderStatus === FirmwareUploadStatus.expectReboot && uploadType === FirmwareUploadType.modem}
-      <p>The firmware has been uploaded successfully.</p>
+      <p>The {uploadType} firmware has been uploaded successfully.</p>
       <p>Waiting for the {uploadType} to restart...</p>
       {#if flashProgress != null && flashProgress > 0}
         <p>Flashing firmware in progress...</p>
@@ -238,13 +299,13 @@
     {/if}
 
     {#if $uploaderStatus === FirmwareUploadStatus.error}
-      <p>The update for the {uploadType} failed!</p>
+      <p>The {uploadType} firmware update failed!</p>
       <p>The error message is <i>{uploader.error}</i></p>
     {/if}
 
     {#if ($uploaderStatus === FirmwareUploadStatus.success && uploadType === FirmwareUploadType.modem) || 
          (flashStatus === FirmwareFlashStatus.success && uploadType === FirmwareUploadType.mower)}
-      <p>The firmware update has been installed successfully.</p>
+      <p>The {uploadType} firmware update has been installed successfully.</p>
     {/if}
   </ModalBody>
   <ModalFooter
