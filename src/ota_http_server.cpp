@@ -401,7 +401,41 @@ void Http::MowerUploadSession::handle(size_t index, uint8_t *data, size_t len, b
 
 bool Http::MowerUploadSession::verifyHeader(uint8_t *data, size_t len)
 {
-  // TODO
+  if (len < 8)
+  {
+    Log(INFO, "Ota::Http::MowerUploadSession::verifyHeader::error::length (need at least 8 bytes, got %d)", len);
+    return false;
+  }
+  
+  // Check for STM32 firmware patterns:
+  // 1. ARM Cortex-M vector table - first 4 bytes should be stack pointer (typically in RAM range)
+  // 2. Second 4 bytes should be reset vector (typically in flash range)
+  
+  uint32_t stackPointer = (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+  uint32_t resetVector = (data[7] << 24) | (data[6] << 16) | (data[5] << 8) | data[4];
+  
+  // STM32 stack pointer should be in RAM range (typically 0x20000000 - 0x20040000 for most STM32)
+  if ((stackPointer & 0xFFFF0000) != 0x20000000)
+  {
+    Log(INFO, "Ota::Http::MowerUploadSession::verifyHeader::error::invalid-stack-pointer (0x%08x)", stackPointer);
+    return false;
+  }
+  
+  // Reset vector should be in flash range (typically 0x08000000+ for STM32) and should be odd (Thumb mode)
+  if ((resetVector & 0xFF000000) != 0x08000000 || (resetVector & 0x01) == 0)
+  {
+    Log(INFO, "Ota::Http::MowerUploadSession::verifyHeader::error::invalid-reset-vector (0x%08x)", resetVector);
+    return false;
+  }
+  
+  // Additional check: file should have reasonable size for STM32 firmware
+  if (len > 0 && len < 1024)
+  {
+    Log(WARN, "Ota::Http::MowerUploadSession::verifyHeader::warning::small-file-size (%d bytes)", len);
+    // Don't fail here, just warn - it might be the first chunk
+  }
+  
+  Log(INFO, "Ota::Http::MowerUploadSession::verifyHeader::success (SP: 0x%08x, Reset: 0x%08x)", stackPointer, resetVector);
   return true;
 }
 

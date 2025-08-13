@@ -20,6 +20,8 @@
     let socket: WebSocket | null = null;
     let restartTimer: NodeJS.Timeout | null = null;
     let reconnect = true;
+    let reconnectAttempts = 0;
+    let maxReconnectAttempts = 10;
 
     let modemDbgLevels: DropdownItem[] = [
         { id: 63, text: "all" },
@@ -32,83 +34,130 @@
     ];
 
     function createSocket() {
-        if (socket != null)
+        if (socket != null && socket.readyState === WebSocket.CONNECTING) {
+            console.log("WebSocket already connecting, skipping...");
             return;
+        }
+        
+        if (socket != null && socket.readyState === WebSocket.OPEN) {
+            console.log("WebSocket already open, skipping...");
+            return;
+        }
+
+        if (!reconnect) {
+            console.log("Reconnect disabled, skipping...");
+            return;
+        }
+        
+        // Clear any existing timer
+        if (restartTimer != null) {
+            clearTimeout(restartTimer);
+            restartTimer = null;
+        }
+
+        // Close existing socket if it exists
+        if (socket != null) {
+            socket.close();
+            socket = null;
+        }
         
         let host = location.host;
-        socket = new WebSocket("ws://" + host + "/ws")
-        socket.addEventListener("open", ()=> {
-            console.log("socket open");
-        });
+        console.log(`Attempting WebSocket connection to ws://${host}/ws (attempt ${reconnectAttempts + 1})`);
+        
+        try {
+            socket = new WebSocket("ws://" + host + "/ws");
+            
+            socket.addEventListener("open", () => {
+                console.log("WebSocket connected successfully");
+                reconnectAttempts = 0; // Reset counter on successful connection
+            });
 
-        socket.addEventListener('close', () => {
-            console.log("socket close");
-            restartTimer = setTimeout(() => {
-            if ((socket != null) && (socket.readyState != socket.OPEN)) {
+            socket.addEventListener('close', (event) => {
+                console.log(`WebSocket closed: ${event.code} ${event.reason}`);
                 socket = null;
-                createSocket();
-            }
-        }, 5000);
-        });
-
-        socket.addEventListener("message", (message: any) => {
-            //console.log("message: ", message.data)
-            try {
-                let jsonData = JSON.parse(message.data);
-                //console.log("parsed: ", jsonData)
-
-                switch (jsonData.type) {
-                    case ResponseDataType.hello:
-                        valueDescriptions = jsonData.data as ValueDescriptions;
-                        console.log("valueDescriptions", valueDescriptions)
-                        modemDbgLevel = valueDescriptions.logLevel;
-                        break;
-                    case ResponseDataType.mowerState:
-                        state = jsonData.data as State;
-                        console.log("state", state)
-                        break
-                    case ResponseDataType.desiredState:
-                        desiredState = jsonData.data as DesiredState;
-                        console.log("desiredState", desiredState)
-                        break
-                    case ResponseDataType.modemLog:
-                        modemLog = (jsonData.data as ModemLog).log;
-                        break
-                    case ResponseDataType.mowerConsole:
-                        consoleLines = (jsonData.data as ConsoleResponseData).lines;
-                        break
-                    default:
-                        console.log("unknown data type");
+                
+                if (reconnect && reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000); // Exponential backoff, max 30s
+                    console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+                    
+                    restartTimer = setTimeout(() => {
+                        createSocket();
+                    }, delay);
+                } else if (reconnectAttempts >= maxReconnectAttempts) {
+                    console.error("Max reconnection attempts reached. Please refresh the page.");
                 }
-            } catch {
-                console.log("can't parse");
+            });
+
+            socket.addEventListener("error", (error) => {
+                console.error("WebSocket error:", error);
+                if (socket) {
+                    socket.close();
+                }
+            });
+
+            socket.addEventListener("message", (message: any) => {
+                //console.log("message: ", message.data)
+                try {
+                    let jsonData = JSON.parse(message.data);
+                    //console.log("parsed: ", jsonData)
+
+                    switch (jsonData.type) {
+                        case ResponseDataType.hello:
+                            valueDescriptions = jsonData.data as ValueDescriptions;
+                            console.log("valueDescriptions", valueDescriptions)
+                            modemDbgLevel = valueDescriptions.logLevel;
+                            break;
+                        case ResponseDataType.mowerState:
+                            state = jsonData.data as State;
+                            console.log("state", state)
+                            break
+                        case ResponseDataType.desiredState:
+                            desiredState = jsonData.data as DesiredState;
+                            console.log("desiredState", desiredState)
+                            break
+                        case ResponseDataType.modemLog:
+                            modemLog = (jsonData.data as ModemLog).log;
+                            break
+                        case ResponseDataType.mowerConsole:
+                            consoleLines = (jsonData.data as ConsoleResponseData).lines;
+                            break
+                        default:
+                            console.log("unknown data type");
+                    }
+                } catch (error) {
+                    console.error("Failed to parse WebSocket message:", error);
+                }
+            });
+        } catch (error) {
+            console.error("Failed to create WebSocket:", error);
+            reconnectAttempts++;
+            if (reconnect && reconnectAttempts < maxReconnectAttempts) {
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000);
+                console.log(`Retrying in ${delay}ms`);
+                restartTimer = setTimeout(() => {
+                    createSocket();
+                }, delay);
             }
-        });
-
-        // if (restartTimer != null) {
-        //     clearInterval(restartTimer);
-        // }
-
-        // restartTimer = setInterval(() => {
-        //     if ((socket == null) || (socket.readyState != socket.OPEN)) {
-        //         socket = null;
-        //         createSocket();
-        //     }
-        // }, 5000);
+        }
     }
     
     onMount(async () => { createSocket(); });
 
     onDestroy(() => {
+        reconnect = false; // Disable reconnection first
+        
         if (restartTimer != null) {
-            clearInterval(restartTimer);
+            clearTimeout(restartTimer);
+            restartTimer = null;
         }
 
-        if ((socket != null) && (socket.readyState == socket.OPEN)) {
-            socket.close();
+        if (socket != null) {
+            if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+                socket.close();
+            }
             socket = null;
-        }    
-        reconnect = false;
+        }
     });
 
     const sendText = (text:string) => {
