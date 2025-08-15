@@ -169,23 +169,9 @@
       caret-color: #00ff00;
     }
 
-    .scroll-container {
-      height: 300px;
-      width: 100%;
-      overflow: auto;
-    }
-
     .console-line {
         display: flex;
         padding: 3px; 
-    }
-
-    .console-line .nr {
-        margin-right: 3px;
-    }
-
-    .console-line .nr {
-        min-width: 30px;
     }
 
     .console-line .text {

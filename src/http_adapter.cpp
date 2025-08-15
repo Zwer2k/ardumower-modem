@@ -1,6 +1,7 @@
 #include "http_adapter.h"
 #include "prometheus.h"
 #include <Arduino.h>
+#include "stm32ota/stm32ota.h"
 
 #define _LOG_ "HttpAdapter::"
 
@@ -34,6 +35,7 @@ void HttpAdapter::begin()
 
   _server.on("/", HTTP_OPTIONS, std::bind(&HttpAdapter::handleCORSPreflightRequest, this, std::placeholders::_1));
   _server.on("/api/modem/reboot", HTTP_POST, std::bind(&HttpAdapter::apiReboot, this, std::placeholders::_1));
+  _server.on("/api/mower/reboot", HTTP_POST, std::bind(&HttpAdapter::apiMowerReboot, this, std::placeholders::_1));
 }
 
 void HttpAdapter::loop()
@@ -167,11 +169,19 @@ void HttpAdapter::handleRouterResponse(const uint32_t id, String res)
     Log(DBG, "%shandleRouterResponse::not-found(id=%d)", _LOG_, id);
 }
 
+
 void HttpAdapter::apiReboot(AsyncWebServerRequest *req)
 {
   req->send(200, "text/plain", "rebooting");
   delay(500);
   ESP.restart();
+}
+
+// Reboot STM32 Mower via GPIO (BOOT0 LOW, NRST pulse)
+void HttpAdapter::apiMowerReboot(AsyncWebServerRequest *req)
+{
+  FirmwareWriterSTM32::rebootMcuStatic();
+  req->send(200, "text/plain", "mower reboot triggered");
 }
 
 void respondWithCors(AsyncWebServerRequest *req, int status, String contentType, String responseBody)

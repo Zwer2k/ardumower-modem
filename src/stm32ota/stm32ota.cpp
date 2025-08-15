@@ -20,10 +20,30 @@
 #include "log.h"
 
 FirmwareWriterSTM32::FirmwareWriterSTM32(HardwareSerial &serial): serial(serial) {
+  
+}
+
+
+
+// Reboot STM32 in Run-Mode (BOOT0_PIN LOW)
+void FirmwareWriterSTM32::rebootMcu() {
+  rebootMcuStatic();
+}
+
+void FirmwareWriterSTM32::rebootMcuStatic() {
   pinMode(BOOT0_PIN, OUTPUT);
   pinMode(NRST_PIN, OUTPUT);
-  digitalWrite(BOOT0_PIN, LOW);
+  delay(50);
+  digitalWrite(BOOT0_PIN, LOW); // Run-Mode
+  delay(50);
+  digitalWrite(NRST_PIN, LOW);
+  delay(100);
   digitalWrite(NRST_PIN, HIGH);
+  delay(200);
+  pinMode(BOOT0_PIN, INPUT);
+  pinMode(NRST_PIN, INPUT);
+  
+  yield();
 }
 
 bool FirmwareWriterSTM32::switchToFlashMode()  {
@@ -33,7 +53,10 @@ bool FirmwareWriterSTM32::switchToFlashMode()  {
   delay(100);
   serial.begin(115200, SERIAL_8E1);
 
-  digitalWrite(BOOT0_PIN, HIGH);
+  pinMode(BOOT0_PIN, OUTPUT);
+  pinMode(NRST_PIN, OUTPUT);
+  delay(50);
+  digitalWrite(BOOT0_PIN, HIGH); // Flash-Mode
   delay(50);
   digitalWrite(NRST_PIN, LOW);
   delay(100);
@@ -59,12 +82,17 @@ void FirmwareWriterSTM32::switchToRunMode()  {
   delay(100);
   serial.begin(115200, SERIAL_8N1);
 
+  pinMode(BOOT0_PIN, OUTPUT);
+  pinMode(NRST_PIN, OUTPUT);
+  delay(50);
   digitalWrite(BOOT0_PIN, LOW);
   delay(500);
   digitalWrite(NRST_PIN, LOW);
   delay(50);
   digitalWrite(NRST_PIN, HIGH);
   delay(1000);
+  pinMode(BOOT0_PIN, INPUT);
+  pinMode(NRST_PIN, INPUT);  
   yield();
 }
 

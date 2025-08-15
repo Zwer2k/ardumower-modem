@@ -17,6 +17,11 @@
     import { Busy } from "../stores/busy";
     import SaveDiscard from "../widget/SaveDiscard.svelte";
     import Toasts from "../widget/Toasts.svelte";
+    import { ToastNotification } from 'carbon-components-svelte';
+    import { toastStore } from '../stores/toast';
+    import type { ToastData } from '../stores/toast';
+    let toast = $state<ToastData | null>(null);
+    $effect(() => { toast = $toastStore });
     import HelpDialog from "../widget/HelpDialog.svelte";
 
     let { children } = $props();
@@ -47,21 +52,32 @@
     </div>
 
     <HeaderUtilities>
-        <SaveDiscard />
-        <Button
-        href="/settings"
-        kind="tertiary"
-        icon={IconSettings}
-        iconDescription="Settings"
-        />
-        <Button
-        on:click={help}
-        kind="tertiary"
-        icon={IconHelp}
-        iconDescription="Help"
-        />
-        <Toasts />
+            <SaveDiscard />
+            <Button
+            href="/settings"
+            kind="tertiary"
+            icon={IconSettings}
+            iconDescription="Settings"
+            />
+            <Button
+            on:click={help}
+            kind="tertiary"
+            icon={IconHelp}
+            iconDescription="Help"
+            />
+            <Toasts />
     </HeaderUtilities>
+
+    {#if toast}
+        <ToastNotification
+            title={toast.type === 'success' ? 'Erfolg' : 'Fehler'}
+            subtitle={toast.msg}
+            kind={toast.type}
+            timeout={4000}
+            on:close={() => toastStore.set(null)}
+            style="position: fixed; right: 2rem; bottom: 2rem; z-index: 9999;"
+        />
+    {/if}
 </Header>
 <Content>
     {@render children()}    

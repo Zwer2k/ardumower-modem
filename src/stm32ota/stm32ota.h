@@ -69,4 +69,8 @@ public:
     bool sendDataBlock(const uint8_t* data, size_t len, unsigned long timeoutMs);
     String getId();
     char version();
+
+    // Added for reboot/run/flash separation
+    static void rebootMcuStatic();
+    void rebootMcu();
 };
