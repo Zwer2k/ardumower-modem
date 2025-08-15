@@ -21,9 +21,8 @@
 
 FirmwareWriterSTM32::FirmwareWriterSTM32(HardwareSerial &serial): serial(serial) {
   pinMode(BOOT0_PIN, OUTPUT);
-  pinMode(NRST_PIN, OUTPUT);
+  pinMode(NRST_PIN, INPUT_PULLUP);
   digitalWrite(BOOT0_PIN, LOW);
-  digitalWrite(NRST_PIN, HIGH);  
 }
 
 
@@ -34,7 +33,6 @@ void FirmwareWriterSTM32::rebootMcu() {
 }
 
 void FirmwareWriterSTM32::rebootMcuStatic() {
-  pinMode(BOOT0_PIN, OUTPUT);
   pinMode(NRST_PIN, OUTPUT);
   delay(50);
   digitalWrite(BOOT0_PIN, LOW); // Run-Mode
@@ -43,8 +41,7 @@ void FirmwareWriterSTM32::rebootMcuStatic() {
   delay(100);
   digitalWrite(NRST_PIN, HIGH);
   delay(200);
-  pinMode(BOOT0_PIN, INPUT);
-  pinMode(NRST_PIN, INPUT);
+  pinMode(NRST_PIN, INPUT_PULLUP);
   
   yield();
 }
@@ -56,7 +53,6 @@ bool FirmwareWriterSTM32::switchToFlashMode()  {
   delay(100);
   serial.begin(115200, SERIAL_8E1);
 
-  pinMode(BOOT0_PIN, OUTPUT);
   pinMode(NRST_PIN, OUTPUT);
   delay(50);
   digitalWrite(BOOT0_PIN, HIGH); // Flash-Mode
