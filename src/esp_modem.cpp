@@ -58,13 +58,18 @@ Console con(Serial, api, settings);
 Terminal terminal(Serial1);
 #endif
 
+
 WebServer webServer;
 
 // firmware update via Arduino IDE with buggy WiFiUDP
 // Ota::ArduinoOta ota;
-// upload firmware as POST multipart body aka. form file upload
-Ota::MowerUpdater mowerUpdater(terminal, Serial1); 
+#ifdef MOWER_TERMINAL
+Ota::MowerUpdater mowerUpdater(terminal, Serial1);
+#else
+Ota::MowerUpdater mowerUpdater(Serial1);
+#endif
 Ota::HttpServer otaHttpServer(settings, webServer.server(), mowerUpdater);
+
 
 // provides request/response communication with the robot
 Router router(Serial2);
@@ -79,7 +84,11 @@ HttpAdapter httpAdapter(router, webServer.server());
 // serves the web frontend
 Http::UiAdapter ui(api, settings, webServer.server(), mowerAdapter, mowerAdapter);
 // handle socket connection with web client
+#ifdef MOWER_TERMINAL
 Http::UiSocketHandler socketHandler(terminal, webServer.server(), mowerAdapter, mowerAdapter, mowerUpdater);
+#else
+Http::UiSocketHandler socketHandler(webServer.server(), mowerAdapter, mowerAdapter, mowerUpdater);
+#endif
 // publish state on MQTT, receive commands on MQTT
 MqttAdapter mqttAdapter(settings, router, mowerAdapter, mowerAdapter);
 // metrics available for use with Prometheus

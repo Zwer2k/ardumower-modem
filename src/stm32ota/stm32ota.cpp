@@ -20,7 +20,10 @@
 #include "log.h"
 
 FirmwareWriterSTM32::FirmwareWriterSTM32(HardwareSerial &serial): serial(serial) {
-  
+  pinMode(BOOT0_PIN, OUTPUT);
+  pinMode(NRST_PIN, OUTPUT);
+  digitalWrite(BOOT0_PIN, LOW);
+  digitalWrite(NRST_PIN, HIGH);  
 }
 
 

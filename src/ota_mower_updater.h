@@ -1,8 +1,11 @@
 #pragma once
 
+#ifdef MOWER_TERMINAL
 #include "terminal.h"
+#endif
 #include "stm32ota/stm32ota.h"
 #include <fs.h>
+#include <ArduinoJson.h>
 
 namespace ArduMower
 {
@@ -17,7 +20,7 @@ namespace ArduMower
         byte progress;
 
         StatusMessage(byte progress) : timestamp(millis()), progress(progress){};
-        void marshal(const JsonObject &o) const;
+  void marshal(const ArduinoJson::JsonObject &o) const;
       };
 
       using UpdateComplete = std::function<void(String updateResult)>;
@@ -26,7 +29,11 @@ namespace ArduMower
       class MowerUpdater
       {
       public:
-        MowerUpdater(Terminal &terminal, HardwareSerial &mowerFirmwareSerial);
+  #ifdef MOWER_TERMINAL
+  MowerUpdater(Terminal &terminal, HardwareSerial &mowerFirmwareSerial);
+  #else
+  MowerUpdater(HardwareSerial &mowerFirmwareSerial);
+  #endif
 
         void startUpdate(String filename, UpdateComplete updateComplete);
         String handleFlash();
@@ -34,7 +41,9 @@ namespace ArduMower
         void loop();
 
       private:
+        #ifdef MOWER_TERMINAL
         Terminal &_terminal;
+        #endif
         HardwareSerial &_serial;
         String _filename;
         FirmwareWriterSTM32 firmwareWriter;
@@ -50,7 +59,9 @@ namespace ArduMower
         void updateStatus(byte progress);
         void setSerialPortReady(bool serialPortReady);
         void printBootloaderInfo();
-        void resumeTerminal() { _terminal.resume(); }
+  #ifdef MOWER_TERMINAL
+  void resumeTerminal() { _terminal.resume(); }
+  #endif
       };
     }
   }

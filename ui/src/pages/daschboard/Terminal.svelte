@@ -23,7 +23,6 @@
     let scrollToIndex: ((index: any, opts: any) => Promise<void>) | undefined = $state(undefined);
 
     $effect(() => {
-      console.log(consoleLines)
       if (consoleLines != null && consoleLines.length > 0) {
         output = [...output, ...consoleLines];
         let remove = output.length - bufferLines;

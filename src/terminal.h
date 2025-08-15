@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef MOWER_TERMINAL
+
 #include <Arduino.h>
 #include "json.h"
 #include "router.h"
@@ -55,3 +57,4 @@ namespace ArduMower
     };
   }
 }
+#endif

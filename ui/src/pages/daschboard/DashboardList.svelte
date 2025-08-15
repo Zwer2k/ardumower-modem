@@ -8,6 +8,10 @@
     import { Accordion, AccordionItem } from "carbon-components-svelte";
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
     import Terminal from "./Terminal.svelte";
+    import { getModemInfo } from '../../firmware/service';
+    import type { ApiModemInfoResponse } from '../../firmware/service';
+    let showTerminal = false;
+    let modemInfo: ApiModemInfoResponse | null = null;
     
     let valueDescriptions: ValueDescriptions | null = null;
     let state: State | null = null;
@@ -202,9 +206,7 @@
                     }
                 }
             }
-        }, 30000); // Send ping every 30 seconds
-        
-        console.log("Heartbeat disabled to prevent server issues");
+        }, 30000); // Send ping every 30 secondsnt server issues");
     }
 
     function handleVisibilityChange() {
@@ -212,7 +214,6 @@
         if (!browser) return;
         
         isPageVisible = !document.hidden;
-        console.log(`Page visibility changed: ${isPageVisible ? 'visible' : 'hidden'}`);
         
         if (isPageVisible) {
             // Page became visible, try to reconnect if needed
@@ -227,16 +228,26 @@
         }
     }
     
-    onMount(async () => { 
+
+    onMount(async () => {
         // Only run in browser, not during SSR
         if (!browser) {
             console.log("SSR detected, skipping WebSocket initialization");
             return;
         }
-        
+
+        // Fetch /api/modem/info für terminal_available
+        try {
+            modemInfo = await getModemInfo();
+            showTerminal = !!modemInfo?.terminal_available;
+            console.log('modemInfo', modemInfo);
+        } catch (e) {
+            console.warn('Could not fetch /api/modem/info:', e);
+        }
+
         // Add visibility change listener
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
+
         // Initial connection with small delay to ensure page is fully loaded
         setTimeout(() => {
             createSocket();
@@ -304,13 +315,15 @@
     <AccordionItem title="Modem Log" bind:open={modemLogOpen}>
         <Console logLevels={LogLevelDesc} dbgLevels={modemDbgLevels} logData={modemLog} bind:dbgLevel={modemDbgLevel}/>
     </AccordionItem>
-    <AccordionItem title="Mower console">
-        <Terminal 
-            consoleLines={consoleLines} 
-            bind:sendCmd={consoleCmd}
-            onOutputDone={handleOutputDone}
-        />
-    </AccordionItem>
+    {#if showTerminal}
+        <AccordionItem title="Mower console">
+                <Terminal 
+                        consoleLines={consoleLines} 
+                        bind:sendCmd={consoleCmd}
+                        onOutputDone={handleOutputDone}
+                />
+        </AccordionItem>
+    {/if}
 {/if}
 </Accordion>
 

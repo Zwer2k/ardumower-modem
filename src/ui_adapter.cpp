@@ -107,7 +107,7 @@ void UiAdapter::handleApiGetModemInfo(AsyncWebServerRequest *request)
 {
   // explicitly allowed without auth
   AsyncJsonResponse *response = new AsyncJsonResponse();
-  const JsonObject &root = response->getRoot();
+  JsonObject root = response->getRoot();
   ArduMower::Modem::Settings::Properties.marshal(root);
   response->setLength();
   request->send(response);

@@ -1,5 +1,6 @@
 #include "terminal.h"
 
+#ifdef MOWER_TERMINAL
 using namespace ArduMower::Modem;
 
 void TerminalMessage::marshal(const JsonObject &o) const
@@ -87,3 +88,4 @@ void Terminal::drainTx(String line, bool &stop)
     _txHandler(line);
   }
 }
+#endif

@@ -1,6 +1,7 @@
 #include "ui_adapter_socket.h"
 #include "json.h"
 #include "log.h"
+#include "terminal.h"
 
 #define _LOG_ "UiSocket::"
 
@@ -57,6 +58,8 @@ AwsClientStatus UiSocketItem::status()
   return _client->status();
 }
 
+
+#ifdef MOWER_TERMINAL
 UiSocketHandler::UiSocketHandler(
   Terminal &terminal,
   AsyncWebServer &server,
@@ -82,6 +85,25 @@ void UiSocketHandler::sendTerminalLine(String line)
   auto message = TerminalMessage(line);
   this->sendData(ResponseDataType::mowerConsole, NULL, message, false);
 }
+#else
+UiSocketHandler::UiSocketHandler(
+  AsyncWebServer &server,
+  ArduMower::Domain::Robot::StateSource &source,
+  ArduMower::Domain::Robot::CommandExecutor &cmd,
+  Ota::MowerUpdater &mowerUpdater
+)
+  : _server(server), _source(source), _cmd(cmd), _mowerUpdater(mowerUpdater)
+{
+  _ws = new AsyncWebSocket("/ws");
+
+  for (int i=0; i < ResponseDataType::responseDataTypeLength; i++) {
+    oldDataTimestamp[i] = 0;
+    lastDataRequestTimestamp[i] = defaultStateUpdateInterval;
+  }
+
+  _mowerUpdater.addStatusHandler(std::bind(&UiSocketHandler::uploadStatusHandler, this, std::placeholders::_1));
+}
+#endif
 
 void UiSocketHandler::uploadStatusHandler(byte progress) 
 {
@@ -146,6 +168,7 @@ void UiSocketHandler::logToUiLoop()
   }
 }
 
+#ifdef MOWER_TERMINAL
 bool UiSocketHandler::cmdToMower(String cmd) {
   Log(DBG, "%s mower console cmd %s", _LOG_, cmd.c_str());
   bool success = _terminal.sendWithoutResponse(cmd);
@@ -154,6 +177,11 @@ bool UiSocketHandler::cmdToMower(String cmd) {
   }
   return success;
 }
+#else
+bool UiSocketHandler::cmdToMower(String) {
+  return false;
+}
+#endif
 
 template<typename T>
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force)

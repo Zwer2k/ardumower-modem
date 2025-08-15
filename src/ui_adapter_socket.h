@@ -6,7 +6,9 @@
 #include <map>
 #include <ArduinoJson.h>
 #include "domain.h"
+#ifdef MOWER_TERMINAL
 #include "terminal.h"
+#endif
 #include "ota_mower_updater.h"
 
 namespace ArduMower
@@ -57,6 +59,8 @@ namespace ArduMower
       class UiSocketHandler
       {
       public:
+
+#ifdef MOWER_TERMINAL
         UiSocketHandler(
           Terminal &terminal,
           AsyncWebServer &server,
@@ -64,6 +68,14 @@ namespace ArduMower
           ArduMower::Domain::Robot::CommandExecutor &cmd,
           Ota::MowerUpdater &mowerUpdater
         );
+#else
+        UiSocketHandler(
+          AsyncWebServer &server,
+          ArduMower::Domain::Robot::StateSource &source,
+          ArduMower::Domain::Robot::CommandExecutor &cmd,
+          Ota::MowerUpdater &mowerUpdater
+        );
+#endif
 
         ~UiSocketHandler();
         
@@ -81,7 +93,9 @@ namespace ArduMower
         uint32_t lastDataRequestTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastclientPing = 0;
         
-        Terminal &_terminal;
+  #ifdef MOWER_TERMINAL
+  Terminal &_terminal;
+  #endif
         AsyncWebServer &_server;
         ArduMower::Domain::Robot::StateSource &_source;
         ArduMower::Domain::Robot::CommandExecutor &_cmd;
@@ -94,7 +108,9 @@ namespace ArduMower
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         void pingClients();
+#ifdef MOWER_TERMINAL
         void sendTerminalLine(String line);
+#endif
         void uploadStatusHandler(byte progress); 
       };
     }

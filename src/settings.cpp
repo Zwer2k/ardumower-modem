@@ -55,6 +55,7 @@ const char * _t_git_time = "git_time";
 const char * _t_git_tag = "git_tag";
 const char * _t_uptime = "uptime";
 const char * _t_bt_mac = "bt_mac";
+const char * _t_terminal_available = "terminal_available";
 const char * _t_has_sta_psk = "has_sta_psk";
 const char * _t_has_ap_psk = "has_ap_psk";
 const char * _t_has_password = "has_password";
@@ -600,6 +601,12 @@ void PropertiesClass::marshal(const JsonObject &o) const
   o[_t_git_tag] = git_tag;
   o[_t_uptime] = millis();
   o[_t_bt_mac] = getBTMacAddress();
+#ifdef MOWER_TERMINAL
+  o[_t_terminal_available] = true;
+#else
+  o[_t_terminal_available] = false;
+#endif
+
 }
 
 bool PropertiesClass::initBluetooth() const

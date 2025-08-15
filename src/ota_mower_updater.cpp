@@ -5,7 +5,7 @@
 
 using namespace ArduMower::Modem::Ota;
 
-void StatusMessage::marshal(const JsonObject &o) const
+void StatusMessage::marshal(const ArduinoJson::JsonObject &o) const
 {
   o["progress"] = progress;
   
@@ -25,11 +25,20 @@ void StatusMessage::marshal(const JsonObject &o) const
   }
 }
 
+
+#ifdef MOWER_TERMINAL
 MowerUpdater::MowerUpdater(Terminal &terminal, HardwareSerial &mowerFirmwareSerial) : 
-    _terminal(terminal), _serial(mowerFirmwareSerial), 
-    firmwareWriter(FirmwareWriterSTM32(mowerFirmwareSerial))
+  _terminal(terminal), _serial(mowerFirmwareSerial), 
+  firmwareWriter(FirmwareWriterSTM32(mowerFirmwareSerial))
 {
 }
+#else
+MowerUpdater::MowerUpdater(HardwareSerial &mowerFirmwareSerial) : 
+  _serial(mowerFirmwareSerial), 
+  firmwareWriter(FirmwareWriterSTM32(mowerFirmwareSerial))
+{
+}
+#endif
 
 void MowerUpdater::startUpdate(String filename, UpdateComplete updateComplete) 
 { 
@@ -51,10 +60,14 @@ void MowerUpdater::startUpdate(String filename, UpdateComplete updateComplete)
     
     Log(INFO, "MowerUpdater::startUpdate initiating update for: %s", filename.c_str());
     
-    _terminal.suspend([this] {
-        Log(INFO, "MowerUpdater::startUpdate terminal suspended successfully");
-        this->setSerialPortReady(true);
-    });
+#ifdef MOWER_TERMINAL
+  _terminal.suspend([this] {
+    Log(INFO, "MowerUpdater::startUpdate terminal suspended successfully");
+    this->setSerialPortReady(true);
+  });
+#else
+  this->setSerialPortReady(true);
+#endif
 }
 
 void MowerUpdater::addStatusHandler(StatusHandler handler)
@@ -87,7 +100,9 @@ void MowerUpdater::loop()
     String result = handleFlash();
     _serialPortReady = false;
     _filename = "";
-    _terminal.resume();
+#ifdef MOWER_TERMINAL
+  _terminal.resume();
+#endif
     _updateComplete(result);
   }
 }

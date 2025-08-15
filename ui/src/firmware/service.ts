@@ -156,7 +156,7 @@ const makeRebootAwaiter = async (timeout: number = 10000): Promise<() => Promise
   }
 }
 
-const getModemInfo = async (timeout: number = 5000): Promise<ApiModemInfoResponse> => {
+export const getModemInfo = async (timeout: number = 5000): Promise<ApiModemInfoResponse> => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   const res = await fetch('/api/modem/info', {
@@ -172,9 +172,10 @@ const millis = (): number => new Date().getTime()
 
 const delay = async (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-interface ApiModemInfoResponse {
+export interface ApiModemInfoResponse {
   git_hash: string
   git_time: string
   git_tag: string
   uptime: number
+  terminal_available?: boolean;
 }
