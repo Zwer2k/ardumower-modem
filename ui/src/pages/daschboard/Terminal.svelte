@@ -81,6 +81,7 @@
           output = [];
           return;
         default:
+          sendCmd = '';
           sendCmd = cmd;
           break;
       }
