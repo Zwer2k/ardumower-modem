@@ -1,6 +1,10 @@
+  
+  
+
 <script lang="ts">
     import type { ConsoleLine } from '../../model';
     import VirtualList from '../../widget/VirtualList.svelte';
+      import { Toggle } from 'carbon-components-svelte';
     
     let  { 
       consoleLines,
@@ -12,7 +16,7 @@
       onOutputDone?: () => void
     } = $props();  
   
-    let autoscroll = true;
+    let autoscroll = $state(true);
     let bufferLines = 10000;
     
     let command = $state<string>("");
@@ -89,6 +93,7 @@
   </script>
   
   <main class="terminal-container">
+      <div class="terminal-wrapper" style="height:100%;display:flex;flex-direction:column;">
     <div class="terminal-output-virtual">
         <div class="list-holder">
           <VirtualList items={output}
@@ -111,7 +116,18 @@
         spellcheck="false"
         use:setFous
       />
+      <div class="terminal-input-actions">
+        <span class="autoscroll-label">Autoscroll</span>
+        <Toggle
+          class="autoscroll-toggle"
+          labelText=""
+          labelA={""}
+          labelB={""}
+          bind:toggled={autoscroll}
+        />
+      </div>
     </div>
+      </div>
   </main>
   
   <style>
@@ -132,9 +148,9 @@
       background-color: #1a1a1a;
       color: #eee;
       white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 0.95em;
-      line-height: 1.4;
+      .autoscroll-toggle {
+        padding-top: 0 !important;
+      }
       position: relative;
 
       .list-holder {
@@ -146,10 +162,50 @@
     
     .terminal-input-wrapper {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       padding: 10px 15px;
       border-top: 1px solid #333;
       background-color: #1a1a1a;
+    }
+    .terminal-input-center {
+      display: none;
+    }
+    .autoscroll-label {
+      color: #eee;
+      font-size: 0.95em;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      height: 100%;
+    }
+    .terminal-input-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+    }
+    .terminal-input-actions {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+      gap: 8px;
+      margin-top: 0 !important;
+      height: 40px;
+      min-height: 40px;
+    }
+    .autoscroll-toggle {
+      margin-top: 0 !important;
+      align-self: center;
+    }
+    .autoscroll-label {
+      color: #eee;
+      font-size: 0.95em;
+      user-select: none;
+      align-self: center;
+      line-height: 1;
+      height: 32px;
+      display: flex;
+      align-items: center;
     }
   
     .prompt {
@@ -174,6 +230,12 @@
     }
 
     .console-line .text {
-        line-break: anywhere;
+  line-break: anywhere;
+}
+
+/* Carbon Toggle vertical alignment fix */
+:global(.bx--toggle__switch) {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
     }
   </style>
