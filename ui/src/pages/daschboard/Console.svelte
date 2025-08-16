@@ -64,22 +64,22 @@
 </script>
 
 <div class="modem-log">
+    <div class="settings">
+        <Dropdown
+            bind:selectedId={dbgLevel}
+            type="inline"
+            titleText="Log level"
+            items={dbgLevels}/>
+        <Toggle
+            class="autoscroll-toggle"
+            labelText="Autoscroll" 
+            labelA={""}
+            labelB={""}
+            bind:toggled={autoscroll}/>
+    </div>
     <div class="log-list">
-        <div class="settings">
-            <Dropdown
-                bind:selectedId={dbgLevel}
-                type="inline"
-                titleText="Log level"
-                items={dbgLevels}/>
-            <Toggle
-                class="autoscroll-toggle"
-                labelText="Autoscroll" 
-                labelA={""}
-                labelB={""}
-                bind:toggled={autoscroll}/>
-        </div>
         <VirtualList {items}
-            height="calc(100% - 40px)"
+            height="100%"
             bind:scrollToIndex
             let:item>
             <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''}">
@@ -115,15 +115,24 @@
         }
     }
 
+    .modem-log {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        width: 100%;
+    }
+
     .settings {
         border-bottom: 1px solid lightgray;
         padding: 0 10px;
+        flex-shrink: 0;
     }
 
     .log-list {
-        height: 300px;
+        flex: 1;
         width: 100%;
         border: 1px solid lightgray;
+        overflow: hidden;
     }
 
     .log-line {

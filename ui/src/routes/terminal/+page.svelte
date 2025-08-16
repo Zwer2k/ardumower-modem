@@ -1,5 +1,5 @@
 <script>
-    import StatusDashboard from "../pages/daschboard/StatusDashboard.svelte";
+    import TerminalDashboard from "../../pages/daschboard/TerminalDashboard.svelte";
     import { onMount, onDestroy } from 'svelte';
 
     onMount(() => {
@@ -12,5 +12,5 @@
 </script>
 
 <div class="dashboard-page">
-    <StatusDashboard />
+    <TerminalDashboard />
 </div>

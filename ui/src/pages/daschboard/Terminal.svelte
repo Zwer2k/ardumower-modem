@@ -134,7 +134,7 @@
   <style>
   
     .terminal-container {
-      height: 60vh;
+      height: calc(100vh - 48px); /* Vollhöhe minus Header */
       background-color: #1a1a1a;
       border-radius: 2px;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
