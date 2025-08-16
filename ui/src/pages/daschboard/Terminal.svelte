@@ -89,7 +89,6 @@
 
     export function setFous(el: HTMLElement){
         el.focus()
-        console.log("set focua")
     }
   </script>
   

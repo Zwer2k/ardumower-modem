@@ -55,23 +55,19 @@ class SocketService {
 
     connect() {
         if (!browser) {
-            console.log("SSR detected, skipping WebSocket creation");
             return;
         }
 
         socketStore.update(state => {
             if (state.socket != null && state.socket.readyState === WebSocket.CONNECTING) {
-                console.log("WebSocket already connecting, skipping...");
                 return state;
             }
             
             if (state.socket != null && state.socket.readyState === WebSocket.OPEN) {
-                console.log("WebSocket already open, skipping...");
                 return state;
             }
 
             if (!this.reconnect || !this.isPageVisible) {
-                console.log("Reconnect disabled or page not visible, skipping...");
                 return state;
             }
             
@@ -82,20 +78,17 @@ class SocketService {
             }
             
             let host = location.host;
-            console.log(`Attempting WebSocket connection to ws://${host}/ws (attempt ${this.reconnectAttempts + 1})`);
             
             try {
                 const socket = new WebSocket("ws://" + host + "/ws");
                 
                 this.connectionTimeout = setTimeout(() => {
                     if (socket && socket.readyState === WebSocket.CONNECTING) {
-                        console.log("WebSocket connection timeout");
                         socket.close();
                     }
                 }, 5000);
                 
                 socket.addEventListener("open", () => {
-                    console.log("WebSocket connected successfully");
                     this.reconnectAttempts = 0;
                     
                     if (this.connectionTimeout) {
@@ -109,7 +102,6 @@ class SocketService {
                 });
 
                 socket.addEventListener('close', (event) => {
-                    console.log(`WebSocket closed: ${event.code} ${event.reason}`);
                     
                     this.clearAllTimers();
                     
@@ -118,18 +110,15 @@ class SocketService {
                     if (this.reconnect && this.reconnectAttempts < this.maxReconnectAttempts && this.isPageVisible) {
                         this.reconnectAttempts++;
                         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
-                        console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
                         
                         this.restartTimer = setTimeout(() => {
                             this.connect();
                         }, delay);
                     } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-                        console.error("Max reconnection attempts reached. Please refresh the page.");
                     }
                 });
 
                 socket.addEventListener("error", (error) => {
-                    console.error("WebSocket error:", error);
                     this.clearAllTimers();
                     if (socket) {
                         socket.close();
@@ -147,15 +136,12 @@ class SocketService {
                                 case ResponseDataType.hello:
                                     newState.valueDescriptions = jsonData.data as ValueDescriptions;
                                     newState.modemDbgLevel = newState.valueDescriptions.logLevel;
-                                    console.log("valueDescriptions", newState.valueDescriptions);
                                     break;
                                 case ResponseDataType.mowerState:
                                     newState.state = jsonData.data as State;
-                                    console.log("state", newState.state);
                                     break;
                                 case ResponseDataType.desiredState:
                                     newState.desiredState = jsonData.data as DesiredState;
-                                    console.log("desiredState", newState.desiredState);
                                     break;
                                 case ResponseDataType.modemLog:
                                     newState.modemLog = (jsonData.data as ModemLog).log;
@@ -164,24 +150,20 @@ class SocketService {
                                     newState.consoleLines = (jsonData.data as ConsoleResponseData).lines;
                                     break;
                                 default:
-                                    console.log("unknown data type");
                             }
                             
                             return newState;
                         });
                     } catch (error) {
-                        console.error("Failed to parse WebSocket message:", error);
                     }
                 });
 
                 return { ...state, socket };
             } catch (error) {
-                console.error("Failed to create WebSocket:", error);
                 this.clearAllTimers();
                 this.reconnectAttempts++;
                 if (this.reconnect && this.reconnectAttempts < this.maxReconnectAttempts && this.isPageVisible) {
                     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
-                    console.log(`Retrying in ${delay}ms`);
                     this.restartTimer = setTimeout(() => {
                         this.connect();
                     }, delay);
@@ -267,7 +249,6 @@ class SocketService {
                 try {
                     socket.send(JSON.stringify({ type: 'ping' }));
                 } catch (error) {
-                    console.error("Failed to send heartbeat:", error);
                     if (socket) {
                         socket.close();
                     }
@@ -284,7 +265,6 @@ class SocketService {
         if (this.isPageVisible) {
             socketStore.update(state => {
                 if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
-                    console.log("Page became visible, attempting to reconnect...");
                     this.reconnectAttempts = 0;
                     this.connect();
                 }

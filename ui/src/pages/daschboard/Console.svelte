@@ -10,6 +10,7 @@
     export let dbgLevel: number; 
     
     let items: LogLine[] = [];
+    let seenLogNumbers = new Set<number>();
 
     let autoscroll = true;
 
@@ -18,16 +19,19 @@
     let logLines = 10000;
     let lineCounter = 0;
 
-    $: if (logData) {
-        if (logData != null) {
-            items = [...items, ...logData];
-            logData = [];
-            let remove = items.length - logLines;
-            if (remove > 0)
-                items.splice(0, remove); 
-        
-            if (autoscroll && scrollToIndex != undefined) {
-                scrollToIndex(items.length - 1, { behavior: 'smooth' });
+    $: {
+        if (logData && logData.length > 0) {
+            const newLines = logData.filter(line => !seenLogNumbers.has(line.nr));
+            if (newLines.length > 0) {
+                newLines.forEach(line => seenLogNumbers.add(line.nr));
+                items = [...items, ...newLines];
+                let remove = items.length - logLines;
+                if (remove > 0) {
+                    items.splice(0, remove);
+                }
+                if (autoscroll && scrollToIndex != undefined) {
+                    scrollToIndex(items.length - 1, { behavior: 'smooth' });
+                }
             }
         }
     }
