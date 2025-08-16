@@ -3,6 +3,7 @@
     import { onMount } from 'svelte';
     import { socketStore, socketService } from '../../stores/socket';
     import { getModemInfo } from '../../firmware/service';
+    import { browser } from '$app/environment';
     import type { ApiModemInfoResponse } from '../../firmware/service';
 
     let showTerminal = false;
@@ -10,7 +11,7 @@
     let consoleCmd: string;
 
     onMount(async () => {
-        socketService.connect();
+        if (!browser) return;
         
         // Fetch /api/modem/info für terminal_available
         try {
@@ -27,7 +28,7 @@
     }
 
     $: {
-        if ($socketStore.connected && consoleCmd) {
+        if (browser && $socketStore.connected && consoleCmd) {
             socketService.sendConsoleCommand(consoleCmd);
         }
     }

@@ -1,19 +1,11 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
-    import { onMount, onDestroy } from 'svelte';
-    import { socketStore, socketService } from '../../stores/socket';
-
-    onMount(() => {
-        socketService.connect();
-    });
-
-    onDestroy(() => {
-        // Don't disconnect here as other components might be using the socket
-    });
+    import { socketStore } from '../../stores/socket';
+    import { browser } from '$app/environment';
 </script>
 
 <div class="dashboard-content">
-    {#if $socketStore.valueDescriptions != null}
+    {#if browser && $socketStore.valueDescriptions != null}
         <StateCard 
             state={$socketStore.state} 
             desiredState={$socketStore.desiredState} 

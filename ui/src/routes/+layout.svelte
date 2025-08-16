@@ -23,7 +23,8 @@
     import { toastStore } from '../stores/toast';
     import type { ToastData } from '../stores/toast';
     import { socketService } from '../stores/socket';
-    import { onDestroy } from 'svelte';
+    import { onDestroy, onMount } from 'svelte';
+    import { browser } from '$app/environment';
     let toast = $state<ToastData | null>(null);
     $effect(() => { toast = $toastStore });
     import HelpDialog from "../widget/HelpDialog.svelte";
@@ -33,6 +34,12 @@
 
     const help = () => (helpOpen = true);
     let url: string;
+
+    onMount(() => {
+        if (browser) {
+            socketService.connect();
+        }
+    });
 
     onDestroy(() => {
         socketService.destroy();
@@ -44,21 +51,21 @@
 {/if}
 <Header company="ArduMower" platformName="Modem">
     <Button
-        href="/"
+        href="/?dashboard=status"
         kind="tertiary"
         icon={IconDashboard}
         iconDescription="Status">
         <span class="button-text">Status</span>
     </Button>
     <Button
-        href="/log"
+        href="/?dashboard=log"
         kind="tertiary"
         icon={IconLog}
         iconDescription="Modem Log">
         <span class="button-text">Log</span>
     </Button>
     <Button
-        href="/terminal"
+        href="/?dashboard=terminal"
         kind="tertiary"
         icon={IconTerminal}
         iconDescription="Terminal">

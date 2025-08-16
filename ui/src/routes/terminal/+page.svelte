@@ -1,16 +1,7 @@
 <script>
-    import TerminalDashboard from "../../pages/daschboard/TerminalDashboard.svelte";
-    import { onMount, onDestroy } from 'svelte';
-
-    onMount(() => {
-        document.body.classList.add('dashboard-mode');
-    });
-
-    onDestroy(() => {
-        document.body.classList.remove('dashboard-mode');
-    });
+    import DashboardContainer from "../../pages/daschboard/DashboardContainer.svelte";
 </script>
 
 <div class="dashboard-page">
-    <TerminalDashboard />
+    <DashboardContainer />
 </div>

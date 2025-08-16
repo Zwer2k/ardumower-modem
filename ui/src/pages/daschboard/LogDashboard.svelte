@@ -3,6 +3,7 @@
     import { onMount } from 'svelte';
     import { socketStore, socketService } from '../../stores/socket';
     import { LogLevelDesc } from "../../model";
+    import { browser } from '$app/environment';
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
 
     let modemDbgLevel: number = 15;
@@ -18,13 +19,9 @@
         { id: 1, text: "critical" },
     ];
 
-    onMount(() => {
-        socketService.connect();
-    });
-
     // Initialize from store once when available
     $: {
-        if ($socketStore.valueDescriptions && lastSentLogLevel === -1) {
+        if (browser && $socketStore.valueDescriptions && lastSentLogLevel === -1) {
             modemDbgLevel = $socketStore.modemDbgLevel;
             lastSentLogLevel = $socketStore.modemDbgLevel;
         }
@@ -32,7 +29,7 @@
 
     // Only send when user actually changes the level
     $: {
-        if ($socketStore.connected && modemDbgLevel !== lastSentLogLevel && lastSentLogLevel !== -1) {
+        if (browser && $socketStore.connected && modemDbgLevel !== lastSentLogLevel && lastSentLogLevel !== -1) {
             socketService.setLogLevel(modemDbgLevel);
             lastSentLogLevel = modemDbgLevel;
         }
