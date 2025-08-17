@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <inttypes.h>
 #include <ArduinoJson.h>
-#include <vector>
+#include "mower_map.h"
 
 namespace ArduMower
 {
@@ -181,6 +181,8 @@ namespace ArduMower
         virtual ArduMower::Domain::Robot::Stats::Stats *statsP() = 0;
         virtual ArduMower::Domain::Robot::Properties *propsP() = 0;
         virtual DesiredState *desiredStateP() = 0;
+
+        virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
       };
 
       class CommandExecutor

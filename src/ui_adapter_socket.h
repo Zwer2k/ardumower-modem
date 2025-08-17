@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "log.h"
@@ -31,6 +30,7 @@ namespace ArduMower
         desiredState,
         modemLog,
         mowerConsole,
+        map,
         responseDataTypeLength
       };
 
@@ -59,7 +59,6 @@ namespace ArduMower
       class UiSocketHandler
       {
       public:
-
 #ifdef MOWER_TERMINAL
         UiSocketHandler(
           Terminal &terminal,

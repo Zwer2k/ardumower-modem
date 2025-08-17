@@ -1,6 +1,7 @@
 #ifndef _MOWER_ADAPTER_H
 #define _MOWER_ADAPTER_H
 
+#include "mower_map.h"
 #include "domain.h"
 #include "router.h"
 #include "encrypt.h"
@@ -8,40 +9,34 @@
 
 namespace ArduMower
 {
-
   namespace Modem
   {
-    class MowerAdapter : public RxDrain, public TxDrain, public ArduMower::Domain::Robot::StateSource, public ArduMower::Domain::Robot::CommandExecutor
-    {
+    class MowerAdapter : public RxDrain, public TxDrain, public ArduMower::Domain::Robot::StateSource, public ArduMower::Domain::Robot::CommandExecutor {
     private:
       Settings::Settings &settings;
       Router &router;
-
       bool sendIsInitialized;
       Encrypt enc;
       ArduMower::Domain::Robot::Properties _props;
       ArduMower::Domain::Robot::State::State _state;
       ArduMower::Domain::Robot::Stats::Stats _stats;
       ArduMower::Domain::Robot::DesiredState _desiredState;
-
+      ArduMower::Domain::Robot::MowerMap _map;
       void parseArduMowerCommand(String line);
       void parseArduMowerResponse(String line);
       void parseVersionResponse(String line);
       void parseStateResponse(String line);
       void parseStatisticsResponse(String line);
       void parseATCCommand(String line);
+      void parseATWCommand(String line);
 
       bool sendCommand(String command, bool encrypt = true);
       bool assertSendIsInitialized();
-
       int containsNonUTF8(const String& input);
       String bytesToHexString(const String& byteString);
-
     public:
       MowerAdapter(Settings::Settings &_settings, Router &_router);
-
       void begin();
-
       virtual ArduMower::Domain::Robot::Properties props() { return _props; }
       virtual ArduMower::Domain::Robot::State::State state() { return _state; };
       virtual ArduMower::Domain::Robot::Stats::Stats stats() { return _stats; };
@@ -50,7 +45,7 @@ namespace ArduMower
       virtual ArduMower::Domain::Robot::State::State *stateP() { return &_state; };
       virtual ArduMower::Domain::Robot::Stats::Stats *statsP() { return &_stats; };
       virtual ArduMower::Domain::Robot::DesiredState *desiredStateP() { return &_desiredState; }
-
+      virtual ArduMower::Domain::Robot::MowerMap mowerMap() { return _map; }
       virtual bool changeSpeed(float speed);
       virtual bool dock();
       virtual bool finishAndRestartEnabled(bool enabled);
@@ -61,19 +56,14 @@ namespace ArduMower
       virtual bool start();
       virtual bool stop();
       virtual bool sonarEnabled(bool enabled);
-
       virtual bool requestVersion();
       virtual bool requestStatus();
       virtual bool requestStats();
-
       virtual bool manualDrive(float linear, float angular);
-
       virtual bool reboot();
       virtual bool rebootGPS();
       virtual bool powerOff();
-
       virtual bool customCmd(String cmd);
-
       virtual void drainRx(String line, bool &stop) override;
       virtual void drainTx(String line, bool &stop) override;
     };

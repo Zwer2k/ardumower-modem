@@ -129,8 +129,13 @@ void UiSocketHandler::loop()
     return;
 
   stateRequestLoop();
+  yield();
   sendData(ResponseDataType::mowerState);
+  yield();
   sendData(ResponseDataType::desiredState);
+  yield();
+  sendData(ResponseDataType::map);
+  yield();
   logToUiLoop();
   //pingClients();
 }
@@ -156,6 +161,10 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     case ResponseDataType::desiredState:
       sendData(dataType, sendTo, _source.desiredState(), force);
       break;
+    case ResponseDataType::map: {
+      sendData(dataType, sendTo, _source.mowerMap(), force);
+      break;
+    }
     default:
       break;
   }

@@ -3,6 +3,7 @@
 #include "log.h"
 #include "prometheus_util.h"
 #include "settings.h"
+#include "mower_map.h"
 
 #define _LOG_ "MowerAdapter::"
 #define _LOG_CMD_ "MowerAdapter::command::"
@@ -88,6 +89,11 @@ void MowerAdapter::parseArduMowerCommand(String line)
     line = buffer;
     free(buffer);
     //Log(DBG, "%sparseArduMowerCommand::decrypted(%s)", _LOG_, line.c_str());
+  }
+
+  if (line.startsWith("AT+W")) {
+    Log(DBG, "%sparseArduMowerCommand::waypoint-command(%s)", _LOG_, line.c_str());
+    parseATWCommand(line);
   }
 
   if (line.startsWith("AT+")) {
@@ -463,6 +469,45 @@ void MowerAdapter::parseStateResponse(String line)
                      });
 
   _state.timestamp = now;
+}
+
+void MowerAdapter::parseATWCommand(String line)
+{
+  Log(DBG, "%sparseATWCommand (waypoint-list): %s", _LOG_, line.c_str());
+  // Erwartetes Format: AT+W,<startIndex>,<x1>,<y1>,<x2>,<y2>,...
+  if (line.startsWith("AT+W,")) line = line.substring(5);
+  const auto now = millis();
+
+  std::vector<float> values;
+  int lastCommaIdx = -1;
+  int len = line.length();
+  for (int idx = 0; idx < len; idx++) {
+    char ch = line[idx];
+    if ((ch == ',') || (idx == len - 1)) {
+      int valueEnd = (ch == ',') ? idx : idx + 1;
+      String token = line.substring(lastCommaIdx + 1, valueEnd);
+      values.push_back(token.toFloat());
+      lastCommaIdx = idx;
+    }
+  }
+
+  if (values.size() < 3) return; // Mindestens Index, x, y
+
+  int widx = (int)values[0];
+  using namespace ArduMower::Domain::Robot;
+  // Nur beim ersten Block (widx==0) die Waypoint-Liste leeren
+  if (widx == 0) {
+    _map.waypoints.clear();
+  }
+  for (size_t i = 1; i + 1 < values.size(); i += 2, widx++) {
+    float x = values[i];
+    float y = values[i + 1];
+    if ((int)_map.waypoints.size() <= widx) {
+      _map.waypoints.resize(widx + 1);
+    }
+    _map.waypoints[widx] = MapPoint{x, y, 0, ""};
+  }
+  _map.timestamp = now;
 }
 
 void MowerAdapter::parseATCCommand(String line)
