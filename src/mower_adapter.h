@@ -22,6 +22,9 @@ namespace ArduMower
       ArduMower::Domain::Robot::Stats::Stats _stats;
       ArduMower::Domain::Robot::DesiredState _desiredState;
       ArduMower::Domain::Robot::MowerMap _map;
+      // Temporärer Buffer für alle empfangenen Wegpunkte (alle Typen)
+      std::vector<ArduMower::Domain::Robot::MapPoint> tempWaypointsBuffer;
+
       void parseArduMowerCommand(String line);
       void parseArduMowerResponse(String line);
       void parseVersionResponse(String line);
@@ -29,6 +32,7 @@ namespace ArduMower
       void parseStatisticsResponse(String line);
       void parseATCCommand(String line);
       void parseATWCommand(String line);
+      void parseATNCommand(String line);
 
       bool sendCommand(String command, bool encrypt = true);
       bool assertSendIsInitialized();

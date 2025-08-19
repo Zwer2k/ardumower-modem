@@ -7,6 +7,8 @@
 #include <ArduinoJson.h>
 #include <string>
 #include <vector>
+#include "log.h"
+
 
 
 namespace ArduMower {
@@ -46,6 +48,8 @@ namespace ArduMower {
                     for (const auto& p : waypoints) p.marshal(wps.createNestedObject());
                     JsonArray docks = obj.createNestedArray("dockpoints");
                     for (const auto& p : dockpoints) p.marshal(docks.createNestedObject());
+                    Log(DBG, "marshal map perimeter %d, exclusions %d, waypoints %d, dockpoints %d", perimeter.size(), exclusions.size(), waypoints.size(), dockpoints.size());
+
                 }
             };
 

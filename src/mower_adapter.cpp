@@ -1,3 +1,4 @@
+#include <sstream>
 #include "mower_adapter.h"
 #include "checksum.h"
 #include "log.h"
@@ -81,7 +82,7 @@ void MowerAdapter::parseArduMowerResponse(String line)
 
 void MowerAdapter::parseArduMowerCommand(String line)
 {
-  Log(DBG, "%sparseArduMowerCommand", _LOG_);
+  Log(DBG, "%sparseArduMowerCommand %s", _LOG_, line.substring(0, 4).c_str());
   if (!line.startsWith("AT+"))
   {
     char *buffer = strdup(line.c_str());
@@ -89,11 +90,6 @@ void MowerAdapter::parseArduMowerCommand(String line)
     line = buffer;
     free(buffer);
     //Log(DBG, "%sparseArduMowerCommand::decrypted(%s)", _LOG_, line.c_str());
-  }
-
-  if (line.startsWith("AT+W")) {
-    Log(DBG, "%sparseArduMowerCommand::waypoint-command(%s)", _LOG_, line.c_str());
-    parseATWCommand(line);
   }
 
   if (line.startsWith("AT+")) {
@@ -113,6 +109,111 @@ void MowerAdapter::parseArduMowerCommand(String line)
 
   if (line.startsWith("AT+C"))
     parseATCCommand(line);
+
+  if (line.startsWith("AT+W")) {
+    parseATWCommand(line);
+  }
+
+  if (line.startsWith("AT+N")) {
+    parseATNCommand(line);
+  }
+}
+
+// AT-N Kommando: AT-N,#perimeter,#exclusions,#dockpoints,#waypoints,#free
+void MowerAdapter::parseATNCommand(String line) {
+  Log(DBG, "%sparseATNCommand (map end)", _LOG_);
+  // Entferne "AT-N," falls vorhanden
+  if (line.startsWith("AT+N,")) line = line.substring(5);
+  std::vector<int> counts;
+  int lastCommaIdx = -1;
+  int len = line.length();
+  for (int idx = 0; idx < len; idx++) {
+    char ch = line[idx];
+    if ((ch == ',') || (idx == len - 1)) {
+      int valueEnd = (ch == ',') ? idx : idx + 1;
+      String token = line.substring(lastCommaIdx + 1, valueEnd);
+      counts.push_back(token.toInt());
+      lastCommaIdx = idx;
+    }
+  }
+  if (counts.size() < 5) {
+    Log(ERR, "%sparseATNCommand: zu wenig Felder", _LOG_);
+    return;
+  }
+  int nPerimeter = counts[0];
+  int nExclusions = counts[1];
+  int nDockpoints = counts[2];
+  int nWaypoints = counts[3];
+  //int nFree = counts[4];
+  using namespace ArduMower::Domain::Robot;
+  // Aufteilen der tempWaypointsBuffer in die richtigen Vektoren
+  int idx = 0;
+  _map.perimeter.clear();
+  _map.exclusions.clear();
+  _map.dockpoints.clear();
+  _map.waypoints.clear();
+
+  // Perimeter
+  for (int i = 0; i < nPerimeter && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
+    _map.perimeter.push_back(tempWaypointsBuffer[idx]);
+  }
+  // Exclusions (hier als ein Block, ggf. erweitern für mehrere Exclusions)
+  for (int ex = 0; ex < nExclusions; ex++) {
+    std::vector<MapPoint> excl;
+    // Annahme: exclusions sind jeweils gleich groß, oder alle Punkte nacheinander
+    // Hier als Dummy: alle Exclusion-Punkte in einen Vektor
+    // (Anpassung nötig, falls mehrere Exclusions mit je eigener Punktzahl)
+    // Beispiel: nExclusions = 1, dann alle Punkte in einen Vektor
+    //           nExclusions > 1: Aufteilung nach bekannter Punktzahl
+    // Hier: alle Exclusions zusammenfassen
+    // TODO: Exclusion-Aufteilung nach realer Struktur
+    // (Hier als Platzhalter: keine Exclusions)
+    // excl.push_back(...)
+    _map.exclusions.push_back(excl);
+  }
+  // Dockpoints
+  for (int i = 0; i < nDockpoints && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
+    _map.dockpoints.push_back(tempWaypointsBuffer[idx]);
+  }
+
+  // Logging: Alle Waypoints im Buffer vor dem Kopieren prüfen
+  for (size_t i = 0; i < tempWaypointsBuffer.size(); i++) {
+    const auto &pt = tempWaypointsBuffer[i];
+    if ((pt.X == 0 && pt.Y == 0 && pt.delta == 0 && pt.timestamp.empty())) {
+      Log(ERR, "%sparseATNCommand: tempWaypointsBuffer[%d] ist leer/uninitialisiert!", _LOG_, (int)i);
+    }
+  }
+
+  // Waypoints
+  for (int i = 0; i < nWaypoints && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
+    _map.waypoints.push_back(tempWaypointsBuffer[idx]);
+  }
+
+  // Summen prüfen
+  bool ok = true;
+  if ((int)_map.perimeter.size() != nPerimeter) {
+    Log(ERR, "%sparseATNCommand: perimeter count mismatch %d != %d", _LOG_, _map.perimeter.size(), nPerimeter);
+    ok = false;
+  }
+  if ((int)_map.exclusions.size() != nExclusions) {
+    Log(ERR, "%sparseATNCommand: exclusions count mismatch %d != %d", _LOG_, _map.exclusions.size(), nExclusions);
+    ok = false;
+  }
+  if ((int)_map.dockpoints.size() != nDockpoints) {
+    Log(ERR, "%sparseATNCommand: dockpoints count mismatch %d != %d", _LOG_, _map.dockpoints.size(), nDockpoints);
+    ok = false;
+  }
+  if ((int)_map.waypoints.size() != nWaypoints) {
+    Log(ERR, "%sparseATNCommand: waypoints count mismatch %d != %d", _LOG_, _map.waypoints.size(), nWaypoints);
+    ok = false;
+  }
+  if (!ok) {
+    Log(ERR, "%sparseATNCommand: Map-Übertragung fehlerhaft, Abbruch", _LOG_);
+    return;
+  }
+  Log(DBG, "%sparseATNCommand: Map vollständig, sende an Client", _LOG_);
+  _map.timestamp = millis();
+  tempWaypointsBuffer.clear();
 }
 
 // start mowing
@@ -473,11 +574,10 @@ void MowerAdapter::parseStateResponse(String line)
 
 void MowerAdapter::parseATWCommand(String line)
 {
-  Log(DBG, "%sparseATWCommand (waypoint-list): %s", _LOG_, line.c_str());
+  Log(DBG, "%sparseATWCommand (waypoint-list)", _LOG_);
   // Erwartetes Format: AT+W,<startIndex>,<x1>,<y1>,<x2>,<y2>,...
   if (line.startsWith("AT+W,")) line = line.substring(5);
-  const auto now = millis();
-
+  
   std::vector<float> values;
   int lastCommaIdx = -1;
   int len = line.length();
@@ -494,20 +594,31 @@ void MowerAdapter::parseATWCommand(String line)
   if (values.size() < 3) return; // Mindestens Index, x, y
 
   int widx = (int)values[0];
+  size_t dataStart = 1;
+
   using namespace ArduMower::Domain::Robot;
   // Nur beim ersten Block (widx==0) die Waypoint-Liste leeren
   if (widx == 0) {
-    _map.waypoints.clear();
+    tempWaypointsBuffer.clear();
   }
-  for (size_t i = 1; i + 1 < values.size(); i += 2, widx++) {
+  // Schreibe die empfangenen Punkte ab Startindex (widx) in die Waypoint-Liste
+  int writeIdx = widx;
+
+  for (size_t i = dataStart; i + 1 < values.size(); i += 2, writeIdx++) {
     float x = values[i];
     float y = values[i + 1];
-    if ((int)_map.waypoints.size() <= widx) {
-      _map.waypoints.resize(widx + 1);
+    if ((int)tempWaypointsBuffer.size() < writeIdx) {
+      Log(ERR, "%sparseATWCommand: Indexsprung! writeIdx=%d, BufferSize=%d", _LOG_, writeIdx, (int)tempWaypointsBuffer.size());
     }
-    _map.waypoints[widx] = MapPoint{x, y, 0, ""};
+    if ((int)tempWaypointsBuffer.size() <= writeIdx) {
+      tempWaypointsBuffer.resize(writeIdx + 1);
+    } else {
+      Log(DBG, "%sparseATWCommand: Überschreibe bestehenden Punkt an writeIdx=%d", _LOG_, writeIdx);
+    }
+    tempWaypointsBuffer[writeIdx] = MapPoint{x, y, 0, ""};
   }
-  _map.timestamp = now;
+  
+  Log(DBG, "%sparseATWCommand done widx=%d, waypoints.size()=%d", _LOG_, widx, tempWaypointsBuffer.size());
 }
 
 void MowerAdapter::parseATCCommand(String line)

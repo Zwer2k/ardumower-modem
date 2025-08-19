@@ -1,13 +1,19 @@
-import { writable } from "svelte/store";
-import type { Map, MapPresentation, Point } from "./model"
-import { mockMapData } from "./mock"
+
+import { writable, derived } from "svelte/store";
+import type { Map, MapPresentation, Point } from "./model";
 import { rotatePointsAroundOrigin } from "./geometry";
+import { socketStore } from "../stores/socket";
+import { waypointsStore, resetMapChunkBuffer } from './map-chunk-buffer';
 
 export interface StoredMap {
   map: Map,
   presentation: MapPresentation,
 }
-export let MapStore = writable<StoredMap>()
+// MapStore is now derived from socketStore
+// Initialize with empty map so $MapStore is always defined
+const emptyMap: Map = { perimeter: { points: [] }, exclusions: [] };
+const emptyPresentation: MapPresentation = { boundary: { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } }, center: { x: 0, y: 0 }, rotation: 0, viewBox: "0 0 1 1" };
+export let MapStore = writable<StoredMap>({ map: emptyMap, presentation: emptyPresentation });
 
 interface PresentationTuningParameters {
   padding: number
@@ -93,11 +99,42 @@ const middle = (a: number[]): number =>
 
 const p2p = (a: { X: number, Y: number }): { x: number, y: number } => ({ x: a.X, y: -a.Y })
 
-let mockMap: Map = {
-  perimeter: { points: mockMapData[0].perimeter.map(p2p) },
-  exclusions: mockMapData[0].exclusions.map(e => ({ points: e.map(p2p) })),
+
+// Helper to convert backend MapRaw to frontend Map
+function mapRawToMap(mapRaw: any): Map {
+  let perimeterPoints = (mapRaw.perimeter || []).map(p2p);
+  // Fallback: Wenn perimeter leer, aber waypoints vorhanden, nutze waypoints
+  if (perimeterPoints.length === 0 && Array.isArray(mapRaw.waypoints) && mapRaw.waypoints.length > 0) {
+    perimeterPoints = mapRaw.waypoints.map(p2p);
+    console.log('[MapService] Fallback: using waypoints as perimeter');
+  }
+  return {
+    perimeter: { points: perimeterPoints },
+    exclusions: (mapRaw.exclusions || []).map((e: any) => ({ points: e.map(p2p) })),
+    // waypoints, dockpoints can be added if needed
+  };
 }
 
-let presentation: MapPresentation = calculatePresentation(mockMap)
 
-MapStore.set({ map: mockMap, presentation })
+// Map aus Chunks zusammensetzen (Waypoints)
+waypointsStore.subscribe((waypoints) => {
+  console.log('[MapService] waypointsStore changed:', waypoints);
+  if (waypoints.length > 0) {
+    // Map-Objekt aus Waypoints bauen (perimeter)
+    const perimeterPoints = waypoints.map(({ X, Y, timestamp }) => {
+      console.log('[MapService] waypoint:', { X, Y, timestamp });
+      return { x: X, y: -Y };
+    });
+    const map: Map = {
+      perimeter: { points: perimeterPoints },
+      exclusions: [] // TODO: Exclusions aus Chunks unterstützen
+    };
+    console.log('[MapService] map object:', map);
+    const presentation = calculatePresentation(map);
+    console.log('[MapService] presentation:', presentation);
+    MapStore.set({ map, presentation });
+  } else {
+    console.log('[MapService] waypointsStore empty, resetting map');
+    MapStore.set({ map: emptyMap, presentation: emptyPresentation });
+  }
+});

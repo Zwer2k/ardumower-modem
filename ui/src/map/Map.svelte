@@ -42,25 +42,28 @@
       text: textPrefix + index,
     });
 
-  $: editItems = [
-    $MapStore.map.perimeter.points.map(
-      pointsToEditItem("map-0-perimeter-point-", "Perimeter point #")
-    ),
-    pointsToEdges($MapStore.map.perimeter.points).map(
-      edgesToEditItem("map-0-perimeter-edge-", "Perimeter edge #")
-    ),
-    ...$MapStore.map.exclusions.map((e, i) => [
-      ...e.points.map(
-        pointsToEditItem(
-          `map-0-exclusion-${i}-point-`,
-          `Exclution #${i} point #`
-        )
-      ),
-      ...pointsToEdges(e.points).map(
-        edgesToEditItem(`map-0-exclusion-${i}-edge-`, `Exclusion #${i} edge #`)
-      ),
-    ]),
-  ].reduce((a, b) => [...a, ...b], []);
+
+  $: editItems = $MapStore && $MapStore.map
+    ? [
+        $MapStore.map.perimeter.points.map(
+          pointsToEditItem("map-0-perimeter-point-", "Perimeter point #")
+        ),
+        pointsToEdges($MapStore.map.perimeter.points).map(
+          edgesToEditItem("map-0-perimeter-edge-", "Perimeter edge #")
+        ),
+        ...$MapStore.map.exclusions.map((e, i) => [
+          ...e.points.map(
+            pointsToEditItem(
+              `map-0-exclusion-${i}-point-`,
+              `Exclution #${i} point #`
+            )
+          ),
+          ...pointsToEdges(e.points).map(
+            edgesToEditItem(`map-0-exclusion-${i}-edge-`, `Exclusion #${i} edge #`)
+          ),
+        ]),
+      ].reduce((a, b) => [...a, ...b], [])
+    : [];
 
   function shouldFilterItem(item: EditItem, value: string) {
     if (!value) return true;
@@ -151,19 +154,21 @@
     </Row>
   </Grid>
   <Canvas>
-    <Perimeter
-      value={$MapStore.map.perimeter}
-      perimiterId="map-0-perimeter"
-      {edit}
-      bind:editItemId
-    />
-    {#each $MapStore.map.exclusions as exclusion, index}
-      <Exclusion
-        value={exclusion}
-        exclusionId={"map-0-exclusion-" + index}
+    {#if $MapStore && $MapStore.map}
+      <Perimeter
+        value={$MapStore.map.perimeter}
+        perimiterId="map-0-perimeter"
         {edit}
         bind:editItemId
       />
-    {/each}
+      {#each $MapStore.map.exclusions as exclusion, index}
+        <Exclusion
+          value={exclusion}
+          exclusionId={"map-0-exclusion-" + index}
+          {edit}
+          bind:editItemId
+        />
+      {/each}
+    {/if}
   </Canvas>
 </main>

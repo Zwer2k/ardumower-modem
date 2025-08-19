@@ -86,6 +86,7 @@ namespace ArduMower
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
       private:
+        void sendMapInChunks(UiSocketItem *sendTo, bool force);
         AsyncWebSocket *_ws;
 
         uint32_t oldDataTimestamp[ResponseDataType::responseDataTypeLength];

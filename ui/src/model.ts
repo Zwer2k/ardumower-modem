@@ -162,6 +162,8 @@ export interface ConsoleResponseData {
   lines: ConsoleLine[];
 };
 
+
+// Add map as a new response type
 export enum ResponseDataType {
   hello = 0,
   mowerState,
@@ -169,11 +171,27 @@ export enum ResponseDataType {
   desiredState,
   modemLog,
   mowerConsole,
+  map,
 };
+
+// Map data for WebSocket
+export interface MapPointRaw {
+  X: number;
+  Y: number;
+  delta?: number;
+  timestamp?: string;
+}
+
+export interface MapRaw {
+  perimeter: MapPointRaw[];
+  exclusions: MapPointRaw[][];
+  waypoints?: { X: number; Y: number }[];
+  dockpoints?: { X: number; Y: number }[];
+}
 
 export interface ResponseSocketMessage {
   type: ResponseDataType;
-  data: State | DesiredState | ModemLog | ConsoleResponseData;
+  data: State | DesiredState | ModemLog | ConsoleResponseData | MapRaw;
 }
 
 

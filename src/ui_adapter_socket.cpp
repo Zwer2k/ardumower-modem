@@ -161,12 +161,65 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     case ResponseDataType::desiredState:
       sendData(dataType, sendTo, _source.desiredState(), force);
       break;
-    case ResponseDataType::map: {
-      sendData(dataType, sendTo, _source.mowerMap(), force);
+    case ResponseDataType::map:
+      sendMapInChunks(sendTo, force);
       break;
-    }
     default:
       break;
+  }
+
+}
+
+// Hilfsfunktion: Map in Blöcke aufteilen und senden
+void UiSocketHandler::sendMapInChunks(UiSocketItem *sendTo, bool force) {
+  const auto &map = _source.mowerMap();
+  if ((map.timestamp == 0) || (!force && (map.timestamp == oldDataTimestamp[ResponseDataType::map]))) {
+    return;
+  }
+  oldDataTimestamp[ResponseDataType::map] = map.timestamp;
+  lastDataRequestTimestamp[ResponseDataType::map] = 0;
+
+  // Feste Blockgröße für stabile Übertragung
+  const size_t maxJsonSize = 1028; // Maximale JSON-Größe pro Block (Sicherheitsgrenze)
+  const size_t blockSize = 20;     // Feste Anzahl Waypoints pro Block
+  size_t total = map.waypoints.size();
+  size_t idx = 0;
+  while (idx < total) {
+    DynamicJsonDocument doc(maxJsonSize);
+    doc["type"] = ResponseDataType::map;
+    auto dataObj = doc.createNestedObject("data");
+    dataObj["startIndex"] = (int)idx;
+    dataObj["total"] = (int)total;
+    auto arr = dataObj.createNestedArray("waypoints");
+
+    size_t measured = 0;
+    size_t blocks = 0;
+    // Füge bis zu blockSize Waypoints in diesen Chunk ein
+    for (; idx < total && (blocks < blockSize) && (measured < maxJsonSize - 128); idx++, blocks++) {
+      const auto &pt = map.waypoints[idx];
+      JsonObject obj = arr.createNestedObject();
+      pt.marshal(obj);
+      if (!obj.containsKey("timestamp")) {
+        obj["timestamp"] = "";
+      }
+      measured = measureJson(doc);
+    }
+    Log(DBG, "%s MapChunk: measured=%u, points=%u, nextIdx=%u", _LOG_, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx);
+    String stateStr;
+    serializeJson(doc, stateStr);
+    if (sendTo != NULL) {
+      if (!sendTo->sendText(stateStr)) {
+        Log(ERR, "%s sendData failed", _LOG_);
+        _ws->cleanupClients();
+      }
+    } else {
+      auto status = _ws->textAll(stateStr);
+      if (status != AsyncWebSocket::ENQUEUED) {
+        Log(ERR, "%s sendData failed", _LOG_);
+        _ws->cleanupClients();
+      }
+    }
+    yield();
   }
 }
 
@@ -202,7 +255,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   oldDataTimestamp[dataType] = data.timestamp;
   lastDataRequestTimestamp[dataType] = 0;
 
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(4096);
   doc["type"] = dataType;
   data.marshal(doc.createNestedObject("data"));
   

@@ -6,6 +6,7 @@
     import StatusDashboard from './StatusDashboard.svelte';
     import LogDashboard from './LogDashboard.svelte';
     import TerminalDashboard from './TerminalDashboard.svelte';
+    import Map from '../../map/Map.svelte';
 
     let currentDashboard = $state('status');
 
@@ -13,7 +14,7 @@
     $effect(() => {
         if (browser && $page.url) {
             const dashboard = $page.url.searchParams.get('dashboard') || 'status';
-            if (['status', 'log', 'terminal'].includes(dashboard)) {
+            if (['status', 'log', 'terminal', 'map'].includes(dashboard)) {
                 currentDashboard = dashboard;
             }
         }
@@ -39,13 +40,14 @@
     <div class="dashboard-panel" class:active={currentDashboard === 'status'}>
         <StatusDashboard />
     </div>
-    
     <div class="dashboard-panel" class:active={currentDashboard === 'log'}>
         <LogDashboard />
     </div>
-    
     <div class="dashboard-panel" class:active={currentDashboard === 'terminal'}>
         <TerminalDashboard />
+    </div>
+    <div class="dashboard-panel" class:active={currentDashboard === 'map'}>
+        <Map />
     </div>
 </div>
 

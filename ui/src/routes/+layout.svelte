@@ -15,6 +15,7 @@
     import IconLog from "carbon-icons-svelte/lib/DocumentView.svelte";
     import IconTerminal from "carbon-icons-svelte/lib/Terminal.svelte";
     import IconDashboard from "carbon-icons-svelte/lib/Dashboard.svelte";
+    import IconMap from "carbon-icons-svelte/lib/Map.svelte";
 
     import { Busy } from "../stores/busy";
     import SaveDiscard from "../widget/SaveDiscard.svelte";
@@ -56,6 +57,13 @@
         icon={IconDashboard}
         iconDescription="Status">
         <span class="button-text">Status</span>
+    </Button>
+    <Button
+        href="/?dashboard=map"
+        kind="tertiary"
+        icon={IconMap}
+        iconDescription="Map">
+        <span class="button-text">Map</span>
     </Button>
     <Button
         href="/?dashboard=log"
@@ -115,6 +123,20 @@
 <HelpDialog bind:open={helpOpen} />
 
 <style lang="scss">
+
+/* Header-Name (ArduMower Modem) auf kleinen Bildschirmen ausblenden */
+@media only screen and (max-width: 768px) {
+    :global(.bx--header__name) {
+        display: none !important;
+    }
+    /* Buttons ganz links anordnen */
+    :global(.bx--header__nav) {
+        margin-left: 0 !important;
+    }
+    :global(.bx--header .bx--btn--tertiary) {
+        margin-left: 0 !important;
+    }
+}
 
 /* Icon-Größe in der Header-Navigation vergrößern */
 :global(.bx--header__action svg) {

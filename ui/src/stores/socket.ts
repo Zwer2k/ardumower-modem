@@ -10,9 +10,12 @@ import type {
     ValueDescriptions, 
     ConsoleLine, 
     ConsoleResponseData, 
-    ConsoleRequestData 
+    ConsoleRequestData, 
+    MapRaw 
 } from "../model";
-import { RequestDataType, ResponseDataType } from "../model";
+import { ResponseDataType, RequestDataType } from "../model";
+import { handleMapChunk } from '../map/map-chunk-buffer';
+
 
 export interface SocketState {
     socket: WebSocket | null;
@@ -23,6 +26,7 @@ export interface SocketState {
     modemLog: LogLine[];
     consoleLines: ConsoleLine[];
     modemDbgLevel: number;
+    mapRaw: MapRaw | null;
 }
 
 const initialState: SocketState = {
@@ -33,7 +37,8 @@ const initialState: SocketState = {
     desiredState: null,
     modemLog: [],
     consoleLines: [],
-    modemDbgLevel: 15
+    modemDbgLevel: 15,
+    mapRaw: null
 };
 
 export const socketStore = writable<SocketState>(initialState);
@@ -128,10 +133,8 @@ class SocketService {
                 socket.addEventListener("message", (message: any) => {
                     try {
                         let jsonData = JSON.parse(message.data);
-
                         socketStore.update(state => {
                             const newState = { ...state };
-                            
                             switch (jsonData.type) {
                                 case ResponseDataType.hello:
                                     newState.valueDescriptions = jsonData.data as ValueDescriptions;
@@ -149,12 +152,18 @@ class SocketService {
                                 case ResponseDataType.mowerConsole:
                                     newState.consoleLines = (jsonData.data as ConsoleResponseData).lines;
                                     break;
+                                case ResponseDataType.map:
+                                    // Map-Chunk-Logik: Chunks sammeln, MapStore wird im Buffer gesetzt
+                                    if (jsonData.data && jsonData.data.startIndex !== undefined && jsonData.data.waypoints) {
+                                        handleMapChunk(jsonData.data);
+                                    }
+                                    break;
                                 default:
                             }
-                            
                             return newState;
                         });
                     } catch (error) {
+                        console.error('[Socket] Error parsing message:', error, message.data);
                     }
                 });
 
