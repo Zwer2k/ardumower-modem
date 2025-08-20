@@ -18,6 +18,7 @@ UiSocketItem::UiSocketItem(
 {
   _socketHandler->sendData(ResponseDataType::mowerState, this, true);
   _socketHandler->sendData(ResponseDataType::desiredState, this, true);
+  _socketHandler->sendData(ResponseDataType::map, this, true);
 }
 
 void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jsonData)
@@ -179,32 +180,44 @@ void UiSocketHandler::sendMapInChunks(UiSocketItem *sendTo, bool force) {
   oldDataTimestamp[ResponseDataType::map] = map.timestamp;
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
 
-  // Feste Blockgröße für stabile Übertragung
-  const size_t maxJsonSize = 1028; // Maximale JSON-Größe pro Block (Sicherheitsgrenze)
-  const size_t blockSize = 20;     // Feste Anzahl Waypoints pro Block
-  size_t total = map.waypoints.size();
+  // Perimeter
+  sendMapArrayInChunks(MapPointType::Perimeter, map.perimeter, map.timestamp, sendTo);
+  // Exclusions (mehrdimensional)
+  for (size_t i = 0; i < map.exclusions.size(); ++i) {
+    sendMapArrayInChunks(MapPointType::Exclusion, map.exclusions[i], map.timestamp, sendTo, static_cast<int>(i));
+  }
+  // Dockpoints
+  sendMapArrayInChunks(MapPointType::Dockpoints, map.dockpoints, map.timestamp, sendTo);
+  // Waypoints
+  sendMapArrayInChunks(MapPointType::Waypoints, map.waypoints, map.timestamp, sendTo);
+}
+
+void UiSocketHandler::sendMapArrayInChunks(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem *sendTo, int exclusionIdx) {
+  const size_t maxJsonSize = 1028;
+  const size_t blockSize = 20;
+  size_t total = points.size();
   size_t idx = 0;
   while (idx < total) {
     DynamicJsonDocument doc(maxJsonSize);
     doc["type"] = ResponseDataType::map;
+    doc["timestamp"] = timestamp;
     auto dataObj = doc.createNestedObject("data");
     dataObj["startIndex"] = (int)idx;
     dataObj["total"] = (int)total;
-    auto arr = dataObj.createNestedArray("waypoints");
-
+    dataObj["pointType"] = static_cast<int>(pointType);
+    if (pointType == MapPointType::Exclusion) {
+      dataObj["exclusionIdx"] = exclusionIdx;
+    }
+    auto arr = dataObj.createNestedArray("points");
     size_t measured = 0;
     size_t blocks = 0;
-    // Füge bis zu blockSize Waypoints in diesen Chunk ein
     for (; idx < total && (blocks < blockSize) && (measured < maxJsonSize - 128); idx++, blocks++) {
-      const auto &pt = map.waypoints[idx];
+      const auto &pt = points[idx];
       JsonObject obj = arr.createNestedObject();
       pt.marshal(obj);
-      if (!obj.containsKey("timestamp")) {
-        obj["timestamp"] = "";
-      }
       measured = measureJson(doc);
     }
-    Log(DBG, "%s MapChunk: measured=%u, points=%u, nextIdx=%u", _LOG_, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx);
+    Log(DBG, "%s MapChunk type=%d exclIdx=%d: measured=%u, points=%u, nextIdx=%u", _LOG_, (int)pointType, exclusionIdx, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx);
     String stateStr;
     serializeJson(doc, stateStr);
     if (sendTo != NULL) {

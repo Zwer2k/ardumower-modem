@@ -176,14 +176,6 @@ void MowerAdapter::parseATNCommand(String line) {
     _map.dockpoints.push_back(tempWaypointsBuffer[idx]);
   }
 
-  // Logging: Alle Waypoints im Buffer vor dem Kopieren prüfen
-  for (size_t i = 0; i < tempWaypointsBuffer.size(); i++) {
-    const auto &pt = tempWaypointsBuffer[i];
-    if ((pt.X == 0 && pt.Y == 0 && pt.delta == 0 && pt.timestamp.empty())) {
-      Log(ERR, "%sparseATNCommand: tempWaypointsBuffer[%d] ist leer/uninitialisiert!", _LOG_, (int)i);
-    }
-  }
-
   // Waypoints
   for (int i = 0; i < nWaypoints && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
     _map.waypoints.push_back(tempWaypointsBuffer[idx]);
@@ -615,7 +607,7 @@ void MowerAdapter::parseATWCommand(String line)
     } else {
       Log(DBG, "%sparseATWCommand: Überschreibe bestehenden Punkt an writeIdx=%d", _LOG_, writeIdx);
     }
-    tempWaypointsBuffer[writeIdx] = MapPoint{x, y, 0, ""};
+    tempWaypointsBuffer[writeIdx] = MapPoint{x, y};
   }
   
   Log(DBG, "%sparseATWCommand done widx=%d, waypoints.size()=%d", _LOG_, widx, tempWaypointsBuffer.size());

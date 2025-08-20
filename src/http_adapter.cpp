@@ -2,8 +2,16 @@
 #include "prometheus.h"
 #include <Arduino.h>
 #include "stm32ota/stm32ota.h"
+#if __has_include("ticker.h")
+#include <ticker.h>
+#endif
 
 #define _LOG_ "HttpAdapter::"
+
+#if __has_include("ticker.h")
+extern Ticker deferred;
+static void delayedEspRestart() { ESP.restart(); }
+#endif
 
 using namespace ArduMower::Modem;
 
@@ -173,8 +181,12 @@ void HttpAdapter::handleRouterResponse(const uint32_t id, String res)
 void HttpAdapter::apiReboot(AsyncWebServerRequest *req)
 {
   req->send(200, "text/plain", "rebooting");
+#if __has_include("ticker.h")
+  deferred.once_ms(500, delayedEspRestart);
+#else
   delay(500);
   ESP.restart();
+#endif
 }
 
 // Reboot STM32 Mower via GPIO (BOOT0 LOW, NRST pulse)

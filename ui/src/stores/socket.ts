@@ -154,7 +154,7 @@ class SocketService {
                                     break;
                                 case ResponseDataType.map:
                                     // Map-Chunk-Logik: Chunks sammeln, MapStore wird im Buffer gesetzt
-                                    if (jsonData.data && jsonData.data.startIndex !== undefined && jsonData.data.waypoints) {
+                                    if (jsonData.data && jsonData.data.startIndex !== undefined && jsonData.data.points) {
                                         handleMapChunk(jsonData.data);
                                     }
                                     break;

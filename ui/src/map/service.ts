@@ -1,9 +1,7 @@
-
-import { writable, derived } from "svelte/store";
-import type { Map, MapPresentation, Point } from "./model";
+import { writable } from "svelte/store";
+import type { Map, MapPresentation, Perimeter, Exclusion, Dockpoints, Waypoints, Point } from "./model";
 import { rotatePointsAroundOrigin } from "./geometry";
-import { socketStore } from "../stores/socket";
-import { waypointsStore, resetMapChunkBuffer } from './map-chunk-buffer';
+import { perimeterStore, dockpointsStore, exclusionsStore, waypointsStore, resetMapChunkBuffer } from './map-chunk-buffer';
 
 export interface StoredMap {
   map: Map,
@@ -11,7 +9,7 @@ export interface StoredMap {
 }
 // MapStore is now derived from socketStore
 // Initialize with empty map so $MapStore is always defined
-const emptyMap: Map = { perimeter: { points: [] }, exclusions: [] };
+const emptyMap: Map = { perimeter: { points: [] }, exclusions: [], dockpoints: { points: [] }, waypoints: { points: [] } };
 const emptyPresentation: MapPresentation = { boundary: { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } }, center: { x: 0, y: 0 }, rotation: 0, viewBox: "0 0 1 1" };
 export let MapStore = writable<StoredMap>({ map: emptyMap, presentation: emptyPresentation });
 
@@ -111,30 +109,43 @@ function mapRawToMap(mapRaw: any): Map {
   return {
     perimeter: { points: perimeterPoints },
     exclusions: (mapRaw.exclusions || []).map((e: any) => ({ points: e.map(p2p) })),
-    // waypoints, dockpoints can be added if needed
+    dockpoints: { points: (mapRaw.dockpoints || []).map(p2p) },
+    waypoints: { points: (mapRaw.waypoints || []).map(p2p) },
   };
 }
 
 
-// Map aus Chunks zusammensetzen (Waypoints)
-waypointsStore.subscribe((waypoints) => {
-  console.log('[MapService] waypointsStore changed:', waypoints);
-  if (waypoints.length > 0) {
-    // Map-Objekt aus Waypoints bauen (perimeter)
-    const perimeterPoints = waypoints.map(({ X, Y, timestamp }) => {
-      console.log('[MapService] waypoint:', { X, Y, timestamp });
-      return { x: X, y: -Y };
-    });
-    const map: Map = {
-      perimeter: { points: perimeterPoints },
-      exclusions: [] // TODO: Exclusions aus Chunks unterstützen
-    };
-    console.log('[MapService] map object:', map);
+// Map aus Chunks zusammensetzen (alle Typen)
+function updateMapStore() {
+  let map: Map = {
+    perimeter: { points: [] },
+    exclusions: [],
+    dockpoints: { points: [] },
+    waypoints: { points: [] }
+  };
+
+  perimeterStore.subscribe((arr) => {
+    map.perimeter = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
+    setMap();
+  });
+  dockpointsStore.subscribe((arr) => {
+    map.dockpoints = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
+    setMap();
+  });
+  exclusionsStore.subscribe((arrs) => {
+    map.exclusions = arrs.map(arr => ({ points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) }));
+    setMap();
+  });
+  waypointsStore.subscribe((arr) => {
+    map.waypoints = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
+    setMap();
+  });
+
+  function setMap() {
     const presentation = calculatePresentation(map);
-    console.log('[MapService] presentation:', presentation);
     MapStore.set({ map, presentation });
-  } else {
-    console.log('[MapService] waypointsStore empty, resetting map');
-    MapStore.set({ map: emptyMap, presentation: emptyPresentation });
+    console.log('[MapService] Map updated:', { map, presentation });
   }
-});
+}
+
+updateMapStore();

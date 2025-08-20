@@ -17,15 +17,10 @@ namespace ArduMower {
             struct MapPoint {
                 double X;
                 double Y;
-                double delta;
-                std::string timestamp;
-
+                
                 void marshal(JsonObject obj) const {
                     obj["X"] = X;
-                    obj["Y"] = Y;
-                    obj["delta"] = delta;
-                    obj["timestamp"] = timestamp.c_str();
-                }
+                    obj["Y"] = Y;                }
             };
 
             struct MowerMap {

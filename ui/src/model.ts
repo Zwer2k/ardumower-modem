@@ -1,4 +1,3 @@
-
 export namespace Settings {
   export interface General {
     name: string
@@ -175,18 +174,16 @@ export enum ResponseDataType {
 };
 
 // Map data for WebSocket
-export interface MapPointRaw {
+export interface MapPoint {
   X: number;
   Y: number;
-  delta?: number;
-  timestamp?: string;
 }
 
 export interface MapRaw {
-  perimeter: MapPointRaw[];
-  exclusions: MapPointRaw[][];
-  waypoints?: { X: number; Y: number }[];
-  dockpoints?: { X: number; Y: number }[];
+  perimeter: MapPoint[];
+  exclusions: MapPoint[][];
+  waypoints?: MapPoint[];
+  dockpoints?: MapPoint[];
 }
 
 export interface ResponseSocketMessage {
@@ -213,3 +210,4 @@ export interface RequestSocketMessage {
   type: RequestDataType;
   data: ModemLogSettings | ConsoleRequestData;
 }
+

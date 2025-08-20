@@ -34,6 +34,13 @@ namespace ArduMower
         responseDataTypeLength
       };
 
+      enum class MapPointType {
+        Perimeter,
+        Exclusion,
+        Dockpoints,
+        Waypoints
+      };
+
       class UiSocketHandler;
 
       class UiSocketItem
@@ -87,6 +94,7 @@ namespace ArduMower
 
       private:
         void sendMapInChunks(UiSocketItem *sendTo, bool force);
+        void sendMapArrayInChunks(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem *sendTo, int exclusionIdx = -1);
         AsyncWebSocket *_ws;
 
         uint32_t oldDataTimestamp[ResponseDataType::responseDataTypeLength];
