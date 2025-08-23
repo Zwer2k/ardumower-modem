@@ -56,16 +56,27 @@ void HttpAdapter::processQueue()
   std::list<Http::CommandRequest *> keep;
 
   xSemaphoreTake(_lock, portMAX_DELAY);
+  uint32_t now = millis();
+  size_t openRequests = _queue.size();
   for (auto req : _queue)
   {
-    if (req->done(millis()))
+    if (req->done(now))
     {
       delete req;
       continue;
     }
-
     processRequest(req);
     keep.push_back(req);
+  }
+  openRequests = keep.size();
+  static size_t lastOpenRequests = 0;
+  if (openRequests != lastOpenRequests) {
+    if (openRequests >= 8) {
+      Log(WARN, "%sprocessQueue: queue almost full (%u)", _LOG_, (unsigned)openRequests);
+    } else {
+      Log(DBG, "%sprocessQueue: open requests: %u", _LOG_, (unsigned)openRequests);
+    }
+    lastOpenRequests = openRequests;
   }
   _queue = keep;
   xSemaphoreGive(_lock);
@@ -82,7 +93,7 @@ size_t HttpAdapter::queueSize()
 
 void HttpAdapter::enqueueRequest(Http::CommandRequest *req)
 {
-  Log(DBG, "%senqueueRequest", _LOG_);
+  Log(DBG, "%senqueueRequest (before): open requests: %u", _LOG_, (unsigned)_queue.size());
   if (queueIsFull())
   {
     Log(DBG, "%senqueueRequest::reject::full", _LOG_);
@@ -93,6 +104,7 @@ void HttpAdapter::enqueueRequest(Http::CommandRequest *req)
 
   xSemaphoreTake(_lock, portMAX_DELAY);
   _queue.push_back(req);
+  Log(DBG, "%senqueueRequest (after): open requests: %u", _LOG_, (unsigned)_queue.size());
   xSemaphoreGive(_lock);
 }
 
@@ -105,7 +117,7 @@ bool HttpAdapter::queueIsFull()
 
 void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 {
-  Log(DBG, "%shandleCommandRequest ID %d", _LOG_, requestId);
+  Log(DBG, "%shandleCommandRequest ID %d, open requests: %u", _LOG_, requestId, (unsigned)_queue.size());
   Http::CommandRequest *req = new Http::CommandRequest(requestId++, _metrics, request, millis());
   if (req->done(millis()))
   {

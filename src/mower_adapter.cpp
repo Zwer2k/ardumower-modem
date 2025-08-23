@@ -596,6 +596,7 @@ void MowerAdapter::parseATWCommand(String line)
   // Schreibe die empfangenen Punkte ab Startindex (widx) in die Waypoint-Liste
   int writeIdx = widx;
 
+  bool overwriteLogged = false;
   for (size_t i = dataStart; i + 1 < values.size(); i += 2, writeIdx++) {
     float x = values[i];
     float y = values[i + 1];
@@ -605,7 +606,10 @@ void MowerAdapter::parseATWCommand(String line)
     if ((int)tempWaypointsBuffer.size() <= writeIdx) {
       tempWaypointsBuffer.resize(writeIdx + 1);
     } else {
-      Log(DBG, "%sparseATWCommand: Überschreibe bestehenden Punkt an writeIdx=%d", _LOG_, writeIdx);
+      if (!overwriteLogged) {
+        Log(DBG, "%sparseATWCommand: Überschreibe bestehenden Punkt an writeIdx=%d", _LOG_, writeIdx);
+        overwriteLogged = true;
+      }
     }
     tempWaypointsBuffer[writeIdx] = MapPoint{x, y};
   }

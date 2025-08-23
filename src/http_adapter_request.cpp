@@ -10,7 +10,7 @@ Http::CommandRequest::CommandRequest(
     AsyncWebServerRequest *_request,
     const uint32_t timeNow)
     : _metrics(metrics), id(_id), state(0), httpRequestBody(""), routerResponse(""), request(_request), _done(false), 
-      timeReceiveHttpRequest(timeNow) 
+      timeReceiveHttpRequest(timeNow)
 {
   parseHttpRequestBody();
 }
@@ -25,7 +25,7 @@ bool Http::CommandRequest::done(const uint32_t now)
 
 bool Http::CommandRequest::timeout(const uint32_t now)
 {
-  if (now - timeReceiveHttpRequest < 1000)
+  if (now - timeReceiveHttpRequest < 2000)
     return false;
 
   _done = true;
@@ -48,6 +48,8 @@ void Http::CommandRequest::readHttpRequestBody()
   if (request->_tempObject)
   {
     httpRequestBody = (char*)request->_tempObject;
+    free(request->_tempObject);
+    request->_tempObject = nullptr;
     return;
   }
 

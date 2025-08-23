@@ -7,6 +7,10 @@
 #include "domain.h"
 #include "http_common.h"
 #include "settings.h"
+#if __has_include("ticker.h")
+#include <ticker.h>
+extern Ticker deferred;
+#endif
 
 namespace ArduMower
 {

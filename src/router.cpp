@@ -98,8 +98,15 @@ void Router::loopReceive()
     lastRx = _millis();
 
     String line = downRx.update((char)c);
+
     if (line == "")
       continue;
+
+    // Nach Zeilenabschluss: Zusammenfassung ignorierter Zeichen loggen
+    String badChars = downRx.getAndClearBadChars();
+    if ((!down.available()) && (badChars.length() > 0)) {
+      Log(ERR, "Reader::update::bad-character-ignored: %s", badChars.c_str());
+    }
 
     if (expectResponse)
     {

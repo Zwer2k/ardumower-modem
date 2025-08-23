@@ -97,6 +97,7 @@ namespace ArduMower
         void sendMapArrayInChunks(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem *sendTo, int exclusionIdx = -1);
         AsyncWebSocket *_ws;
 
+        uint32_t lastVersionRequestTimestamp = 0;
         uint32_t oldDataTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastDataRequestTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastclientPing = 0;
@@ -111,7 +112,8 @@ namespace ArduMower
 
         void handleData(uint32_t clientId, char *data);
         std::map<uint32_t, UiSocketItem*> itemMap;  
-
+        
+        void versionRequestLoop();
         void stateRequestLoop();
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);

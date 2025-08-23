@@ -11,7 +11,7 @@
 using namespace ArduMower::Modem::Http;
 
 #if __has_include("ticker.h")
-static Ticker deferred;
+Ticker deferred;
 #endif
 
 UiAdapter::UiAdapter(Api::Api &api,

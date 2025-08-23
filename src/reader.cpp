@@ -16,18 +16,29 @@ String Reader::update(char c)
     if (buffer.length() > 0) buffer = buffer.substring(0, buffer.length() - 1);
     return String("");
   }
-  
+
   if (isPrintableCharacter(c))
     buffer += String(c);
-  else Log(ERR, "Reader::update::bad-character-ignored(c=0x%02x)", c);
+  else {
+    char buf[8];
+    snprintf(buf, sizeof(buf), "0x%02x ", (unsigned char)c);
+    badChars += String(buf);
+  }
 
   if (!buffer.endsWith(eol))
     return String("");
-  
+
   String result = buffer.substring(0, buffer.length() - eol.length());
   buffer = "";
 
   return result;
+
+}
+
+String Reader::getAndClearBadChars() {
+  String tmp = badChars;
+  badChars = "";
+  return tmp;
 }
 
 String Reader::peek()

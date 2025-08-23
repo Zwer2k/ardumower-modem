@@ -46,6 +46,7 @@ export function handleMapChunk(chunk: MapChunk) {
       buffer[chunk.startIndex + i] = chunk.points[i];
     }
     const filled = buffer.filter(Boolean).length;
+    console.log(`[MapChunkBuffer] ${chunk.pointType} buffer filled:`, filled, total);
     if (filled === total) {
       store.set([...buffer]);
     }
@@ -68,6 +69,7 @@ export function handleMapChunk(chunk: MapChunk) {
     return;
   }
 
+  console.log('[MapChunkBuffer] Handling chunk for pointType:', chunk.pointType);
   switch (chunk.pointType) {
     case MapPointType.Perimeter:
       [perimeterBuffer, perimeterTotal] = handleGeneric(perimeterBuffer, perimeterTotal, perimeterStore);

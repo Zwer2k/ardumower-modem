@@ -117,6 +117,8 @@ function mapRawToMap(mapRaw: any): Map {
 
 // Map aus Chunks zusammensetzen (alle Typen)
 function updateMapStore() {
+  console.log('[MapService] updateMapStore called');
+  
   let map: Map = {
     perimeter: { points: [] },
     exclusions: [],

@@ -6,6 +6,7 @@
 #define _LOG_ "UiSocket::"
 
 uint32_t clientPingInterval = 10000;
+uint32_t defaultVersionRequestInterval = 10000;
 uint32_t defaultStateUpdateInterval = 10000;
 
 using namespace ArduMower::Modem::Http;
@@ -129,6 +130,8 @@ void UiSocketHandler::loop()
   if (_ws->count() == 0)
     return;
 
+  versionRequestLoop();
+  yield();
   stateRequestLoop();
   yield();
   sendData(ResponseDataType::mowerState);
@@ -139,6 +142,18 @@ void UiSocketHandler::loop()
   yield();
   logToUiLoop();
   //pingClients();
+}
+
+void UiSocketHandler::versionRequestLoop()
+{
+  auto props = _source.props();
+  if (props.timestamp != 0)
+    return;
+
+  if (millis() - lastVersionRequestTimestamp > defaultVersionRequestInterval) {
+    _cmd.requestVersion();
+    lastVersionRequestTimestamp = millis();
+  }
 }
 
 void UiSocketHandler::stateRequestLoop()
@@ -193,8 +208,8 @@ void UiSocketHandler::sendMapInChunks(UiSocketItem *sendTo, bool force) {
 }
 
 void UiSocketHandler::sendMapArrayInChunks(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem *sendTo, int exclusionIdx) {
-  const size_t maxJsonSize = 1028;
-  const size_t blockSize = 20;
+  const size_t maxJsonSize = 1024;
+  const size_t blockSize = 15;
   size_t total = points.size();
   size_t idx = 0;
   while (idx < total) {
@@ -209,15 +224,24 @@ void UiSocketHandler::sendMapArrayInChunks(MapPointType pointType, const std::ve
       dataObj["exclusionIdx"] = exclusionIdx;
     }
     auto arr = dataObj.createNestedArray("points");
-    size_t measured = 0;
-    size_t blocks = 0;
-    for (; idx < total && (blocks < blockSize) && (measured < maxJsonSize - 128); idx++, blocks++) {
-      const auto &pt = points[idx];
+    size_t measured = measureJson(doc);
+    size_t pointsAdded = 0;
+    while (pointsAdded < blockSize && idx < total) {
+      // Probe: Punkt hinzufügen
       JsonObject obj = arr.createNestedObject();
-      pt.marshal(obj);
-      measured = measureJson(doc);
+      points[idx].marshal(obj);
+      size_t newMeasured = measureJson(doc);
+      if (newMeasured >= maxJsonSize - 128) {
+        // Zu groß, Punkt wieder entfernen und abbrechen
+        arr.remove(arr.size() - 1);
+        Log(DBG, "%s remove point", _LOG_);
+        break;
+      }
+      measured = newMeasured;
+      ++idx;
+      ++pointsAdded;
     }
-    Log(DBG, "%s MapChunk type=%d exclIdx=%d: measured=%u, points=%u, nextIdx=%u", _LOG_, (int)pointType, exclusionIdx, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx);
+    Log(DBG, "%s MapChunk type=%d exclIdx=%d: measured=%u, points=%u, nextIdx=%u, pointsAdded=%u", _LOG_, (int)pointType, exclusionIdx, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx, (unsigned)pointsAdded);
     String stateStr;
     serializeJson(doc, stateStr);
     if (sendTo != NULL) {

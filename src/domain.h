@@ -14,7 +14,7 @@ namespace ArduMower
       class Properties
       {
       public:
-        uint32_t timestamp;
+        uint32_t timestamp = 0;
         String firmware;
         String version;
 

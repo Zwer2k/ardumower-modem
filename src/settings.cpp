@@ -206,6 +206,7 @@ void Settings::stripSecrets(const JsonObject &o) const
   prometheus.stripSecrets(o[_t_prometheus]);
 }
 
+
 static bool validBluetoothAndDnsName(const String &name)
 {
   if (name == "")
