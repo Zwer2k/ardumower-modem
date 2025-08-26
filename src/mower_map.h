@@ -23,13 +23,24 @@ namespace ArduMower {
                     obj["Y"] = Y;                }
             };
 
+
             struct MowerMap {
                 uint32_t timestamp;
-        
+
                 std::vector<MapPoint> perimeter;
                 std::vector<std::vector<MapPoint>> exclusions;
                 std::vector<MapPoint> waypoints;
                 std::vector<MapPoint> dockpoints;
+
+                // Flag, ob aktuell ein Lesevorgang läuft (z.B. für Map-Transfer)
+                volatile bool reading = false;
+
+                // Setzt das reading-Flag (z.B. vor Map-Transfer)
+                void beginRead() volatile { reading = true; }
+                // Hebt das reading-Flag wieder auf
+                void endRead() volatile { reading = false; }
+                // Prüft, ob aktuell gelesen wird
+                bool isReading() const volatile { return reading; }
 
                 void marshal(JsonObject obj) const {
                     JsonArray perim = obj.createNestedArray("perimeter");
@@ -44,7 +55,6 @@ namespace ArduMower {
                     JsonArray docks = obj.createNestedArray("dockpoints");
                     for (const auto& p : dockpoints) p.marshal(docks.createNestedObject());
                     Log(DBG, "marshal map perimeter %d, exclusions %d, waypoints %d, dockpoints %d", perimeter.size(), exclusions.size(), waypoints.size(), dockpoints.size());
-
                 }
             };
 

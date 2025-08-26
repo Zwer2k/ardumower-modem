@@ -9,6 +9,7 @@
 #include "terminal.h"
 #endif
 #include "ota_mower_updater.h"
+#include <vector>
 
 namespace ArduMower
 {
@@ -63,6 +64,15 @@ namespace ArduMower
         ArduMower::Domain::Robot::StateSource &_source;
       };      
 
+      struct MapChunkSendState {
+        bool active = false;
+        UiSocketItem* sendTo = nullptr;
+        uint32_t timestamp = 0;
+        int phase = 0;
+        size_t exclusionIdx = 0;
+        size_t idx = 0;
+      };
+
       class UiSocketHandler
       {
       public:
@@ -93,8 +103,9 @@ namespace ArduMower
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
       private:
-        void sendMapInChunks(UiSocketItem *sendTo, bool force);
-        void sendMapArrayInChunks(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem *sendTo, int exclusionIdx = -1);
+        void startMapChunkSend(UiSocketItem* sendTo, bool force);
+        void processMapChunkSend();
+        bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem* sendTo, int exclusionIdx, size_t startIdx, size_t blockSize);
         AsyncWebSocket *_ws;
 
         uint32_t lastVersionRequestTimestamp = 0;
@@ -112,6 +123,7 @@ namespace ArduMower
 
         void handleData(uint32_t clientId, char *data);
         std::map<uint32_t, UiSocketItem*> itemMap;  
+        MapChunkSendState mapChunkSendState;
         
         void versionRequestLoop();
         void stateRequestLoop();

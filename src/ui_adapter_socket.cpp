@@ -50,9 +50,13 @@ bool UiSocketItem::sendText(String text)
 {
   // Bis zu 10 Versuche, jeweils 100ms Pause zwischen den Versuchen
   for (int attempt = 0; attempt < 10; ++attempt) {
-    if (_client->text(text.c_str())) {
-      return true;
-    }
+    try {
+      if (_client->text(text.c_str())) {
+        return true;
+      }
+    } catch (...) {
+      return false;
+    }    
     yield();
     vTaskDelay(100 / portTICK_PERIOD_MS); // 100ms warten
   }
@@ -136,21 +140,41 @@ void UiSocketHandler::begin()
 
 void UiSocketHandler::loop()
 {
-  versionRequestLoop();
-  
   if (_ws->count() == 0)
     return;
 
+  static byte loopCase = 0;
+  switch (loopCase)
+  {
+  case 0:
+    versionRequestLoop();
+    break;
+  case 1:
+    stateRequestLoop();
+    break;
+  case 2:
+    sendData(ResponseDataType::mowerState);
+    break;
+  case 3:
+    sendData(ResponseDataType::desiredState);
+    break;
+  case 4:
+    // Map-Chunk-Prozess
+    processMapChunkSend();
+    break;
+  case 5:
+    sendData(ResponseDataType::map);
+    break;
+  case 6:
+    logToUiLoop();
+    break;
+  default:
+    loopCase = 0;
+    break;
+  }
+  loopCase++;
   yield();
-  stateRequestLoop();
-  yield();
-  sendData(ResponseDataType::mowerState);
-  yield();
-  sendData(ResponseDataType::desiredState);
-  yield();
-  sendData(ResponseDataType::map);
-  yield();
-  logToUiLoop();
+  
   //pingClients();
 }
 
@@ -188,86 +212,173 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       sendData(dataType, sendTo, _source.desiredState(), force);
       break;
     case ResponseDataType::map:
-      sendMapInChunks(sendTo, force);
+      // Starte asynchronen Map-Chunk-Versand
+      startMapChunkSend(sendTo, force);
       break;
     default:
       break;
   }
-
 }
 
-// Hilfsfunktion: Map in Blöcke aufteilen und senden
-void UiSocketHandler::sendMapInChunks(UiSocketItem *sendTo, bool force) {
-  const auto &map = _source.mowerMap();
-  if ((map.timestamp == 0) || (!force && (map.timestamp == oldDataTimestamp[ResponseDataType::map]))) {
+// Starte asynchronen Map-Chunk-Versand
+void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
+  auto map = _source.mowerMap();
+  if ((map.timestamp == 0) || (!force && (map.timestamp == oldDataTimestamp[ResponseDataType::map])) || mapChunkSendState.active) {
     return;
   }
-  oldDataTimestamp[ResponseDataType::map] = map.timestamp;
+  map.beginRead();
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
-
-  // Perimeter
-  sendMapArrayInChunks(MapPointType::Perimeter, map.perimeter, map.timestamp, sendTo);
-  // Exclusions (mehrdimensional)
-  for (size_t i = 0; i < map.exclusions.size(); ++i) {
-    sendMapArrayInChunks(MapPointType::Exclusion, map.exclusions[i], map.timestamp, sendTo, static_cast<int>(i));
-  }
-  // Dockpoints
-  sendMapArrayInChunks(MapPointType::Dockpoints, map.dockpoints, map.timestamp, sendTo);
-  // Waypoints
-  sendMapArrayInChunks(MapPointType::Waypoints, map.waypoints, map.timestamp, sendTo);
+  mapChunkSendState.active = true;
+  mapChunkSendState.sendTo = sendTo;
+  mapChunkSendState.timestamp = map.timestamp;
+  mapChunkSendState.phase = 0;
+  mapChunkSendState.exclusionIdx = 0;
+  mapChunkSendState.idx = 0;
 }
 
-void UiSocketHandler::sendMapArrayInChunks(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem *sendTo, int exclusionIdx) {
-  const size_t maxJsonSize = 2048;
+// Pro loop() einen Chunk versenden
+void UiSocketHandler::processMapChunkSend() {
+  if (!mapChunkSendState.active) return;
+  auto map = _source.mowerMap();
   const size_t blockSize = 30;
-  size_t total = points.size();
-  size_t idx = 0;
-  while (idx < total) {
-    DynamicJsonDocument doc(maxJsonSize);
-    doc["type"] = ResponseDataType::map;
-    doc["timestamp"] = timestamp;
-    auto dataObj = doc.createNestedObject("data");
-    dataObj["startIndex"] = (int)idx;
-    dataObj["total"] = (int)total;
-    dataObj["pointType"] = static_cast<int>(pointType);
-    if (pointType == MapPointType::Exclusion) {
-      dataObj["exclusionIdx"] = exclusionIdx;
-    }
-    auto arr = dataObj.createNestedArray("points");
-    size_t measured = measureJson(doc);
-    size_t pointsAdded = 0;
-    while (pointsAdded < blockSize && idx < total) {
-      // Probe: Punkt hinzufügen
-      JsonObject obj = arr.createNestedObject();
-      points[idx].marshal(obj);
-      size_t newMeasured = measureJson(doc);
-      if (newMeasured >= maxJsonSize - 128) {
-        // Zu groß, Punkt wieder entfernen und abbrechen
-        arr.remove(arr.size() - 1);
-        Log(DBG, "%s remove point", _LOG_);
+  String stateStr;
+  bool chunkSent = false;
+
+  switch (mapChunkSendState.phase) {
+    case 0: // Perimeter
+      if (map.perimeter.size() > 0 && mapChunkSendState.idx < map.perimeter.size()) {
+        chunkSent = sendMapChunk(MapPointType::Perimeter, map.perimeter, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
+        if (!chunkSent) {
+          // Fehler beim Senden: Sendevorgang von vorne beginnen
+          mapChunkSendState.phase = 0;
+          mapChunkSendState.exclusionIdx = 0;
+          mapChunkSendState.idx = 0;
+          break;
+        }
+        mapChunkSendState.idx += blockSize;
+        if (mapChunkSendState.idx >= map.perimeter.size()) { mapChunkSendState.phase = 1; mapChunkSendState.idx = 0; }
         break;
-      }
-      measured = newMeasured;
-      ++idx;
-      ++pointsAdded;
-    }
-    Log(DBG, "%s MapChunk type=%d exclIdx=%d: measured=%u, points=%u, nextIdx=%u, pointsAdded=%u", _LOG_, (int)pointType, exclusionIdx, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx, (unsigned)pointsAdded);
-    String stateStr;
-    serializeJson(doc, stateStr);
-    if (sendTo != NULL) {
-      if (!sendTo->sendText(stateStr)) {
-        Log(ERR, "%s sendData failed", _LOG_);
-        _ws->cleanupClients();
-      }
-    } else {
-      if (!sendTextAllWithRetry(_ws, stateStr)) {
-        Log(ERR, "%s sendData failed", _LOG_);
-        _ws->cleanupClients();
-      }
-    }
-    yield();
-    vTaskDelay(50);
+      } else { mapChunkSendState.phase = 1; mapChunkSendState.idx = 0; }
+      // fallthrough
+    case 1: // Exclusions
+      if (map.exclusions.size() > 0 && mapChunkSendState.exclusionIdx < map.exclusions.size()) {
+        const auto& excl = map.exclusions[mapChunkSendState.exclusionIdx];
+        if (excl.size() > 0 && mapChunkSendState.idx < excl.size()) {
+          chunkSent = sendMapChunk(MapPointType::Exclusion, excl, mapChunkSendState.timestamp, mapChunkSendState.sendTo, (int)mapChunkSendState.exclusionIdx, mapChunkSendState.idx, blockSize);
+          if (!chunkSent) {
+            mapChunkSendState.phase = 0;
+            mapChunkSendState.exclusionIdx = 0;
+            mapChunkSendState.idx = 0;
+            break;
+          }
+          mapChunkSendState.idx += blockSize;
+          if (mapChunkSendState.idx >= excl.size()) { mapChunkSendState.exclusionIdx++; mapChunkSendState.idx = 0; }
+          break;
+        } else { mapChunkSendState.exclusionIdx++; mapChunkSendState.idx = 0; }
+        break;
+      } else { mapChunkSendState.phase = 2; mapChunkSendState.exclusionIdx = 0; mapChunkSendState.idx = 0; }
+      // fallthrough
+    case 2: // Dockpoints
+      if (map.dockpoints.size() > 0 && mapChunkSendState.idx < map.dockpoints.size()) {
+        chunkSent = sendMapChunk(MapPointType::Dockpoints, map.dockpoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
+        if (!chunkSent) {
+          mapChunkSendState.phase = 0;
+          mapChunkSendState.exclusionIdx = 0;
+          mapChunkSendState.idx = 0;
+          break;
+        }
+        mapChunkSendState.idx += blockSize;
+        if (mapChunkSendState.idx >= map.dockpoints.size()) { mapChunkSendState.phase = 3; mapChunkSendState.idx = 0; }
+        break;
+      } else { mapChunkSendState.phase = 3; mapChunkSendState.idx = 0; }
+      // fallthrough
+    case 3: // Waypoints
+      if (map.waypoints.size() > 0 && mapChunkSendState.idx < map.waypoints.size()) {
+        chunkSent = sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
+        if (!chunkSent) {
+          mapChunkSendState.phase = 0;
+          mapChunkSendState.exclusionIdx = 0;
+          mapChunkSendState.idx = 0;
+          break;
+        }
+        mapChunkSendState.idx += blockSize;
+        if (mapChunkSendState.idx >= map.waypoints.size()) { mapChunkSendState.phase = 4; mapChunkSendState.idx = 0; }
+        break;
+      } else { mapChunkSendState.phase = 4; mapChunkSendState.idx = 0; }
+      // fallthrough
+    case 4:
+      mapChunkSendState.active = false;
+      oldDataTimestamp[ResponseDataType::map] = map.timestamp;
+      map.endRead();
+      break;
   }
+}
+
+// Hilfsfunktion: Sende einen Chunk eines MapPoint-Vektors
+bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem* sendTo, int exclusionIdx, size_t startIdx, size_t blockSize) {
+  const size_t maxJsonSize = 2048;
+  size_t total = points.size();
+  if (startIdx >= total) return false;
+  DynamicJsonDocument doc(maxJsonSize);
+  doc["type"] = ResponseDataType::map;
+  doc["timestamp"] = timestamp;
+  auto dataObj = doc.createNestedObject("data");
+  dataObj["startIndex"] = (int)startIdx;
+  dataObj["total"] = (int)total;
+  dataObj["pointType"] = static_cast<int>(pointType);
+  if (pointType == MapPointType::Exclusion) {
+    dataObj["exclusionIdx"] = exclusionIdx;
+  }
+  auto arr = dataObj.createNestedArray("points");
+  size_t measured = measureJson(doc);
+  size_t pointsAdded = 0;
+  size_t idx = startIdx;
+  while (pointsAdded < blockSize && idx < total) {
+    JsonObject obj = arr.createNestedObject();
+    bool marshalOk = true;
+    try {
+      points[idx].marshal(obj);
+    } catch (...) {
+      Log(ERR, "%s marshal exception at pointType=%d idx=%u", _LOG_, (int)pointType, (unsigned)idx);
+      marshalOk = false;
+    }
+    if (!marshalOk) {
+      arr.remove(arr.size() - 1);
+      ++idx;
+      continue;
+    }
+    size_t newMeasured = measureJson(doc);
+    if (newMeasured >= maxJsonSize - 128) {
+      arr.remove(arr.size() - 1);
+      Log(DBG, "%s remove point", _LOG_);
+      break;
+    }
+    measured = newMeasured;
+    ++idx;
+    ++pointsAdded;
+  }
+  Log(DBG, "%s MapChunk type=%d exclIdx=%d: measured=%u, points=%u, nextIdx=%u, pointsAdded=%u", _LOG_, (int)pointType, exclusionIdx, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx, (unsigned)pointsAdded);
+  String stateStr;
+  try {
+    serializeJson(doc, stateStr);
+  } catch (...) {
+    Log(ERR, "%s serializeJson failed", _LOG_);
+    return false;
+  }
+  if (sendTo != NULL) {
+    if (!sendTo->sendText(stateStr)) {
+      Log(ERR, "%s sendData failed", _LOG_);
+      _ws->cleanupClients();
+      return false;
+    }
+  } else {
+    if (!sendTextAllWithRetry(_ws, stateStr)) {
+      Log(ERR, "%s sendData failed", _LOG_);
+      _ws->cleanupClients();
+      return false;
+    }
+  }
+  return true;
 }
 
 void UiSocketHandler::logToUiLoop()
@@ -321,9 +432,13 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 
 bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket* ws, const String& text) {
   for (int attempt = 0; attempt < 10; ++attempt) {
-    auto status = ws->textAll(text);
-    if (status == AsyncWebSocket::ENQUEUED) {
-      return true;
+    try {
+      auto status = ws->textAll(text);
+      if (status == AsyncWebSocket::ENQUEUED) {
+        return true;
+      }
+    } catch (...) {
+      return false;
     }
     yield();
     vTaskDelay(100 / portTICK_PERIOD_MS);

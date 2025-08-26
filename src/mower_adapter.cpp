@@ -122,6 +122,15 @@ void MowerAdapter::parseArduMowerCommand(String line)
 // AT-N Kommando: AT-N,#perimeter,#exclusions,#dockpoints,#waypoints,#free
 void MowerAdapter::parseATNCommand(String line) {
   Log(DBG, "%sparseATNCommand (map end)", _LOG_);
+  // Warte, bis kein Lesevorgang auf _map läuft
+  int waitCount = 0;
+  while (_map.isReading()) {
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    waitCount++;
+    if (waitCount % 100 == 0) {
+      Log(DBG, "%sparseATNCommand: warte auf Ende des Map-Lesevorgangs... (%d ms)", _LOG_, waitCount * 10);
+    }
+  }
   // Entferne "AT-N," falls vorhanden
   if (line.startsWith("AT+N,")) line = line.substring(5);
   std::vector<int> counts;
