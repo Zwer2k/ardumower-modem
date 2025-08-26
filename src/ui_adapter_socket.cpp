@@ -1,3 +1,4 @@
+#include <functional>
 #include "ui_adapter_socket.h"
 #include "json.h"
 #include "log.h"
@@ -47,7 +48,15 @@ UiSocketItem::~UiSocketItem()
 
 bool UiSocketItem::sendText(String text)
 {
-  return _client->text(text.c_str());
+  // Bis zu 10 Versuche, jeweils 100ms Pause zwischen den Versuchen
+  for (int attempt = 0; attempt < 10; ++attempt) {
+    if (_client->text(text.c_str())) {
+      return true;
+    }
+    yield();
+    vTaskDelay(100 / portTICK_PERIOD_MS); // 100ms warten
+  }
+  return false;
 }
 
 void UiSocketItem::ping()
@@ -127,10 +136,11 @@ void UiSocketHandler::begin()
 
 void UiSocketHandler::loop()
 {
+  versionRequestLoop();
+  
   if (_ws->count() == 0)
     return;
 
-  versionRequestLoop();
   yield();
   stateRequestLoop();
   yield();
@@ -208,8 +218,8 @@ void UiSocketHandler::sendMapInChunks(UiSocketItem *sendTo, bool force) {
 }
 
 void UiSocketHandler::sendMapArrayInChunks(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem *sendTo, int exclusionIdx) {
-  const size_t maxJsonSize = 1024;
-  const size_t blockSize = 15;
+  const size_t maxJsonSize = 2048;
+  const size_t blockSize = 30;
   size_t total = points.size();
   size_t idx = 0;
   while (idx < total) {
@@ -250,13 +260,13 @@ void UiSocketHandler::sendMapArrayInChunks(MapPointType pointType, const std::ve
         _ws->cleanupClients();
       }
     } else {
-      auto status = _ws->textAll(stateStr);
-      if (status != AsyncWebSocket::ENQUEUED) {
+      if (!sendTextAllWithRetry(_ws, stateStr)) {
         Log(ERR, "%s sendData failed", _LOG_);
         _ws->cleanupClients();
       }
     }
     yield();
+    vTaskDelay(50);
   }
 }
 
@@ -302,12 +312,23 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   if (sendTo != NULL) {
     sendTo->sendText(stateStr);
   } else {
-    auto status = _ws->textAll(stateStr);    
-    if (status != AsyncWebSocket::ENQUEUED) {
+    if (!sendTextAllWithRetry(_ws, stateStr)) {
       Log(DBG, "%ssendData cleanup old clients\n", _LOG_); 
       _ws->cleanupClients(); // cleanup disconnected clients
     }
   }
+}
+
+bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket* ws, const String& text) {
+  for (int attempt = 0; attempt < 10; ++attempt) {
+    auto status = ws->textAll(text);
+    if (status == AsyncWebSocket::ENQUEUED) {
+      return true;
+    }
+    yield();
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+  return false;
 }
 
 void UiSocketHandler::pingClients()

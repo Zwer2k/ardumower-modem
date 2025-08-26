@@ -117,6 +117,7 @@ namespace ArduMower
         void stateRequestLoop();
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
+        bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);
         void pingClients();
 #ifdef MOWER_TERMINAL
         void sendTerminalLine(String line);
