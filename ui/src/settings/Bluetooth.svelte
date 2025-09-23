@@ -5,12 +5,16 @@
 import BluetoothClean from "./BluetoothClean.svelte";
   import Group from "./Group.svelte";
 
+  import { tick } from 'svelte';
+
   export let settings: Settings.Bluetooth;
   export let original: Settings.Bluetooth;
 
   export let ps4ControllerSettings: Settings.PS4Controller;
 
-  const enableChange = (ev: ChangeEventValue) => {
+  const enableChange = async (ev: ChangeEventValue) => {
+    // Warte einen Tick, damit die Bluetooth-Transition abgeschlossen ist
+    await tick();
     ps4ControllerSettings.enabled = false;
   }
 </script>
