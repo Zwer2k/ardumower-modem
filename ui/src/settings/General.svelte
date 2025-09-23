@@ -2,13 +2,12 @@
   import type { Settings } from "../model";
   import CheckboxSetting from "../widget/CheckboxSetting.svelte";
   import TextSetting from "../widget/TextSetting.svelte";
-  import Group from "./Group.svelte";
 
   export let settings: Settings.General;
   export let original: Settings.General;
 </script>
 
-<Group title="General" {settings} {original}>
+<div class="general-settings">
   <TextSetting
     label="Device name"
     key="general.name"
@@ -31,4 +30,12 @@
     bind:value={settings.password}
     bind:original={original.password}
   />
-</Group>
+</div>
+
+<style lang="scss">
+  .general-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+</style>

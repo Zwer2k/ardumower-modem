@@ -3,7 +3,6 @@
   import type { Option } from "../model/ui";
   import SelectSetting from "../widget/SelectSetting.svelte";
   import TextSetting from "../widget/TextSetting.svelte";
-  import Group from "./Group.svelte";
 
   export let settings: Settings.WiFi;
   export let original: Settings.WiFi;
@@ -15,7 +14,7 @@
   ];
 </script>
 
-<Group title="WiFi" {settings} {original}>
+<div class="wifi-settings">
   <SelectSetting
     label="Mode"
     key="wifi.mode"
@@ -78,4 +77,18 @@
       bind:original={original.ap_psk}
     />
   {/if}
-</Group>
+</div>
+
+<style lang="scss">
+  .wifi-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  p {
+    color: var(--cds-text-secondary);
+    margin: 0;
+    font-size: 0.875rem;
+  }
+</style>

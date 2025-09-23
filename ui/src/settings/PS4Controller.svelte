@@ -8,7 +8,6 @@
   import SelectSetting from "../widget/SelectSetting.svelte";
   import TextSetting from "../widget/TextSetting.svelte";
   import BluetoothClean from "./BluetoothClean.svelte";
-  import Group from "./Group.svelte";
 
   export let settings: Settings.PS4Controller;
   export let original: Settings.PS4Controller;
@@ -32,7 +31,7 @@
   }
 </script>
 
-<Group title="PS4 Controller" {settings} {original}>
+<div class="ps4controller-settings">
   <CheckboxSetting
     label="Use PS4 controller to control the mower"
     key="ps4Controller.enabled"
@@ -40,37 +39,56 @@
     bind:original={original.enabled}
   />
 
-  <svelte:fragment slot="enabled">
-    <SelectSetting
-      label="Pairing Mode (You can use the sixaxispairer tool to read the PS4 MAC address from the cotroller or overwrite it with ESP32 BT MAC)"
-      key="ps4Controller.use_ps4_mac"
-      bind:value={use_ps4_mac}
-      bind:original={use_ps4_mac_original}
-      options={pairingModes}
-      on:change={(e) => usePS4MacChange(e.detail)}
-    />
-
-    {#if settings.use_ps4_mac}
-      <TextSetting
-        label="PS4 BT MAC address (When switching on the Controller, the PS4 should be far enough away)"
-        key="ps4Controller.ps4MAC"
-        placeholder="PS4 Bluetooth MAC Address"
-        bind:value={settings.ps4_mac}
-        bind:original={original.ps4_mac}
+  {#if settings.enabled}
+    <div class="enabled-settings">
+      <SelectSetting
+        label="Pairing Mode (You can use the sixaxispairer tool to read the PS4 MAC address from the cotroller or overwrite it with ESP32 BT MAC)"
+        key="ps4Controller.use_ps4_mac"
+        bind:value={use_ps4_mac}
+        bind:original={use_ps4_mac_original}
+        options={pairingModes}
+        on:change={(e) => usePS4MacChange(e.detail)}
       />
-    {:else}
-      <TextSetting
-        label="ESP32 BT MAC address (Configure PS4 control with these addresses. You can use the Sixaxispairer tool to do this)"
-        key="ps4Controller.ps4MAC"
-        readonly={true}
-        bind:value={bt_mac}
-        bind:original={bt_mac}
-      />
-    {/if}
 
-    <BluetoothClean
-      bind:bluetoothSettings={bluetoothSettings}
-      bind:ps4ControllerSettings={settings}
-    />
-  </svelte:fragment>
-</Group>
+      {#if settings.use_ps4_mac}
+        <TextSetting
+          label="PS4 BT MAC address (When switching on the Controller, the PS4 should be far enough away)"
+          key="ps4Controller.ps4MAC"
+          placeholder="PS4 Bluetooth MAC Address"
+          bind:value={settings.ps4_mac}
+          bind:original={original.ps4_mac}
+        />
+      {:else}
+        <TextSetting
+          label="ESP32 BT MAC address (Configure PS4 control with these addresses. You can use the Sixaxispairer tool to do this)"
+          key="ps4Controller.ps4MAC"
+          readonly={true}
+          bind:value={bt_mac}
+          bind:original={bt_mac}
+        />
+      {/if}
+
+      <BluetoothClean
+        bind:bluetoothSettings={bluetoothSettings}
+        bind:ps4ControllerSettings={settings}
+      />
+    </div>
+  {/if}
+</div>
+
+<style lang="scss">
+  .ps4controller-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .enabled-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-left: 1.5rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--cds-border-subtle-01);
+  }
+</style>

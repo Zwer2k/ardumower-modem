@@ -345,6 +345,14 @@ bool MqttAdapter::publishWithSubtopics(JsonObject& data, const String baseTopic)
       value = pair.value().as<const char*>();
     } else if (pair.value().is<String>()) {
       value = pair.value().as<String>();
+    } else if (pair.value().is<long>()) {
+      value = String(pair.value().as<long>());
+    } else if (pair.value().is<unsigned int>()) {
+      value = String(pair.value().as<unsigned int>());
+    } else if (pair.value().is<unsigned long>()) {
+      value = String(pair.value().as<unsigned long>());
+    } else if (pair.value().isNull()) {
+      value = "null";
     } else if (pair.value().is<JsonObject>()) {
       // Rekursiver Aufruf für verschachtelte Objekte (optional, siehe Hinweise)
       // publishWithSubtopics(pair.value().as<JsonObject>(), subTopic.c_str());
@@ -366,8 +374,19 @@ bool MqttAdapter::publishWithSubtopics(JsonObject& data, const String baseTopic)
       continue;
 
     } else {
-      Log(WARN, "%spublishWithSubtopics: unknown datatype: ", _LOG_, pair.key().c_str());
-      return false;
+      // Fallback: versuche den Wert direkt als String zu serialisieren
+      String serializedValue;
+      if (serializeJson(pair.value(), serializedValue) > 0) {
+        // Entferne die Anführungszeichen, falls es ein quoted String ist
+        if (serializedValue.startsWith("\"") && serializedValue.endsWith("\"")) {
+          value = serializedValue.substring(1, serializedValue.length() - 1);
+        } else {
+          value = serializedValue;
+        }
+      } else {
+        Log(WARN, "%spublishWithSubtopics: unknown datatype for key: %s", _LOG_, pair.key().c_str());
+        return false;
+      }
     }
 
     if (!client.publish(subTopic.c_str(), value.c_str())) {

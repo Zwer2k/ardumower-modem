@@ -8,7 +8,6 @@
     Dropdown
   } from "carbon-components-svelte";
   import IconUpload from "carbon-icons-svelte/lib/CloudUpload.svelte";
-  import Group from "./Group.svelte";
   import {InfoStore} from "../stores/info"
   import { toastStore } from '../stores/toast';
   import FirmwareUpload from '../firmware/FirmwareUpload.svelte'
@@ -65,7 +64,7 @@
 </script>
 
 <FirmwareUpload bind:open={dialogFwOpen} />
-<Group title="Firmware" open={true}>
+<div class="firmware-settings">
   {#if $InfoStore}
     <StructuredList>
       <StructuredListBody>
@@ -104,4 +103,12 @@
       {/if}
     </div>
   </div>
-</Group>
+</div>
+
+<style lang="scss">
+  .firmware-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+</style>
