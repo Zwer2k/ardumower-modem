@@ -27,9 +27,10 @@
         socketService.clearConsoleLines();
     }
 
-    $: {
-        if (browser && $socketStore.connected && consoleCmd) {
-            socketService.sendConsoleCommand(consoleCmd);
+    function handleSendCommand(event: CustomEvent<string>) {
+        const cmd = event.detail;
+        if (cmd && browser && $socketStore.connected) {
+            socketService.sendConsoleCommand(cmd);
         }
     }
 </script>
@@ -39,7 +40,7 @@
         <div class="terminal-wrapper">
             <Terminal 
                 consoleLines={$socketStore.consoleLines} 
-                bind:sendCmd={consoleCmd}
+                on:sendCommand={handleSendCommand}
                 onOutputDone={handleOutputDone}
             />
         </div>

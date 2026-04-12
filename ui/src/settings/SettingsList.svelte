@@ -7,6 +7,7 @@
   import MqttSettings from "./Mqtt.svelte";
   import PrometheusSettings from "./Prometheus.svelte";
   import Firmware from "./Firmware.svelte";
+  import FirmwareUpload from "../firmware/FirmwareUpload.svelte";
   import { FrontendSettings as settings } from "../stores/frontend";
   import { BackendSettings as original } from "../stores/backend";
   import { InfoStore as info } from "../stores/info";
@@ -18,6 +19,9 @@
   // Verwalte Accordion-Zustand selbst - ohne Carbon Accordion
   let openSections = new Set(['general', 'web', 'wifi', 'bluetooth', 'mqtt', 'prometheus', 'firmware']);
   
+  // Modal state
+  let dialogFwOpen = false;
+
   function toggleSection(sectionId: string) {
     if (openSections.has(sectionId)) {
       openSections.delete(sectionId);
@@ -26,9 +30,14 @@
     }
     openSections = new Set(openSections); // Trigger reactivity
   }
+
+  function handleUploadFirmware() {
+    dialogFwOpen = true;
+  }
 </script>
 
 <Reload/>
+<FirmwareUpload bind:open={dialogFwOpen} />
 {#if $settings}
   <div class="settings">
     <div class="custom-accordion">
@@ -191,7 +200,7 @@
         </button>
         {#if openSections.has('firmware')}
           <div class="accordion-content">
-            <Firmware />
+            <Firmware on:uploadFirmware={handleUploadFirmware} />
           </div>
         {/if}
       </div>

@@ -10,13 +10,14 @@
   import IconUpload from "carbon-icons-svelte/lib/CloudUpload.svelte";
   import {InfoStore} from "../stores/info"
   import { toastStore } from '../stores/toast';
-  import FirmwareUpload from '../firmware/FirmwareUpload.svelte'
+  import { createEventDispatcher } from 'svelte';
 
-  let dialogFwOpen = false;
+  const dispatch = createEventDispatcher<{ uploadFirmware: void }>();
+
   let showRestartMenu = false;
 
   function uploadFw() {
-    dialogFwOpen = true;
+    dispatch('uploadFirmware');
   }
 
   type RestartOption = { id: string; label: string; endpoint: string; text: string };
@@ -63,7 +64,6 @@
   }
 </script>
 
-<FirmwareUpload bind:open={dialogFwOpen} />
 <div class="firmware-settings">
   {#if $InfoStore}
     <StructuredList>

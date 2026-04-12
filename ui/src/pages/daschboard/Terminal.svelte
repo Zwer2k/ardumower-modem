@@ -2,17 +2,18 @@
   
 
 <script lang="ts">
+    import { createEventDispatcher } from 'svelte';
     import type { ConsoleLine } from '../../model';
     import VirtualList from '../../widget/VirtualList.svelte';
-      import { Toggle } from 'carbon-components-svelte';
+    import { Toggle } from 'carbon-components-svelte';
+    
+    const dispatch = createEventDispatcher<{ sendCommand: string }>();
     
     let  { 
       consoleLines,
-      sendCmd = $bindable(),
       onOutputDone 
     }: { 
       consoleLines: ConsoleLine[],
-      sendCmd: string,
       onOutputDone?: () => void
     } = $props();  
   
@@ -81,8 +82,7 @@
           output = [];
           return;
         default:
-          sendCmd = '';
-          sendCmd = cmd;
+          dispatch('sendCommand', cmd);
           break;
       }
     }
@@ -148,9 +148,6 @@
       background-color: #1a1a1a;
       color: #eee;
       white-space: pre-wrap;
-      .autoscroll-toggle {
-        padding-top: 0 !important;
-      }
       position: relative;
 
       .list-holder {
@@ -167,36 +164,7 @@
       border-top: 1px solid #333;
       background-color: #1a1a1a;
     }
-    .terminal-input-center {
-      display: none;
-    }
-    .autoscroll-label {
-      color: #eee;
-      font-size: 0.95em;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      height: 100%;
-    }
-    .terminal-input-center {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-    }
-    .terminal-input-actions {
-      display: flex;
-      align-items: center;
-      margin-left: auto;
-      gap: 8px;
-      margin-top: 0 !important;
-      height: 40px;
-      min-height: 40px;
-    }
-    .autoscroll-toggle {
-      margin-top: 0 !important;
-      align-self: center;
-    }
+    
     .autoscroll-label {
       color: #eee;
       font-size: 0.95em;
@@ -206,6 +174,16 @@
       height: 32px;
       display: flex;
       align-items: center;
+    }
+    
+    .terminal-input-actions {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+      gap: 8px;
+      margin-top: 0 !important;
+      height: 40px;
+      min-height: 40px;
     }
   
     .prompt {
@@ -230,8 +208,12 @@
     }
 
     .console-line .text {
-  line-break: anywhere;
-}
+      white-space: pre-wrap;
+      word-break: break-word;
+      tab-size: 4;
+      -moz-tab-size: 4;
+      font-family: monospace;
+    }
 
 /* Carbon Toggle vertical alignment fix */
 :global(.bx--toggle__switch) {

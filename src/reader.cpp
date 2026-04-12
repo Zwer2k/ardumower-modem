@@ -48,5 +48,5 @@ String Reader::peek()
 
 bool isPrintableCharacter(char c)
 {
-  return (c >= 0x20 && c < 0x7f) || c == '\r' || c == '\n';
+  return (c >= 0x20 && c < 0x7f) || c == '\r' || c == '\n' || c == '\t';
 }

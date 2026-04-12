@@ -77,11 +77,4 @@
         pointer-events: auto;
     }
 
-    .loading-state {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        color: #6f6f6f;
-    }
 </style>
