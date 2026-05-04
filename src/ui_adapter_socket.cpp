@@ -144,35 +144,32 @@ void UiSocketHandler::loop()
     return;
 
   static byte loopCase = 0;
-  switch (loopCase)
-  {
-  case 0:
-    versionRequestLoop();
-    break;
-  case 1:
-    stateRequestLoop();
-    break;
-  case 2:
-    sendData(ResponseDataType::mowerState);
-    break;
-  case 3:
-    sendData(ResponseDataType::desiredState);
-    break;
-  case 4:
-    // Map-Chunk-Prozess
-    processMapChunkSend();
-    break;
-  case 5:
-    sendData(ResponseDataType::map);
-    break;
-  case 6:
-    logToUiLoop();
-    break;
-  default:
-    loopCase = 0;
-    break;
-  }
-  loopCase++;
+    switch (loopCase)
+    {
+    case 0:
+      versionRequestLoop();
+      break;
+    case 1:
+      stateRequestLoop();
+      break;
+    case 2:
+      sendData(ResponseDataType::mowerState);
+      break;
+    case 3:
+      sendData(ResponseDataType::desiredState);
+      break;
+    case 4:
+      processMapChunkSend();
+      break;
+    case 5:
+      sendData(ResponseDataType::map);
+      break;
+    case 6:
+      logToUiLoop();
+      break;
+    }
+    loopCase++;
+    if (loopCase > 6) loopCase = 0;
   yield();
   
   //pingClients();
@@ -226,7 +223,8 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   if ((map.timestamp == 0) || (!force && (map.timestamp == oldDataTimestamp[ResponseDataType::map])) || mapChunkSendState.active) {
     return;
   }
-  map.beginRead();
+  // Snapshot einmalig speichern - verhindert Race Condition waehrend Chunk-Versand
+  mapChunkSendState.snapshot = map;
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
   mapChunkSendState.active = true;
   mapChunkSendState.sendTo = sendTo;
@@ -236,12 +234,12 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   mapChunkSendState.idx = 0;
 }
 
-// Pro loop() einen Chunk versenden
+// Pro loop() einen Chunk versenden – Snapshot aus mapChunkSendState verwenden
 void UiSocketHandler::processMapChunkSend() {
   if (!mapChunkSendState.active) return;
-  auto map = _source.mowerMap();
+  // Snapshot verwenden: einmalig beim Start gespeichert, bleibt konsistent
+  auto& map = mapChunkSendState.snapshot;
   const size_t blockSize = 30;
-  String stateStr;
   bool chunkSent = false;
 
   switch (mapChunkSendState.phase) {

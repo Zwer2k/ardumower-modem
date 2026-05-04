@@ -86,9 +86,25 @@ void Http::CommandRequest::onRouterResponse(String response)
 {
   Log(DBG, "Http::CommandRequest::onRouterResponse [%s]", response.c_str());
 
-  response += "\r\n";
   _done = true;
 
+  if (response.length() == 0)
+  {
+    Log(DBG, "Http::CommandRequest::onRouterResponse::empty-response");
+    reject(504, "timeout");
+    return;
+  }
+
+  // Short acknowledgment (like 'P', 'C', 'M', etc.) - just send OK
+  if (response.length() <= 3) {
+    Log(DBG, "Http::CommandRequest::onRouterResponse::ack-response(%s)", response.c_str());
+    auto request = serialRequest.lock();
+    respondWithCors(request.get(), 200, "text/html; charset=UTF-8", "OK\r\n");
+    _metrics->countStatusCode(200);
+    return;
+  }
+
+  response += "\r\n";
   auto request = serialRequest.lock();
   respondWithCors(request.get(), 200, "text/html; charset=UTF-8", response);
   _metrics->countStatusCode(200);

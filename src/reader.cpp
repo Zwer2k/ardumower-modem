@@ -17,12 +17,15 @@ String Reader::update(char c)
     return String("");
   }
 
-  if (isPrintableCharacter(c))
+  // Accept all characters (including encrypted data)
+  // Only filter out null bytes and line endings (handled separately)
+  if (c == '\0') {
+    // Ignore null bytes
+  } else if (c == '\r' || c == '\n') {
+    // Line endings - check if we have a complete line
     buffer += String(c);
-  else {
-    char buf[8];
-    snprintf(buf, sizeof(buf), "0x%02x ", (unsigned char)c);
-    badChars += String(buf);
+  } else {
+    buffer += String(c);
   }
 
   if (!buffer.endsWith(eol))

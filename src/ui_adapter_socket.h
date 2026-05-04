@@ -55,7 +55,6 @@ namespace ArduMower
         bool sendText(String text);
         void ping();
         AwsClientStatus status();
-
         ~UiSocketItem();
       
       private:
@@ -71,6 +70,7 @@ namespace ArduMower
         int phase = 0;
         size_t exclusionIdx = 0;
         size_t idx = 0;
+        ArduMower::Domain::Robot::MowerMap snapshot;  // Einmalige Kopie der Map beim Start
       };
 
       class UiSocketHandler

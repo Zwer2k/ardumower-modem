@@ -33,14 +33,14 @@ namespace ArduMower {
                 std::vector<MapPoint> dockpoints;
 
                 // Flag, ob aktuell ein Lesevorgang läuft (z.B. für Map-Transfer)
-                volatile bool reading = false;
+                bool reading = false;
 
                 // Setzt das reading-Flag (z.B. vor Map-Transfer)
-                void beginRead() volatile { reading = true; }
+                void beginRead() { reading = true; }
                 // Hebt das reading-Flag wieder auf
-                void endRead() volatile { reading = false; }
+                void endRead() { reading = false; }
                 // Prüft, ob aktuell gelesen wird
-                bool isReading() const volatile { return reading; }
+                bool isReading() const { return reading; }
 
                 void marshal(JsonObject obj) const {
                     JsonArray perim = obj.createNestedArray("perimeter");
