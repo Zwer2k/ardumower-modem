@@ -6,9 +6,10 @@
 
 <div class="dashboard-content">
     {#if browser && $socketStore.valueDescriptions != null}
-        <StateCard 
-            state={$socketStore.state} 
-            desiredState={$socketStore.desiredState} 
+        <StateCard
+            state={$socketStore.state}
+            stats={$socketStore.stats}
+            desiredState={$socketStore.desiredState}
             valueDescriptions={$socketStore.valueDescriptions}
         />
     {/if}
@@ -22,8 +23,8 @@
         margin: 0;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
-        
+        overflow-y: auto;
+
         /* Abzug der Header-Höhe */
         padding-top: 48px; /* Standard Carbon Header Höhe */
     }

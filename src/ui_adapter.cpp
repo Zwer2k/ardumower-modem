@@ -43,6 +43,10 @@ void UiAdapter::begin()
   _server.on("/api/modem/bluetooth/reset", HTTP_POST, std::bind(&UiAdapter::handleApiResetModemBluetoothPairings, this, std::placeholders::_1));
 
   _server.on("/api/robot/desired_state", HTTP_GET, std::bind(&UiAdapter::handleApiGetRobotDesiredState, this, std::placeholders::_1));
+
+  auto commandHandler = new AsyncCallbackJsonWebHandler("/api/robot/command", std::bind(&UiAdapter::handleApiPostRobotCommand, this, std::placeholders::_1, std::placeholders::_2));
+  commandHandler->setMethod(HTTP_POST);
+  _server.addHandler(commandHandler);
  
   _server.onNotFound(std::bind(&UiAdapter::handleRequest, this, std::placeholders::_1));
 }
@@ -222,6 +226,55 @@ void UiAdapter::handleApiResetModemBluetoothPairings(AsyncWebServerRequest *requ
   #if __has_include("ticker.h")
     deferred.once_ms(500, &UiAdapter::delayedRestart, this);
   #endif
+}
+
+void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVariant &json)
+{
+  if (!auth(request))
+    return;
+
+  String action = json.as<JsonObject>()["action"] | "";
+  bool ok = false;
+
+  if (action == "start")
+    ok = _cmd.start();
+  else if (action == "stop")
+    ok = _cmd.stop();
+  else if (action == "dock")
+    ok = _cmd.dock();
+  else if (action == "reboot")
+    ok = _cmd.reboot();
+  else if (action == "poweroff")
+    ok = _cmd.powerOff();
+  else if (action == "skipWaypoint")
+    ok = _cmd.skipWaypoint();
+  else if (action == "requestStats")
+    ok = _cmd.requestStats();
+  else if (action == "requestStatus")
+    ok = _cmd.requestStatus();
+  else if (action == "mowerEnabled")
+    ok = _cmd.mowerEnabled(json.as<JsonObject>()["enabled"] | true);
+  else if (action == "sonarEnabled")
+    ok = _cmd.sonarEnabled(json.as<JsonObject>()["enabled"] | true);
+  else if (action == "finishAndRestartEnabled")
+    ok = _cmd.finishAndRestartEnabled(json.as<JsonObject>()["enabled"] | true);
+  else if (action == "changeSpeed")
+    ok = _cmd.changeSpeed(json.as<JsonObject>()["speed"] | 0.2f);
+  else if (action == "setFixTimeout")
+    ok = _cmd.setFixTimeout(json.as<JsonObject>()["timeout"] | 0);
+  else if (action == "customCmd")
+    ok = _cmd.customCmd(json.as<JsonObject>()["cmd"] | "");
+  else {
+    reject(request, 400, "command", "unknown action: " + action);
+    return;
+  }
+
+  AsyncResponseStream *response = request->beginResponseStream("application/json");
+  DynamicJsonDocument doc(256);
+  doc["success"] = ok;
+  doc["action"] = action;
+  serializeJson(doc, *response);
+  request->send(response);
 }
 
 void UiAdapter::delayedRestart(UiAdapter* instancePtr)

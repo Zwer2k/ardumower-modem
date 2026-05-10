@@ -134,21 +134,29 @@ void Stats::Obstacles::marshal(const JsonObject &o) const
 
 void Stats::Stats::marshal(const JsonObject &o) const
 {
-  o.createNestedObject(_t_state_durations);
-  durations.marshal(o[_t_state_durations]);
+  // Flattened format matching frontend Stats interface
+  o[_t_duration_idle] = durations.idle;
+  o[_t_duration_charge] = durations.charge;
+  o[_t_duration_mow] = durations.mow;
+  o[_t_duration_mow_invalid] = durations.mowInvalid;
+  o[_t_duration_mow_float] = durations.mowFloat;
+  o[_t_duration_mow_fix] = durations.mowFix;
   o[_t_stats_mow_traveled] = mowDistanceTraveled;
   o[_t_stats_gps_chk_sum_errors] = gpsChecksumErrors;
   o[_t_stats_dgps_chk_sum_errors] = dgpsChecksumErrors;
-  o.createNestedObject(_t_stats_recoveries);
-  recoveries.marshal(o[_t_stats_recoveries]);
-  o.createNestedObject(_t_stats_obstacles);
-  obstacles.marshal(o[_t_stats_obstacles]);
+  o[_t_recoveries_invalid_recoveries] = recoveries.mowInvalid;
+  o[_t_recoveries_float_recoveries] = recoveries.mowFloatToFix;
+  o[_t_recoveries_imu_triggered] = recoveries.imu;
+  o[_t_obstacles_gps_motion_timeout] = obstacles.gpsMotionLow;
+  o[_t_obstacles_sonar_triggered] = obstacles.sonar;
+  o[_t_obstacles_bumper_triggered] = obstacles.bumper;
+  o[_t_obstacles_obstacles] = obstacles.count;
   o[_t_stats_gps_jumps] = gpsJumps;
   o[_t_stats_max_cycle] = maxMotorControlCycleTime;
   o[_t_stats_max_dpgs_age] = mowMaxDgpsAge;
   o[_t_stats_serial_buffer_size] = serialBufferSize;
   o[_t_stats_free_memory] = freeMemory;
-  o[_t_stats_reset_cause] = resetCause;  
+  o[_t_stats_reset_cause] = resetCause;
   o[_t_stats_temp_min] = tempMin;
   o[_t_stats_temp_max] = tempMax;
 }

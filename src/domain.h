@@ -165,7 +165,7 @@ namespace ArduMower
         int op;
         int fixTimeout;
 
-        DesiredState() : speed(0), mowerMotorEnabled(false), finishAndRestart(false), op(-1), fixTimeout(-1){};
+        DesiredState() : timestamp(1), speed(0), mowerMotorEnabled(false), finishAndRestart(false), op(-1), fixTimeout(-1){};
         void marshal(const JsonObject &o) const;
       };
 

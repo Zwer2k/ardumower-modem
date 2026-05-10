@@ -49,7 +49,7 @@ namespace ArduMower
         void handleApiGetModemStatus(AsyncWebServerRequest *request);
         void handleApiGetRobotDesiredState(AsyncWebServerRequest *request);
         void handleApiResetModemBluetoothPairings(AsyncWebServerRequest *request);
-  
+        void handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVariant &json);
 
         static void delayedRestart(UiAdapter* instancePtr);
       };

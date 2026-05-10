@@ -162,20 +162,23 @@ void UiSocketHandler::loop()
       sendData(ResponseDataType::mowerState);
       break;
     case 3:
-      sendData(ResponseDataType::desiredState);
+      sendData(ResponseDataType::mowerStats);
       break;
     case 4:
-      processMapChunkSend();
+      sendData(ResponseDataType::desiredState);
       break;
     case 5:
-      sendData(ResponseDataType::map);
+      processMapChunkSend();
       break;
     case 6:
+      sendData(ResponseDataType::map);
+      break;
+    case 7:
       logToUiLoop();
       break;
     }
     loopCase++;
-    if (loopCase > 6) loopCase = 0;
+    if (loopCase > 7) loopCase = 0;
   yield();
   
   //pingClients();
@@ -210,6 +213,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   switch (dataType) {
     case ResponseDataType::mowerState:
       sendData(dataType, sendTo, _source.state(), force);
+      break;
+    case ResponseDataType::mowerStats:
+      sendData(dataType, sendTo, _source.stats(), force);
       break;
     case ResponseDataType::desiredState:
       sendData(dataType, sendTo, _source.desiredState(), force);
@@ -319,6 +325,8 @@ void UiSocketHandler::processMapChunkSend() {
 }
 
 // Hilfsfunktion: Sende einen Chunk eines MapPoint-Vektors
+static String sanitizeUtf8(const String& input);
+
 bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem* sendTo, int exclusionIdx, size_t startIdx, size_t blockSize) {
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
@@ -365,6 +373,7 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
   String stateStr;
   try {
     serializeJson(doc, stateStr);
+    stateStr = sanitizeUtf8(stateStr);
   } catch (...) {
     Log(ERR, "%s serializeJson failed", _LOG_);
     return false;
@@ -409,6 +418,24 @@ bool UiSocketHandler::cmdToMower(String) {
 }
 #endif
 
+static String sanitizeUtf8(const String& input) {
+  String output;
+  output.reserve(input.length());
+  for (size_t i = 0; i < input.length(); i++) {
+    unsigned char c = (unsigned char)input[i];
+    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t') {
+      output += '?';
+    } else if (c >= 0x80) {
+      // Alle non-ASCII Bytes durch ? ersetzen – verhindert
+      // jegliche Invalid-UTF-8 Probleme im Browser
+      output += '?';
+    } else {
+      output += (char)c;
+    }
+  }
+  return output;
+}
+
 template<typename T>
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force)
 {
@@ -425,6 +452,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   
   String stateStr;
   serializeJson(doc, stateStr);
+  stateStr = sanitizeUtf8(stateStr);
   
   if (sendTo != NULL) {
     sendTo->sendText(stateStr);
@@ -510,6 +538,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
 
     String dataStr;
     serializeJson(doc, dataStr);
+    dataStr = sanitizeUtf8(dataStr);
     Log(DBG, "%s %s", _LOG_, dataStr.c_str());
     client->text(dataStr.c_str());
 
