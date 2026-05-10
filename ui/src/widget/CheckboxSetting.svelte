@@ -30,6 +30,12 @@ import type { ChangeEventValue } from "../model";
   function revert() {
     value = original;
   }
+
+  function handleChange(e: CustomEvent) {
+    const newValue = e.detail?.toggled ?? e.detail;
+    value = newValue;
+    dispatch('change', { event: e, value: newValue });
+  }
 </script>
 
 <main>

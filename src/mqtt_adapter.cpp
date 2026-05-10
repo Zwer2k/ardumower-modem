@@ -366,7 +366,16 @@ bool MqttAdapter::publishWithSubtopics(JsonObject& data, const String baseTopic)
       continue;
 
     } else {
-      Log(WARN, "%spublishWithSubtopics: unknown datatype: ", _LOG_, pair.key().c_str());
+      String typeInfo = "unknown";
+      if (pair.value().isNull()) typeInfo = "null";
+      else if (pair.value().is<signed char>()) typeInfo = "signed char";
+      else if (pair.value().is<unsigned char>()) typeInfo = "unsigned char";
+      else if (pair.value().is<short>()) typeInfo = "short";
+      else if (pair.value().is<unsigned short>()) typeInfo = "unsigned short";
+      else if (pair.value().is<long long>()) typeInfo = "long long";
+      else if (pair.value().is<unsigned long long>()) typeInfo = "unsigned long long";
+
+      Log(WARN, "%spublishWithSubtopics: unknown datatype for key '%s': %s", _LOG_, pair.key().c_str(), typeInfo.c_str());
       return false;
     }
 

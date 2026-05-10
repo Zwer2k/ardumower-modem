@@ -197,6 +197,10 @@
     overflow: hidden;
 }
 
+:global(#main-content) {
+    position: relative;
+}
+
 /* Dashboard-Modus: Komplett ohne Scrollbars */
 :global(body.dashboard-mode) {
     overflow: hidden !important;

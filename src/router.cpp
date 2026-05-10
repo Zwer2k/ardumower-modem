@@ -17,6 +17,24 @@ void Router::loop()
   loopSend();
   loopReceive();
   loopTimeout();
+  loopStuckRecovery();
+}
+
+void Router::loopStuckRecovery()
+{
+  // Auch wenn sendCommand true ist (sendWithoutResponse hängt),
+  // müssen wir den Router zurücksetzen
+  if (!expectResponse && !sendCommand) return;
+
+  // expectResponseSince wird genau einmal pro Befehl gesetzt und nicht
+  // durch neue Befehle oder eingehende Zeichen überschrieben.
+  if (_millis() - expectResponseSince > 3000) {
+    Log(ERR, "Router::loopStuckRecovery: stuck for %lu ms, resetting cmd=%s", (unsigned long)(_millis() - expectResponseSince), lastCommand.c_str());
+    sendCommand = false;
+    expectResponse = false;
+    expectResponseSince = 0;
+    cb("", XferError::TIMEOUT);
+  }
 }
 
 void Router::sniffRx(RxDrain *d)
@@ -40,6 +58,8 @@ bool Router::send(String _command, responseCb _cb)
   cb = _cb;
   sendCommand = true;
   expectResponse = true;
+  lastTx = _millis();
+  expectResponseSince = _millis();
 
   return true;
 }
@@ -76,7 +96,6 @@ void Router::loopSend()
   }
 
   sendCommand = false;
-  lastTx = _millis();
 
   bool stop = false;
   for (auto it : txDrains)
@@ -111,6 +130,7 @@ void Router::loopReceive()
     if (expectResponse)
     {
       expectResponse = false;
+      expectResponseSince = 0;
       cb(line, XferError::SUCCESS);
     }
 
@@ -134,6 +154,7 @@ void Router::loopTimeout()
   if (isRxTimeout())
   {
     expectResponse = false;
+    expectResponseSince = 0;
     cb("", XferError::TIMEOUT);
   }
 }

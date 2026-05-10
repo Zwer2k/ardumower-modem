@@ -12,11 +12,6 @@ Import("env")  # noqa: F821 (PlatformIO injects this)
 print("[git_version] PROJECT_DIR = " + env.subst("$PROJECT_DIR"))
 print("[git_version] Current dir = " + os.getcwd())
 
-# Debug: Write to file to verify script execution
-with open(os.path.join(env.subst("$PROJECT_DIR"), "ci_script_executed.txt"), "w") as f:
-    f.write("Script was executed at " + os.getcwd() + "\n")
-    f.write("PROJECT_DIR = " + env.subst("$PROJECT_DIR") + "\n")
-
 
 def _run(cmd):
     print("[git_version] Running: " + ' '.join(cmd))
@@ -57,17 +52,21 @@ git_tag  = get_git_tag()
 
 
 def make_tag(value):
-    # Produces: \"<actual-value>\" so that C sees a string literal
+    # Produces: \" so that C sees a string literal
     return '\\"' + value + '\\"'
 
 
 if git_hash:
     print("[git_version] GIT_HASH = " + git_hash)
     env.Append(CPPDEFINES=[("GIT_HASH", make_tag(git_hash))])
+else:
+    print("[git_version] GIT_HASH = (no hash)")
 
 if git_time:
     print("[git_version] GIT_TIME = " + git_time)
     env.Append(CPPDEFINES=[("GIT_TIME", make_tag(git_time))])
+else:
+    print("[git_version] GIT_TIME = (no time)")
 
 if git_tag:
     print("[git_version] GIT_TAG  = " + git_tag)

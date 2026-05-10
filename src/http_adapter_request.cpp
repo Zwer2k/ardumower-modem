@@ -25,7 +25,7 @@ bool Http::CommandRequest::done(const uint32_t now)
 
 bool Http::CommandRequest::timeout(const uint32_t now)
 {
-  if (now - timeReceiveHttpRequest < 2000)
+  if (now - timeReceiveHttpRequest < 5000)
     return false;
 
   _done = true;

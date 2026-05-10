@@ -42,34 +42,39 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
   }
 }
 
-UiSocketItem::~UiSocketItem() 
+UiSocketItem::~UiSocketItem()
 {
 }
 
 bool UiSocketItem::sendText(String text)
 {
-  // Bis zu 10 Versuche, jeweils 100ms Pause zwischen den Versuchen
-  for (int attempt = 0; attempt < 10; ++attempt) {
+  if (_client == NULL || _client->status() == WS_DISCONNECTED)
+    return false;
+
+  for (int attempt = 0; attempt < 3; ++attempt) {
     try {
       if (_client->text(text.c_str())) {
         return true;
       }
     } catch (...) {
       return false;
-    }    
+    }
     yield();
-    vTaskDelay(100 / portTICK_PERIOD_MS); // 100ms warten
+    vTaskDelay(1 / portTICK_PERIOD_MS); // nur 1ms statt 10ms
   }
   return false;
 }
 
 void UiSocketItem::ping()
 {
-  _client->ping();
+  if (_client != NULL && _client->status() != WS_DISCONNECTED)
+    _client->ping();
 }
 
 AwsClientStatus UiSocketItem::status()
 {
+  if (_client == NULL)
+    return WS_DISCONNECTED;
   return _client->status();
 }
 
@@ -140,6 +145,7 @@ void UiSocketHandler::begin()
 
 void UiSocketHandler::loop()
 {
+  _ws->cleanupClients();
   if (_ws->count() == 0)
     return;
 
@@ -367,12 +373,14 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
     if (!sendTo->sendText(stateStr)) {
       Log(ERR, "%s sendData failed", _LOG_);
       _ws->cleanupClients();
+      mapChunkSendState.active = false;
       return false;
     }
   } else {
     if (!sendTextAllWithRetry(_ws, stateStr)) {
       Log(ERR, "%s sendData failed", _LOG_);
       _ws->cleanupClients();
+      mapChunkSendState.active = false;
       return false;
     }
   }
@@ -428,20 +436,29 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   }
 }
 
-bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket* ws, const String& text) {
-  for (int attempt = 0; attempt < 10; ++attempt) {
-    try {
-      auto status = ws->textAll(text);
-      if (status == AsyncWebSocket::ENQUEUED) {
-        return true;
+bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &text)
+{
+  bool anySent = false;
+  int clientCount = 0;
+  try {
+    for (auto &client : ws->getClients()) {
+      if (++clientCount > 16)
+        break; // Sicherheitslimit, um Endlosschleifen zu vermeiden
+      if (client.status() == WS_DISCONNECTED)
+        continue;
+      try {
+        if (client.text(text.c_str())) {
+          anySent = true;
+        }
+      } catch (...) {
+        // ignore send errors for individual clients
       }
-    } catch (...) {
-      return false;
+      yield(); // Watchdog füttern
     }
-    yield();
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+  } catch (...) {
+    return false;
   }
-  return false;
+  return anySent;
 }
 
 void UiSocketHandler::pingClients()

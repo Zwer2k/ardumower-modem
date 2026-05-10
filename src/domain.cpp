@@ -161,14 +161,14 @@ void Properties::marshal(const JsonObject &o) const
 
 void State::State::marshal(const JsonObject &o) const
 {
-  o[_t_state_batteryVoltage] = serialized(String(batteryVoltage, 2));
+  o[_t_state_batteryVoltage] = batteryVoltage;
   o.createNestedObject(_t_state_position);
   position.marshal(o[_t_state_position]);
   o.createNestedObject(_t_state_target);
   target.marshal(o[_t_state_target]);
   o[_t_state_job] = job;
   o[_t_state_sensor] = sensor;
-  o[_t_state_amps] = serialized(String(amps, 2));
+  o[_t_state_amps] = amps;
   o[_t_state_mapCrc] = mapCrc;
 }
 
@@ -181,14 +181,14 @@ void State::Position::marshal(const JsonObject &o) const
   o[_t_position_visibleSatellites] = visibleSatellites;
   o[_t_position_visibleSatellitesDgps] = visibleSatellitesDgps;
   o[_t_position_mowPointIndex] = mowPointIndex;
-  o[_t_point_x] = serialized(String(x, 8));
-  o[_t_point_y] = serialized(String(y, 8));
+  o[_t_point_x] = x;
+  o[_t_point_y] = y;
 }
 
 void State::Point::marshal(const JsonObject &o) const
 {
-  o[_t_point_x] = serialized(String(x, 8));
-  o[_t_point_y] = serialized(String(y, 8));
+  o[_t_point_x] = x;
+  o[_t_point_y] = y;
 }
 
 

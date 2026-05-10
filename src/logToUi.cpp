@@ -38,6 +38,17 @@ size_t LogToUi::log(const LogLevel logLevel, const char *format, ...)
     }
     va_end(arg);
 
+    // Bereinige Text: nur druckbares ASCII und \r\n\t erlauben,
+    // alles andere ersetzen durch '?' um Invalid-UTF-8 im WebSocket zu vermeiden
+    for (int i = 0; temp[i] != '\0'; i++) {
+      unsigned char c = (unsigned char)temp[i];
+      if (c < 0x20 && c != '\r' && c != '\n' && c != '\t') {
+        temp[i] = '?';
+      } else if (c >= 0x80) {
+        temp[i] = '?';
+      }
+    }
+
     auto freeHeap = ESP.getFreeHeap();
     auto line = LogLine{nr: modemLineNrIn++, level: logLevel, text: temp, freeHeap: freeHeap};
     if(temp != loc_buf){

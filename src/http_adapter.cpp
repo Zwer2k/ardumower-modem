@@ -210,7 +210,9 @@ void HttpAdapter::apiMowerReboot(AsyncWebServerRequest *req)
 
 void respondWithCors(AsyncWebServerRequest *req, int status, String contentType, String responseBody)
 {
-  if (req->client()->connected()) {
+  Log(DBG, "%s::respondWithCors reqIsNull=%d code=%d contentType=%s responseBody=%s", _LOG_, req==NULL, status, contentType.c_str(), responseBody.c_str());
+
+  if ((req != NULL) && req->client()->connected()) {
     AsyncWebServerResponse *res = req->beginResponse(status, contentType, responseBody);
     res->addHeader("Access-Control-Allow-Origin", "*");
     res->addHeader("Access-Control-Allow-Headers", "authorization");

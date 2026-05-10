@@ -122,14 +122,15 @@ void MowerAdapter::parseArduMowerCommand(String line)
 // AT-N Kommando: AT-N,#perimeter,#exclusions,#dockpoints,#waypoints,#free
 void MowerAdapter::parseATNCommand(String line) {
   Log(DBG, "%sparseATNCommand (map end)", _LOG_);
-  // Warte, bis kein Lesevorgang auf _map läuft
+  // Warte kurz, bis kein Lesevorgang auf _map läuft (max 100ms, um Loop-Blockade zu vermeiden)
   int waitCount = 0;
-  while (_map.isReading()) {
+  while (_map.isReading() && waitCount < 10) {
     vTaskDelay(10 / portTICK_PERIOD_MS);
     waitCount++;
-    if (waitCount % 100 == 0) {
-      Log(DBG, "%sparseATNCommand: warte auf Ende des Map-Lesevorgangs... (%d ms)", _LOG_, waitCount * 10);
-    }
+  }
+  if (_map.isReading()) {
+    Log(WARN, "%sparseATNCommand: Map-Lesevorgang läuft noch, ignoriere AT-N", _LOG_);
+    return;
   }
   // Entferne "AT-N," falls vorhanden
   if (line.startsWith("AT+N,")) line = line.substring(5);
