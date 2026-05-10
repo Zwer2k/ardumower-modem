@@ -14,7 +14,11 @@
   import { pointsToEdges } from "./geometry";
   import type { Point, Edge } from "./model";
   import Perimeter from "./Perimeter.svelte";
+  import Waypoints from "./Waypoints.svelte";
+  import Dockpoints from "./Dockpoints.svelte";
+  import MowerPosition from "./MowerPosition.svelte";
   import { MapStore } from "./service";
+  import { socketStore } from "../stores/socket";
 
   interface EditItem {
     id: string;
@@ -86,8 +90,8 @@
     editItemId = null;
   }
 
-  function onDeleteClick() {  
-    if (editItemId != null) {    
+  function onDeleteClick() {
+    if (editItemId != null) {
       if (editPoint) {
         let index = parseInt(editItemId.replace(/.*-point-([0-9]+)/, "$1"));
         if (editItemId.indexOf("-perimeter-") !== -1) {
@@ -119,8 +123,8 @@
   $: omg(editItemId);
 </script>
 
-<main>
-  <Grid>
+<div class="map-dashboard">
+  <Grid class="map-toolbar">
     <Row>
       <Column sm={1} md={1} lg={1}>
         <Checkbox bind:checked={edit} labelText="Editor" />
@@ -153,22 +157,54 @@
       </Column>
     </Row>
   </Grid>
-  <Canvas>
-    {#if $MapStore && $MapStore.map}
-      <Perimeter
-        value={$MapStore.map.perimeter}
-        perimiterId="map-0-perimeter"
-        {edit}
-        bind:editItemId
-      />
-      {#each $MapStore.map.exclusions as exclusion, index}
-        <Exclusion
-          value={exclusion}
-          exclusionId={"map-0-exclusion-" + index}
+  <div class="map-canvas-wrapper">
+    <Canvas>
+      {#if $MapStore && $MapStore.map}
+        <Perimeter
+          value={$MapStore.map.perimeter}
+          perimiterId="map-0-perimeter"
           {edit}
           bind:editItemId
         />
-      {/each}
-    {/if}
-  </Canvas>
-</main>
+        {#each $MapStore.map.exclusions as exclusion, index}
+          <Exclusion
+            value={exclusion}
+            exclusionId={"map-0-exclusion-" + index}
+            {edit}
+            bind:editItemId
+          />
+        {/each}
+        <Waypoints
+          value={$MapStore.map.waypoints}
+          waypointsId="map-0-waypoints"
+          {edit}
+          bind:editItemId
+        />
+        <Dockpoints
+          value={$MapStore.map.dockpoints}
+          dockpointsId="map-0-dockpoints"
+          {edit}
+          bind:editItemId
+        />
+        <MowerPosition position={$socketStore.state?.position ?? null} />
+      {/if}
+    </Canvas>
+  </div>
+</div>
+
+<style>
+  .map-dashboard {
+    width: 100%;
+    height: 100%;
+    padding-top: 48px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .map-canvas-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+</style>

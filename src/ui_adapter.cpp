@@ -79,6 +79,13 @@ bool UiAdapter::servePath(AsyncWebServerRequest *request, const String &path)
     response->addHeader("Content-Encoding", "gzip");
     response->addHeader("ETag", asset->etag);
     response->addHeader("Last-Modified", asset->time);
+
+    if (strcmp(asset->path, "/index.html") == 0 || strcmp(asset->path, "/_app/version.json") == 0) {
+      response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    } else if (strstr(asset->path, "/_app/immutable/") != nullptr) {
+      response->addHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+
     request->send(response);
     Log(DBG, "UiAdapter::servePath::200(path=%s size=%d)", path.c_str(), asset->size);
     return true;

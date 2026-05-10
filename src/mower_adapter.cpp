@@ -93,6 +93,18 @@ void MowerAdapter::parseArduMowerCommand(String line)
   }
 
   if (line.startsWith("AT+")) {
+    // Bereinige die Zeile von invaliden Bytes, bevor sie verarbeitet wird.
+    // Das verhindert, dass invalide UTF-8-Sequenzen in Domain-Objekte
+    // oder WebSocket-Nachrichten gelangen.
+    for (int i = 0; i < line.length(); i++) {
+      unsigned char c = (unsigned char)line[i];
+      if (c < 0x20 && c != '\r' && c != '\n' && c != '\t') {
+        line[i] = '?';
+      } else if (c >= 0x80) {
+        line[i] = '?';
+      }
+    }
+
     int badChar = containsNonUTF8(line);
     if (badChar == -1) {
       Log(COMM, ">> %s", line.c_str());
