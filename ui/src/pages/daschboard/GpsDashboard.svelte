@@ -64,17 +64,13 @@
     let customHex = $state('');
     let ubxHistory: { commandId: string; commandName: string; customHex: string; resp: string; time: string }[] = $state([]);
     let parsedResult: Record<string, any> | null = $state(null);
-    let lastCommandId = $state('');
-    let filteredCommands = $state<UbxCommand[]>(ubxCommands.filter(c => c.category === 'Receiver'));
-    let selectedCommand = $state<UbxCommand | null>(null);
 
-    $effect(() => {
-        filteredCommands = ubxCommands.filter(c => c.category === activeCategory);
-    });
+    // Non-reactive bookkeeping variables
+    let lastCommandId = '';
+    let processedUbxKey: string | number = '';
 
-    $effect(() => {
-        selectedCommand = ubxCommands.find(c => c.id === selectedCommandId) ?? null;
-    });
+    let filteredCommands = $derived(ubxCommands.filter(c => c.category === activeCategory));
+    let selectedCommand = $derived(ubxCommands.find(c => c.id === selectedCommandId) ?? null);
 
     function sendSelectedCommand() {
         const cmd = selectedCommand;
@@ -86,16 +82,17 @@
         socketService.sendUbx(hex);
     }
 
-    let lastProcessedTimestamp = $state(0);
-
-    $effect(() => {
-        const resp = $socketStore.ubxResponse;
-        // Only process if we have a new response (different timestamp)
+    function handleUbxResponse(resp: import('../../model').UbxResponse) {
         if (!resp || !resp.hex || resp.hex.length === 0) return;
-        if (resp.timestamp === lastProcessedTimestamp) return;
-        lastProcessedTimestamp = resp.timestamp;
+        // Robust dedup: prefer timestamp, fallback to hex (in case backend omits timestamp)
+        const dedupKey = (resp.timestamp && resp.timestamp > 0) ? resp.timestamp : resp.hex;
+        if (dedupKey === processedUbxKey) {
+            console.log('[GpsDashboard] Duplicate UBX response ignored, key:', dedupKey);
+            return;
+        }
+        processedUbxKey = dedupKey;
 
-        console.log('[GpsDashboard] New UBX response, timestamp:', resp.timestamp, 'hex length:', resp.hex.length, 'lastCommandId:', lastCommandId);
+        console.log('[GpsDashboard] Processing UBX response, key:', dedupKey, 'hex length:', resp.hex.length, 'lastCommandId:', lastCommandId);
 
         const cmd = ubxCommands.find(c => c.id === lastCommandId);
         const entry = {
@@ -123,6 +120,23 @@
             }
         } else {
             console.log('[GpsDashboard] No command found for id:', lastCommandId);
+        }
+    }
+
+    let unsubscribeUbx: (() => void) | null = null;
+
+    onMount(() => {
+        unsubscribeUbx = socketStore.subscribe((state) => {
+            if (state.ubxResponse) {
+                handleUbxResponse(state.ubxResponse);
+            }
+        });
+    });
+
+    onDestroy(() => {
+        if (unsubscribeUbx) {
+            unsubscribeUbx();
+            unsubscribeUbx = null;
         }
     });
 </script>

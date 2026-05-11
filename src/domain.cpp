@@ -299,5 +299,6 @@ void GpsDetails::marshal(const JsonObject &o) const
 
 void UbxResponse::marshal(const JsonObject &o) const
 {
+  o["timestamp"] = timestamp;
   o["hex"] = hexData;
 }

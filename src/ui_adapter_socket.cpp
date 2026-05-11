@@ -64,6 +64,8 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
       String hexCmd = jsonData["hex"] | "";
       if (hexCmd.length() > 0) {
         _socketHandler->sendUbx(hexCmd);
+        _socketHandler->ubxResponseActive = true;
+        _socketHandler->resetRequestTimestamp(ResponseDataType::ubxResponse);
         Log(INFO, "%s UBX command sent", _LOG_);
       }
     }
