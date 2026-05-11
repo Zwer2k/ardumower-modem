@@ -14,6 +14,7 @@ import type {
   MapRaw,
   SensorSummary,
   GpsDetails,
+  UbxResponse,
 } from "../model";
 import { ResponseDataType, RequestDataType } from "../model";
 import { handleMapChunk } from "../map/map-chunk-buffer";
@@ -27,6 +28,7 @@ export interface SocketState {
   desiredState: DesiredState | null;
   sensorSummary: SensorSummary | null;
   gpsDetails: GpsDetails | null;
+  ubxResponse: UbxResponse | null;
   modemLog: LogLine[];
   consoleLines: ConsoleLine[];
   modemDbgLevel: number;
@@ -42,6 +44,7 @@ const initialState: SocketState = {
   desiredState: null,
   sensorSummary: null,
   gpsDetails: null,
+  ubxResponse: null,
   modemLog: [],
   consoleLines: [],
   modemDbgLevel: 15,
@@ -193,6 +196,9 @@ class SocketService {
                 case ResponseDataType.gpsDetails:
                   newState.gpsDetails = jsonData.data as GpsDetails;
                   break;
+                case ResponseDataType.ubxResponse:
+                  newState.ubxResponse = jsonData.data as UbxResponse;
+                  break;
                 default:
               }
               return newState;
@@ -301,6 +307,14 @@ class SocketService {
     const req: RequestSocketMessage = {
       type: RequestDataType.stopSensorSummary,
       data: {},
+    };
+    this.sendMessage(req);
+  }
+
+  sendUbx(hex: string) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.requestUbx,
+      data: { hex },
     };
     this.sendMessage(req);
   }

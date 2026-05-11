@@ -46,7 +46,7 @@ void MowerAdapter::parseArduMowerResponse(String line)
     return;
   }
 
-  if (line[1] != ',' && !(line[0] == 'S' && (line[1] == '3' || line[1] == '4')))
+  if (line[1] != ',' && !(line[0] == 'S' && (line[1] == '3' || line[1] == '4')) && !(line[0] == 'U'))
   // return;
   {
     Log(DBG, "%sparseArduMowerResponse::guard::second-char(%c)", _LOG_, line[1]);
@@ -70,7 +70,9 @@ void MowerAdapter::parseArduMowerResponse(String line)
   // TODO test
   // if (chk.value != checksum) return;
 
-  if (payload.startsWith("S4,"))
+  if (payload.startsWith("U,"))
+    parseUbxResponse(payload);
+  else if (payload.startsWith("S4,"))
     parseGpsDetailsResponse(payload);
   else if (payload.startsWith("S3,"))
     parseSensorSummaryResponse(payload);
@@ -354,6 +356,26 @@ bool MowerAdapter::requestGpsDetails()
 {
   Log(DBG, "%srequestGpsDetails", _LOG_);
   return sendCommand("AT+S4", true);
+}
+
+bool MowerAdapter::sendUbx(const String &hexCmd)
+{
+  Log(DBG, "%ssendUbx(%s)", _LOG_, hexCmd.c_str());
+  return sendCommand("AT+U," + hexCmd, true);
+}
+
+void MowerAdapter::parseUbxResponse(String line)
+{
+  Log(DBG, "%sparseUbxResponse", _LOG_);
+  const auto now = millis();
+
+  int idx = line.indexOf(',');
+  if (idx >= 0) {
+    _ubxResponse.hexData = line.substring(idx + 1);
+  } else {
+    _ubxResponse.hexData = "";
+  }
+  _ubxResponse.timestamp = now;
 }
 
 // linear: m/s

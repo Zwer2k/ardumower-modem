@@ -296,3 +296,8 @@ void GpsDetails::marshal(const JsonObject &o) const
     sat.marshal(obj);
   }
 }
+
+void UbxResponse::marshal(const JsonObject &o) const
+{
+  o["hex"] = hexData;
+}

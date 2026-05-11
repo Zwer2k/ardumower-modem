@@ -3,6 +3,7 @@
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
     import { socketStore, socketService } from '../../stores/socket';
+    import { ubxCommands, ubxCategories, getParser, type UbxCommand } from './ubxCommands';
 
     function gnssName(gnssId: number): string {
         switch (gnssId) {
@@ -56,9 +57,176 @@
     let dgpsCount = $derived(satellites.filter(s => s.crCorrUsed).length);
     let lastUpdate = $derived($socketStore.gpsDetails?.timestamp ?? 0);
     let isStale = $derived(lastUpdate > 0 && (Date.now() - lastUpdate) > 10000);
+
+    let mode = $state<'simple' | 'advanced'>('simple');
+    let activeCategory = $state('Receiver');
+    let selectedCommandId = $state<string>('');
+    let customHex = $state('');
+    let ubxHistory: { commandId: string; commandName: string; customHex: string; resp: string; time: string }[] = $state([]);
+    let parsedResult: Record<string, any> | null = $state(null);
+    let lastCommandId = $state('');
+    let filteredCommands = $state<UbxCommand[]>(ubxCommands.filter(c => c.category === 'Receiver'));
+    let selectedCommand = $state<UbxCommand | null>(null);
+
+    $effect(() => {
+        filteredCommands = ubxCommands.filter(c => c.category === activeCategory);
+    });
+
+    $effect(() => {
+        selectedCommand = ubxCommands.find(c => c.id === selectedCommandId) ?? null;
+    });
+
+    function sendSelectedCommand() {
+        const cmd = selectedCommand;
+        if (!cmd) return;
+        const hex = cmd.id === 'raw-custom' ? customHex.trim().replace(/\s/g, '') : cmd.hex;
+        if (!hex || hex.length % 2 !== 0) return;
+        lastCommandId = cmd.id;
+        parsedResult = null;
+        socketService.sendUbx(hex);
+    }
+
+    let lastProcessedTimestamp = $state(0);
+
+    $effect(() => {
+        const resp = $socketStore.ubxResponse;
+        // Only process if we have a new response (different timestamp)
+        if (!resp || !resp.hex || resp.hex.length === 0) return;
+        if (resp.timestamp === lastProcessedTimestamp) return;
+        lastProcessedTimestamp = resp.timestamp;
+
+        console.log('[GpsDashboard] New UBX response, timestamp:', resp.timestamp, 'hex length:', resp.hex.length, 'lastCommandId:', lastCommandId);
+
+        const cmd = ubxCommands.find(c => c.id === lastCommandId);
+        const entry = {
+            commandId: lastCommandId,
+            commandName: cmd?.name || 'Custom',
+            customHex: cmd?.id === 'raw-custom' ? customHex : '',
+            resp: resp.hex,
+            time: new Date().toLocaleTimeString()
+        };
+        ubxHistory = [entry, ...ubxHistory].slice(0, 20);
+        if (cmd) {
+            const parser = getParser(cmd.id);
+            console.log('[GpsDashboard] Parser for', cmd.id, ':', parser ? 'found' : 'none');
+            if (parser) {
+                try {
+                    const parsed = parser(resp.hex);
+                    console.log('[GpsDashboard] Parsed result:', parsed);
+                    parsedResult = parsed;
+                } catch (e) {
+                    console.error('[GpsDashboard] Parser error:', e);
+                    parsedResult = { "Parse Error": String(e), "Raw Hex": resp.hex.substring(0, 200) };
+                }
+            } else {
+                parsedResult = { "Raw Hex": resp.hex.substring(0, 200) };
+            }
+        } else {
+            console.log('[GpsDashboard] No command found for id:', lastCommandId);
+        }
+    });
 </script>
 
 <div class="dashboard-content">
+    <div class="mode-toggle">
+        <button class:active={mode === 'simple'} onclick={() => mode = 'simple'}>Simple</button>
+        <button class:active={mode === 'advanced'} onclick={() => mode = 'advanced'}>Advanced (UBX)</button>
+    </div>
+
+    {#if mode === 'advanced'}
+    <div class="ubx-panel">
+        <div class="ubx-categories">
+            {#each ubxCategories as cat}
+                <button class:active={activeCategory === cat} onclick={() => { activeCategory = cat; selectedCommandId = ''; parsedResult = null; }}>
+                    {cat}
+                </button>
+            {/each}
+        </div>
+
+        <div class="ubx-command-row">
+            <select bind:value={selectedCommandId}>
+                <option value="">Select command...</option>
+                {#each filteredCommands as cmd}
+                    <option value={cmd.id}>{cmd.name}</option>
+                {/each}
+            </select>
+            {#if selectedCommand?.id === 'raw-custom'}
+                <input type="text" placeholder="Hex bytes (e.g. B56206080000000E)" bind:value={customHex} />
+            {/if}
+            <button class="send-btn" onclick={sendSelectedCommand} disabled={!selectedCommandId || (selectedCommand?.id === 'raw-custom' && !customHex)}>
+                Send
+            </button>
+        </div>
+
+        {#if selectedCommand}
+            <div class="cmd-desc">{selectedCommand.description}</div>
+        {/if}
+
+        {#if parsedResult}
+            <div class="parsed-response">
+                <h5>Parsed Response</h5>
+                {#if Array.isArray(parsedResult)}
+                    <div class="parsed-table-wrapper">
+                        <table class="parsed-table">
+                            <thead>
+                                <tr>
+                                    {#each Object.keys(parsedResult[0]) as key}
+                                        <th>{key}</th>
+                                    {/each}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {#each parsedResult as row}
+                                    <tr>
+                                        {#each Object.values(row) as val}
+                                            <td>{val}</td>
+                                        {/each}
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
+                    </div>
+                {:else}
+                    <div class="parsed-kv">
+                        {#each Object.entries(parsedResult) as [key, val]}
+                            <div class="kv-row">
+                                <span class="kv-key">{key}</span>
+                                <span class="kv-val">{val}</span>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+            </div>
+        {:else}
+            <div class="parsed-response">
+                <h5>Parsed Response</h5>
+                <div class="parsed-kv">
+                    <div class="kv-row">
+                        <span class="kv-key">Status</span>
+                        <span class="kv-val">Waiting for response...</span>
+                    </div>
+                </div>
+            </div>
+        {/if}
+
+        {#if ubxHistory.length > 0}
+        <div class="ubx-history">
+            <h5>History ({ubxHistory.length})</h5>
+            {#each ubxHistory as entry}
+                <div class="ubx-entry">
+                    <div class="ubx-time">{entry.time} — {entry.commandName}</div>
+                    {#if entry.customHex}
+                        <div class="ubx-cmd">Custom: {entry.customHex.substring(0, 40)}</div>
+                    {/if}
+                    <div class="ubx-resp">{entry.resp.substring(0, 120)}{entry.resp.length > 120 ? '...' : ''}</div>
+                </div>
+            {/each}
+        </div>
+        {/if}
+    </div>
+    {/if}
+
+    {#if mode === 'simple'}
     {#if $socketStore.gpsDetails != null}
         {@const d = $socketStore.gpsDetails}
         <div class="gps-stats">
@@ -154,6 +322,7 @@
                 </div>
             {/if}
         </div>
+    {/if}
     {/if}
 </div>
 
@@ -357,5 +526,205 @@
         background: #f4f4f4;
         padding: 0.5rem 1rem;
         border-radius: 4px;
+    }
+
+    .mode-toggle {
+        display: flex;
+        gap: 0;
+        padding: 8px;
+        background: #f8f8f8;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .mode-toggle button {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #ccc;
+        background: #f4f4f4;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+
+    .mode-toggle button:first-child {
+        border-radius: 4px 0 0 4px;
+    }
+
+    .mode-toggle button:last-child {
+        border-radius: 0 4px 4px 0;
+    }
+
+    .mode-toggle button.active {
+        background: #006064;
+        color: white;
+        border-color: #006064;
+    }
+
+    .ubx-panel {
+        padding: 12px;
+        background: #fafafa;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .ubx-categories {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 10px;
+    }
+
+    .ubx-categories button {
+        padding: 4px 10px;
+        border: 1px solid #ccc;
+        background: #f4f4f4;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.8em;
+    }
+
+    .ubx-categories button.active {
+        background: #006064;
+        color: white;
+        border-color: #006064;
+    }
+
+    .ubx-command-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 6px;
+    }
+
+    .ubx-command-row select {
+        flex: 1;
+        padding: 6px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.9em;
+    }
+
+    .ubx-command-row input {
+        flex: 1;
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.9em;
+    }
+
+    .ubx-command-row button.send-btn {
+        padding: 6px 16px;
+        background: #006064;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+
+    .ubx-command-row button.send-btn:disabled {
+        background: #aaa;
+        cursor: not-allowed;
+    }
+
+    .cmd-desc {
+        font-size: 0.8em;
+        color: #666;
+        margin-bottom: 8px;
+    }
+
+    .parsed-response {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 8px;
+        margin-bottom: 10px;
+    }
+
+    .parsed-response h5 {
+        margin: 0 0 6px 0;
+        font-size: 0.85em;
+        color: #333;
+    }
+
+    .parsed-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .parsed-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8em;
+    }
+
+    .parsed-table th {
+        text-align: left;
+        padding: 4px 6px;
+        border-bottom: 1px solid #ddd;
+        background: #f4f4f4;
+        font-weight: 600;
+    }
+
+    .parsed-table td {
+        padding: 3px 6px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .parsed-kv {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .kv-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 6px;
+        background: #f8f8f8;
+        border-radius: 3px;
+        font-size: 0.85em;
+    }
+
+    .kv-key {
+        font-weight: 600;
+        color: #555;
+    }
+
+    .kv-val {
+        color: #333;
+        font-family: monospace;
+    }
+
+    .ubx-history {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .ubx-history h5 {
+        margin: 0;
+        font-size: 0.85em;
+        color: #333;
+    }
+
+    .ubx-entry {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        padding: 6px 10px;
+        font-family: monospace;
+        font-size: 0.8em;
+    }
+
+    .ubx-time {
+        color: #888;
+        font-size: 0.85em;
+        margin-bottom: 2px;
+    }
+
+    .ubx-resp {
+        color: #333;
+        word-break: break-all;
     }
 </style>

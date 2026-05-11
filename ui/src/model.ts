@@ -249,6 +249,11 @@ export interface ConsoleResponseData {
 }
 
 // Add map as a new response type
+export interface UbxResponse {
+  timestamp: number;
+  hex: string;
+}
+
 export enum ResponseDataType {
   hello = 0,
   mowerState,
@@ -259,6 +264,7 @@ export enum ResponseDataType {
   map,
   sensorSummary,
   gpsDetails,
+  ubxResponse,
 }
 
 // Map data for WebSocket
@@ -287,6 +293,7 @@ export enum RequestDataType {
   stopGpsDetails,
   requestSensorSummary,
   stopSensorSummary,
+  requestUbx,
 }
 
 export interface ModemLogSettings {

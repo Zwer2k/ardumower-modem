@@ -23,6 +23,7 @@ namespace ArduMower
       ArduMower::Domain::Robot::DesiredState _desiredState;
       ArduMower::Domain::Robot::SensorSummary _sensorSummary;
       ArduMower::Domain::Robot::GpsDetails _gpsDetails;
+      ArduMower::Domain::Robot::UbxResponse _ubxResponse;
       ArduMower::Domain::Robot::MowerMap _map;
       // Temporärer Buffer für alle empfangenen Wegpunkte (alle Typen)
       std::vector<ArduMower::Domain::Robot::MapPoint> tempWaypointsBuffer;
@@ -34,6 +35,7 @@ namespace ArduMower
       void parseStatisticsResponse(String line);
       void parseSensorSummaryResponse(String line);
       void parseGpsDetailsResponse(String line);
+      void parseUbxResponse(String line);
       void parseATCCommand(String line);
       void parseATWCommand(String line);
       void parseATNCommand(String line);
@@ -51,12 +53,14 @@ namespace ArduMower
       virtual ArduMower::Domain::Robot::DesiredState desiredState() { return _desiredState; }
       virtual ArduMower::Domain::Robot::SensorSummary sensorSummary() { return _sensorSummary; }
       virtual ArduMower::Domain::Robot::GpsDetails gpsDetails() { return _gpsDetails; }
+      virtual ArduMower::Domain::Robot::UbxResponse ubxResponse() { return _ubxResponse; }
       virtual ArduMower::Domain::Robot::Properties *propsP() { return &_props; }
       virtual ArduMower::Domain::Robot::State::State *stateP() { return &_state; };
       virtual ArduMower::Domain::Robot::Stats::Stats *statsP() { return &_stats; }
       virtual ArduMower::Domain::Robot::DesiredState *desiredStateP() { return &_desiredState; }
       virtual ArduMower::Domain::Robot::SensorSummary *sensorSummaryP() { return &_sensorSummary; }
       virtual ArduMower::Domain::Robot::GpsDetails *gpsDetailsP() { return &_gpsDetails; }
+      virtual ArduMower::Domain::Robot::UbxResponse *ubxResponseP() { return &_ubxResponse; }
       virtual ArduMower::Domain::Robot::MowerMap mowerMap() { return _map; }
       virtual bool changeSpeed(float speed);
       virtual bool dock();
@@ -73,6 +77,7 @@ namespace ArduMower
       virtual bool requestStats();
       virtual bool requestSensorSummary();
       virtual bool requestGpsDetails();
+      virtual bool sendUbx(const String &hexCmd);
       virtual bool manualDrive(float linear, float angular);
       virtual bool reboot();
       virtual bool rebootGPS();

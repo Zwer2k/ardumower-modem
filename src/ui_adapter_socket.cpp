@@ -39,6 +39,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
 
   case RequestDataType::requestGpsDetails:
     _socketHandler->gpsDetailsActive = true;
+    _socketHandler->resetRequestTimestamp(ResponseDataType::gpsDetails);
     Log(INFO, "%s GPS details polling activated", _LOG_);
     break;
 
@@ -49,12 +50,23 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
 
   case RequestDataType::requestSensorSummary:
     _socketHandler->sensorSummaryActive = true;
+    _socketHandler->resetRequestTimestamp(ResponseDataType::sensorSummary);
     Log(INFO, "%s Sensor summary polling activated", _LOG_);
     break;
 
   case RequestDataType::stopSensorSummary:
     _socketHandler->sensorSummaryActive = false;
     Log(INFO, "%s Sensor summary polling deactivated", _LOG_);
+    break;
+
+  case RequestDataType::requestUbx:
+    {
+      String hexCmd = jsonData["hex"] | "";
+      if (hexCmd.length() > 0) {
+        _socketHandler->sendUbx(hexCmd);
+        Log(INFO, "%s UBX command sent", _LOG_);
+      }
+    }
     break;
 
   default:
@@ -169,6 +181,8 @@ void UiSocketHandler::loop()
   if (_ws->count() == 0)
     return;
 
+  ubxLoop();
+
   static byte loopCase = 0;
     switch (loopCase)
     {
@@ -212,9 +226,14 @@ void UiSocketHandler::loop()
         sendData(ResponseDataType::gpsDetails);
       }
       break;
+    case 12:
+      if (ubxResponseActive && _source.ubxResponse().timestamp > 0) {
+        sendData(ResponseDataType::ubxResponse);
+      }
+      break;
     }
     loopCase++;
-    if (loopCase > 11) loopCase = 0;
+    if (loopCase > 12) loopCase = 0;
   yield();
   
   //pingClients();
@@ -256,8 +275,27 @@ void UiSocketHandler::gpsRequestLoop()
 {
   if ((lastDataRequestTimestamp[ResponseDataType::gpsDetails] > 0) && ((millis() - lastDataRequestTimestamp[ResponseDataType::gpsDetails]) < 20000))
     return;
-  if (_cmd.requestGpsDetails()) {
-    lastDataRequestTimestamp[ResponseDataType::gpsDetails] = millis();
+  _cmd.requestGpsDetails();
+  lastDataRequestTimestamp[ResponseDataType::gpsDetails] = millis();
+}
+
+bool UiSocketHandler::sendUbx(const String &hexCmd)
+{
+  pendingUbxCmd = hexCmd;
+  return true;
+}
+
+void UiSocketHandler::resetRequestTimestamp(ResponseDataType dataType)
+{
+  lastDataRequestTimestamp[dataType] = 0;
+}
+
+void UiSocketHandler::ubxLoop()
+{
+  if (pendingUbxCmd.length() == 0) return;
+  if (_cmd.sendUbx(pendingUbxCmd)) {
+    Log(DBG, "%subxLoop sent pending cmd", _LOG_);
+    pendingUbxCmd = "";
   }
 }
 
@@ -282,6 +320,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       break;
     case ResponseDataType::gpsDetails:
       sendData(dataType, sendTo, _source.gpsDetails(), force);
+      break;
+    case ResponseDataType::ubxResponse:
+      sendData(dataType, sendTo, _source.ubxResponse(), force);
       break;
     default:
       break;
@@ -503,7 +544,11 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   }
     
   oldDataTimestamp[dataType] = data.timestamp;
-  lastDataRequestTimestamp[dataType] = 0;
+  // Don't reset request timestamp for types with their own polling loop,
+  // otherwise they would re-request immediately after sending data
+  if (dataType != ResponseDataType::gpsDetails && dataType != ResponseDataType::sensorSummary) {
+    lastDataRequestTimestamp[dataType] = 0;
+  }
 
   const size_t docSize = (dataType == ResponseDataType::gpsDetails) ? 4096 : 4096;
   DynamicJsonDocument doc(docSize);

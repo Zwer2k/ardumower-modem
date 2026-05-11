@@ -246,6 +246,21 @@ namespace ArduMower
         void marshal(const JsonObject &o) const;
       };
 
+      class UbxResponse
+      {
+      public:
+        uint32_t timestamp;
+        String hexData;
+
+        UbxResponse() : timestamp(0) {}
+
+        bool operator==(const UbxResponse &other) {
+          return timestamp == other.timestamp && hexData == other.hexData;
+        }
+        bool operator!=(const UbxResponse &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
+      };
+
       class StateSource
       {
       public:
@@ -262,6 +277,8 @@ namespace ArduMower
         virtual SensorSummary *sensorSummaryP() = 0;
         virtual GpsDetails gpsDetails() = 0;
         virtual GpsDetails *gpsDetailsP() = 0;
+        virtual UbxResponse ubxResponse() = 0;
+        virtual UbxResponse *ubxResponseP() = 0;
 
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
       };
@@ -286,6 +303,7 @@ namespace ArduMower
         virtual bool requestStats() = 0;
         virtual bool requestSensorSummary() = 0;
         virtual bool requestGpsDetails() = 0;
+        virtual bool sendUbx(const String &hexCmd) = 0;
 
         virtual bool manualDrive(float linear, float angular) = 0;
 

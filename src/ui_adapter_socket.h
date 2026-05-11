@@ -25,6 +25,7 @@ namespace ArduMower
         stopGpsDetails,
         requestSensorSummary,
         stopSensorSummary,
+        requestUbx,
         requestDataTypeLength
       };
 
@@ -38,6 +39,7 @@ namespace ArduMower
         map,
         sensorSummary,
         gpsDetails,
+        ubxResponse,
         responseDataTypeLength
       };
 
@@ -107,9 +109,13 @@ namespace ArduMower
         bool cmdToMower(String cmd);
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
+        bool sendUbx(const String &hexCmd);
+        void resetRequestTimestamp(ResponseDataType dataType);
 
         bool gpsDetailsActive = false;
         bool sensorSummaryActive = false;
+        bool ubxResponseActive = false;
+        String pendingUbxCmd;
 
       private:
         void startMapChunkSend(UiSocketItem* sendTo, bool force);
@@ -138,6 +144,7 @@ namespace ArduMower
         void stateRequestLoop();
         void sensorRequestLoop();
         void gpsRequestLoop();
+        void ubxLoop();
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);
