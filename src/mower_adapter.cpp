@@ -46,7 +46,7 @@ void MowerAdapter::parseArduMowerResponse(String line)
     return;
   }
 
-  if (line[1] != ',')
+  if (line[1] != ',' && !(line[0] == 'S' && (line[1] == '3' || line[1] == '4')))
   // return;
   {
     Log(DBG, "%sparseArduMowerResponse::guard::second-char(%c)", _LOG_, line[1]);
@@ -70,7 +70,9 @@ void MowerAdapter::parseArduMowerResponse(String line)
   // TODO test
   // if (chk.value != checksum) return;
 
-  if (payload.startsWith("S3,"))
+  if (payload.startsWith("S4,"))
+    parseGpsDetailsResponse(payload);
+  else if (payload.startsWith("S3,"))
     parseSensorSummaryResponse(payload);
   else if (payload.startsWith("S,"))
     parseStateResponse(payload);
@@ -348,6 +350,12 @@ bool MowerAdapter::requestSensorSummary()
   return sendCommand("AT+S3", true);
 }
 
+bool MowerAdapter::requestGpsDetails()
+{
+  Log(DBG, "%srequestGpsDetails", _LOG_);
+  return sendCommand("AT+S4", true);
+}
+
 // linear: m/s
 // angular: rad/s
 bool MowerAdapter::manualDrive(float linear, float angular)
@@ -538,6 +546,78 @@ void MowerAdapter::parseSensorSummaryResponse(String line)
                      });
 
   _sensorSummary.timestamp = now;
+}
+
+void MowerAdapter::parseGpsDetailsResponse(String line)
+{
+  Log(DBG, "%sparseGpsDetailsResponse", _LOG_);
+  const auto now = millis();
+
+  _gpsDetails.timestamp = now;
+
+  int satCount = 0;
+  int fieldIdx = -1;
+
+  processCSVResponse(line, [&](int index, String val)
+                     {
+                       fieldIdx = index;
+                       switch (index)
+                       {
+                       case 1:
+                         _gpsDetails.numSV = val.toInt();
+                         break;
+                       case 2:
+                         _gpsDetails.numSVdgps = val.toInt();
+                         break;
+                       case 3:
+                         _gpsDetails.solution = val.toInt();
+                         break;
+                       case 4:
+                         _gpsDetails.hAccuracy = val.toFloat();
+                         break;
+                       case 5:
+                         _gpsDetails.vAccuracy = val.toFloat();
+                         break;
+                       case 6:
+                         _gpsDetails.dgpsAge = val.toInt();
+                         break;
+                       case 7:
+                         satCount = val.toInt();
+                         _gpsDetails.satellites.clear();
+                         break;
+                       default:
+                         // Satellitenfelder ab Index 8, 8 Felder pro Satellit
+                         {
+                           int satField = index - 8;
+                           if (satField < 0) break;
+                           int satIdx = satField / 8;
+                           int col = satField % 8;
+                           if (satIdx >= satCount || satIdx >= 40) break;
+                           if ((size_t)satIdx >= _gpsDetails.satellites.size()) {
+                             _gpsDetails.satellites.resize(satIdx + 1);
+                           }
+                           switch (col) {
+                           case 0: _gpsDetails.satellites[satIdx].gnssId = val.toInt(); break;
+                           case 1: _gpsDetails.satellites[satIdx].svId = val.toInt(); break;
+                           case 2: _gpsDetails.satellites[satIdx].sigId = val.toInt(); break;
+                           case 3: _gpsDetails.satellites[satIdx].cno = val.toInt(); break;
+                           case 4: _gpsDetails.satellites[satIdx].qualityInd = val.toInt(); break;
+                           case 5: _gpsDetails.satellites[satIdx].prUsed = val.toInt() == 1; break;
+                           case 6: _gpsDetails.satellites[satIdx].crCorrUsed = val.toInt() == 1; break;
+                           case 7: _gpsDetails.satellites[satIdx].prRes = val.toFloat(); break;
+                           }
+                         }
+                         break;
+                       }
+                     });
+
+  // Auf tatsächliche Anzahl kürzen (falls Antwort weniger Sats hatte)
+  if ((size_t)satCount < _gpsDetails.satellites.size()) {
+    _gpsDetails.satellites.resize(satCount);
+  }
+
+  Log(DBG, "%sparseGpsDetailsResponse done sats=%d/%d fields=%d",
+      _LOG_, (int)_gpsDetails.satellites.size(), satCount, fieldIdx);
 }
 
 void MowerAdapter::parseVersionResponse(String line)

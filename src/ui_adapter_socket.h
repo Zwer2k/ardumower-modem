@@ -21,6 +21,10 @@ namespace ArduMower
         requestHello = 0,
         modemLogSettings,
         mowerConsoleRequest,
+        requestGpsDetails,
+        stopGpsDetails,
+        requestSensorSummary,
+        stopSensorSummary,
         requestDataTypeLength
       };
 
@@ -33,6 +37,7 @@ namespace ArduMower
         mowerConsole,
         map,
         sensorSummary,
+        gpsDetails,
         responseDataTypeLength
       };
 
@@ -103,6 +108,9 @@ namespace ArduMower
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
+        bool gpsDetailsActive = false;
+        bool sensorSummaryActive = false;
+
       private:
         void startMapChunkSend(UiSocketItem* sendTo, bool force);
         void processMapChunkSend();
@@ -129,6 +137,7 @@ namespace ArduMower
         void versionRequestLoop();
         void stateRequestLoop();
         void sensorRequestLoop();
+        void gpsRequestLoop();
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);

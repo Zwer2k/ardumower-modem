@@ -1,8 +1,20 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
     import SensorEvents from "./SensorEvents.svelte";
-    import { socketStore } from '../../stores/socket';
+    import { socketStore, socketService } from '../../stores/socket';
+    import { page } from '$app/stores';
     import { browser } from '$app/environment';
+
+    // Reagiere auf Sichtbarkeit (Dashboard ist immer im DOM, nur CSS hidden)
+    $effect(() => {
+        if (!browser) return;
+        const dashboard = $page.url?.searchParams?.get('dashboard');
+        if (dashboard === 'status') {
+            socketService.requestSensorSummary();
+        } else {
+            socketService.stopSensorSummary();
+        }
+    });
 </script>
 
 <div class="dashboard-content">

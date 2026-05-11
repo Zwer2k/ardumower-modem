@@ -13,6 +13,7 @@ import type {
   ConsoleResponseData,
   MapRaw,
   SensorSummary,
+  GpsDetails,
 } from "../model";
 import { ResponseDataType, RequestDataType } from "../model";
 import { handleMapChunk } from "../map/map-chunk-buffer";
@@ -25,6 +26,7 @@ export interface SocketState {
   stats: Stats | null;
   desiredState: DesiredState | null;
   sensorSummary: SensorSummary | null;
+  gpsDetails: GpsDetails | null;
   modemLog: LogLine[];
   consoleLines: ConsoleLine[];
   modemDbgLevel: number;
@@ -39,6 +41,7 @@ const initialState: SocketState = {
   stats: null,
   desiredState: null,
   sensorSummary: null,
+  gpsDetails: null,
   modemLog: [],
   consoleLines: [],
   modemDbgLevel: 15,
@@ -187,6 +190,9 @@ class SocketService {
                 case ResponseDataType.sensorSummary:
                   newState.sensorSummary = jsonData.data as SensorSummary;
                   break;
+                case ResponseDataType.gpsDetails:
+                  newState.gpsDetails = jsonData.data as GpsDetails;
+                  break;
                 default:
               }
               return newState;
@@ -265,6 +271,38 @@ class SocketService {
 
   clearConsoleLines() {
     socketStore.update((state) => ({ ...state, consoleLines: [] }));
+  }
+
+  requestGpsDetails() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.requestGpsDetails,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
+  stopGpsDetails() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.stopGpsDetails,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
+  requestSensorSummary() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.requestSensorSummary,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
+  stopSensorSummary() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.stopSensorSummary,
+      data: {},
+    };
+    this.sendMessage(req);
   }
 
   disconnect() {

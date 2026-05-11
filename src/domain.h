@@ -202,6 +202,50 @@ namespace ArduMower
         void marshal(const JsonObject &o) const;
       };
 
+      class GpsSatellite
+      {
+      public:
+        uint8_t gnssId;
+        uint8_t svId;
+        uint8_t sigId;
+        uint8_t cno;
+        uint8_t qualityInd;
+        bool prUsed;
+        bool crCorrUsed;
+        float prRes;
+
+        GpsSatellite()
+            : gnssId(0), svId(0), sigId(0), cno(0), qualityInd(0),
+              prUsed(false), crCorrUsed(false), prRes(0)
+        {
+        }
+
+        void marshal(const JsonObject &o) const;
+      };
+
+      class GpsDetails
+      {
+      public:
+        uint32_t timestamp;
+        int numSV;
+        int numSVdgps;
+        int solution;
+        float hAccuracy;
+        float vAccuracy;
+        uint32_t dgpsAge;
+        std::vector<GpsSatellite> satellites;
+
+        GpsDetails()
+            : timestamp(0), numSV(0), numSVdgps(0), solution(0),
+              hAccuracy(0), vAccuracy(0), dgpsAge(0)
+        {
+        }
+
+        bool operator==(const GpsDetails &other);
+        bool operator!=(const GpsDetails &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
+      };
+
       class StateSource
       {
       public:
@@ -216,6 +260,8 @@ namespace ArduMower
         virtual DesiredState *desiredStateP() = 0;
         virtual SensorSummary sensorSummary() = 0;
         virtual SensorSummary *sensorSummaryP() = 0;
+        virtual GpsDetails gpsDetails() = 0;
+        virtual GpsDetails *gpsDetailsP() = 0;
 
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
       };
@@ -239,6 +285,7 @@ namespace ArduMower
         virtual bool requestStatus() = 0;
         virtual bool requestStats() = 0;
         virtual bool requestSensorSummary() = 0;
+        virtual bool requestGpsDetails() = 0;
 
         virtual bool manualDrive(float linear, float angular) = 0;
 

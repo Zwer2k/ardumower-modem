@@ -177,6 +177,28 @@ export interface SensorSummary {
   rain_triggered: boolean;
 }
 
+export interface GpsSatellite {
+  gnssId: number;
+  svId: number;
+  sigId: number;
+  cno: number;
+  qualityInd: number;
+  prUsed: boolean;
+  crCorrUsed: boolean;
+  prRes: number;
+}
+
+export interface GpsDetails {
+  timestamp: number;
+  numSV: number;
+  numSVdgps: number;
+  solution: number;
+  hAccuracy: number;
+  vAccuracy: number;
+  dgpsAge: number;
+  satellites: GpsSatellite[];
+}
+
 export interface DesiredState {
   speed: number;
   mower_motor_enabled: boolean;
@@ -236,6 +258,7 @@ export enum ResponseDataType {
   mowerConsole,
   map,
   sensorSummary,
+  gpsDetails,
 }
 
 // Map data for WebSocket
@@ -260,6 +283,10 @@ export enum RequestDataType {
   hello = 0,
   modemLogSettings,
   mowerConsoleRequest,
+  requestGpsDetails,
+  stopGpsDetails,
+  requestSensorSummary,
+  stopSensorSummary,
 }
 
 export interface ModemLogSettings {

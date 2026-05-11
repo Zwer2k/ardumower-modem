@@ -16,6 +16,7 @@
     import IconTerminal from "carbon-icons-svelte/lib/Terminal.svelte";
     import IconDashboard from "carbon-icons-svelte/lib/Dashboard.svelte";
     import IconMap from "carbon-icons-svelte/lib/Map.svelte";
+    import IconGps from "carbon-icons-svelte/lib/Location.svelte";
 
     import { Busy } from "../stores/busy";
     import SaveDiscard from "../widget/SaveDiscard.svelte";
@@ -79,6 +80,13 @@
         iconDescription="Terminal">
         <span class="button-text">Terminal</span>
     </Button>
+    <Button
+        href="/?dashboard=gps"
+        kind="tertiary"
+        icon={IconGps}
+        iconDescription="GPS">
+        <span class="button-text">GPS</span>
+    </Button>
     <!-- <Button
         on:click={() => { url = "/map"; navigate(url, { replace: true }); }}
         kind="tertiary"
@@ -118,7 +126,7 @@
     {/if}
 </Header>
 <Content>
-    {@render children()}    
+    {@render children()}
 </Content>
 <HelpDialog bind:open={helpOpen} />
 
@@ -149,7 +157,7 @@
     .button-text {
         display: none;
     }
-    
+
     /* Navigation-Buttons genauso kompakt wie HeaderUtilities-Buttons machen */
     :global(.bx--header .bx--btn--tertiary) {
         min-width: 48px !important;
@@ -157,12 +165,12 @@
         padding: 0 !important;
         justify-content: center !important;
     }
-    
+
     /* Icon-Container zentrieren */
     :global(.bx--header .bx--btn--tertiary .bx--btn__icon) {
         margin: 0 !important;
     }
-    
+
     /* Entferne Text-Spacing */
     :global(.bx--header .bx--btn--tertiary:not(.bx--header__action)) {
         padding-left: 0 !important;
@@ -174,7 +182,7 @@
     :global(#main-content) {
         padding: 0;
     }
-    
+
     /* Noch kleinere Bildschirme - Icons etwas kleiner aber immer noch größer als Standard */
     :global(.bx--header__action svg) {
         width: 18px !important;

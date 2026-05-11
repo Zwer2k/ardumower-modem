@@ -36,7 +36,27 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
   case RequestDataType::mowerConsoleRequest:
     _socketHandler->cmdToMower(jsonData["cmd"]);
     break;
-  
+
+  case RequestDataType::requestGpsDetails:
+    _socketHandler->gpsDetailsActive = true;
+    Log(INFO, "%s GPS details polling activated", _LOG_);
+    break;
+
+  case RequestDataType::stopGpsDetails:
+    _socketHandler->gpsDetailsActive = false;
+    Log(INFO, "%s GPS details polling deactivated", _LOG_);
+    break;
+
+  case RequestDataType::requestSensorSummary:
+    _socketHandler->sensorSummaryActive = true;
+    Log(INFO, "%s Sensor summary polling activated", _LOG_);
+    break;
+
+  case RequestDataType::stopSensorSummary:
+    _socketHandler->sensorSummaryActive = false;
+    Log(INFO, "%s Sensor summary polling deactivated", _LOG_);
+    break;
+
   default:
     break;
   }
@@ -177,14 +197,24 @@ void UiSocketHandler::loop()
       logToUiLoop();
       break;
     case 8:
-      sensorRequestLoop();
+      if (sensorSummaryActive) sensorRequestLoop();
       break;
     case 9:
-      sendData(ResponseDataType::sensorSummary);
+      if (sensorSummaryActive && _source.sensorSummary().timestamp > 0) {
+        sendData(ResponseDataType::sensorSummary);
+      }
+      break;
+    case 10:
+      if (gpsDetailsActive) gpsRequestLoop();
+      break;
+    case 11:
+      if (gpsDetailsActive && _source.gpsDetails().timestamp > 0) {
+        sendData(ResponseDataType::gpsDetails);
+      }
       break;
     }
     loopCase++;
-    if (loopCase > 9) loopCase = 0;
+    if (loopCase > 11) loopCase = 0;
   yield();
   
   //pingClients();
@@ -222,6 +252,15 @@ void UiSocketHandler::sensorRequestLoop()
   lastDataRequestTimestamp[ResponseDataType::sensorSummary] = millis();
 }
 
+void UiSocketHandler::gpsRequestLoop()
+{
+  if ((lastDataRequestTimestamp[ResponseDataType::gpsDetails] > 0) && ((millis() - lastDataRequestTimestamp[ResponseDataType::gpsDetails]) < 20000))
+    return;
+  if (_cmd.requestGpsDetails()) {
+    lastDataRequestTimestamp[ResponseDataType::gpsDetails] = millis();
+  }
+}
+
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, bool force)
 {
   switch (dataType) {
@@ -240,6 +279,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       break;
     case ResponseDataType::sensorSummary:
       sendData(dataType, sendTo, _source.sensorSummary(), force);
+      break;
+    case ResponseDataType::gpsDetails:
+      sendData(dataType, sendTo, _source.gpsDetails(), force);
       break;
     default:
       break;
@@ -463,7 +505,8 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   oldDataTimestamp[dataType] = data.timestamp;
   lastDataRequestTimestamp[dataType] = 0;
 
-  DynamicJsonDocument doc(4096);
+  const size_t docSize = (dataType == ResponseDataType::gpsDetails) ? 4096 : 4096;
+  DynamicJsonDocument doc(docSize);
   doc["type"] = dataType;
   data.marshal(doc.createNestedObject("data"));
   

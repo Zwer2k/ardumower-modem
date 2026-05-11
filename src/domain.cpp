@@ -258,3 +258,41 @@ void SensorSummary::marshal(const JsonObject &o) const
   o[_t_sensor_lift_triggered] = liftTriggered;
   o[_t_sensor_rain_triggered] = rainTriggered;
 }
+
+bool GpsDetails::operator==(const GpsDetails &other)
+{
+  return timestamp == other.timestamp &&
+         numSV == other.numSV &&
+         numSVdgps == other.numSVdgps &&
+         solution == other.solution &&
+         hAccuracy == other.hAccuracy &&
+         vAccuracy == other.vAccuracy &&
+         dgpsAge == other.dgpsAge;
+}
+
+void GpsSatellite::marshal(const JsonObject &o) const
+{
+  o["gnssId"] = gnssId;
+  o["svId"] = svId;
+  o["sigId"] = sigId;
+  o["cno"] = cno;
+  o["qualityInd"] = qualityInd;
+  o["prUsed"] = prUsed;
+  o["crCorrUsed"] = crCorrUsed;
+  o["prRes"] = prRes;
+}
+
+void GpsDetails::marshal(const JsonObject &o) const
+{
+  o["numSV"] = numSV;
+  o["numSVdgps"] = numSVdgps;
+  o["solution"] = solution;
+  o["hAccuracy"] = hAccuracy;
+  o["vAccuracy"] = vAccuracy;
+  o["dgpsAge"] = dgpsAge;
+  JsonArray arr = o.createNestedArray("satellites");
+  for (const auto& sat : satellites) {
+    JsonObject obj = arr.createNestedObject();
+    sat.marshal(obj);
+  }
+}
