@@ -1,5 +1,6 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
+    import SensorEvents from "./SensorEvents.svelte";
     import { socketStore } from '../../stores/socket';
     import { browser } from '$app/environment';
 </script>
@@ -12,6 +13,7 @@
             desiredState={$socketStore.desiredState}
             valueDescriptions={$socketStore.valueDescriptions}
         />
+        <SensorEvents summary={$socketStore.sensorSummary} />
     {/if}
 </div>
 

@@ -100,6 +100,28 @@ export interface ValueDescriptions {
   logLevel: number;
 }
 
+export const SensorDescriptions: { [sensorId: number]: string } = {
+  0: "none",
+  1: "bat undervoltage",
+  2: "obstacle",
+  3: "gps fix timeout",
+  4: "imu timeout",
+  5: "imu tilt",
+  6: "kidnapped",
+  7: "overload",
+  8: "motor error",
+  9: "gps invalid",
+  10: "odometry error",
+  11: "no route",
+  12: "mem overflow",
+  13: "bumper",
+  14: "sonar",
+  15: "lift",
+  16: "rain",
+  17: "stop button",
+  18: "temp out of range",
+};
+
 export interface Stats {
   idle: number;
   charge: number;
@@ -136,6 +158,23 @@ export interface State {
   sensor: number;
   amps: number;
   map_crc: number;
+}
+
+export interface SensorSummary {
+  timestamp: number;
+  sonar_left: number;
+  sonar_center: number;
+  sonar_right: number;
+  sonar_obstacle: boolean;
+  sonar_near_obstacle: boolean;
+  bumper_left: boolean;
+  bumper_right: boolean;
+  bumper_obstacle: boolean;
+  bumper_near_obstacle: boolean;
+  lidar_obstacle: boolean;
+  lidar_near_obstacle: boolean;
+  lift_triggered: boolean;
+  rain_triggered: boolean;
 }
 
 export interface DesiredState {
@@ -196,6 +235,7 @@ export enum ResponseDataType {
   modemLog,
   mowerConsole,
   map,
+  sensorSummary,
 }
 
 // Map data for WebSocket

@@ -70,7 +70,9 @@ void MowerAdapter::parseArduMowerResponse(String line)
   // TODO test
   // if (chk.value != checksum) return;
 
-  if (payload.startsWith("S,"))
+  if (payload.startsWith("S3,"))
+    parseSensorSummaryResponse(payload);
+  else if (payload.startsWith("S,"))
     parseStateResponse(payload);
   else if (payload.startsWith("V,"))
     parseVersionResponse(payload);
@@ -338,6 +340,14 @@ bool MowerAdapter::requestStats()
   return sendCommand("AT+T", true);
 }
 
+bool MowerAdapter::requestSensorSummary()
+{
+  Log(DBG, "%srequestSensorSummary", _LOG_);
+  if (!assertSendIsInitialized())
+    return false;
+  return sendCommand("AT+S3", true);
+}
+
 // linear: m/s
 // angular: rad/s
 bool MowerAdapter::manualDrive(float linear, float angular)
@@ -473,6 +483,61 @@ void MowerAdapter::parseStatisticsResponse(String line)
                      });
 
   _stats.timestamp = now;
+}
+
+void MowerAdapter::parseSensorSummaryResponse(String line)
+{
+  Log(DBG, "%sparseSensorSummaryResponse", _LOG_);
+  const auto now = millis();
+
+  processCSVResponse(line, [&](int index, String val)
+                     {
+                       // S3,<left>,<center>,<right>,<sonarObs>,<sonarNear>,<bumpL>,<bumpR>,<bumpObs>,<bumpNear>,<lidarObs>,<lidarNear>,<lift>,<rain>
+                       switch (index)
+                       {
+                       case 1:
+                         _sensorSummary.sonarLeft = val.toFloat();
+                         break;
+                       case 2:
+                         _sensorSummary.sonarCenter = val.toFloat();
+                         break;
+                       case 3:
+                         _sensorSummary.sonarRight = val.toFloat();
+                         break;
+                       case 4:
+                         _sensorSummary.sonarObstacle = val.toInt() == 1;
+                         break;
+                       case 5:
+                         _sensorSummary.sonarNearObstacle = val.toInt() == 1;
+                         break;
+                       case 6:
+                         _sensorSummary.bumperLeft = val.toInt() == 1;
+                         break;
+                       case 7:
+                         _sensorSummary.bumperRight = val.toInt() == 1;
+                         break;
+                       case 8:
+                         _sensorSummary.bumperObstacle = val.toInt() == 1;
+                         break;
+                       case 9:
+                         _sensorSummary.bumperNearObstacle = val.toInt() == 1;
+                         break;
+                       case 10:
+                         _sensorSummary.lidarObstacle = val.toInt() == 1;
+                         break;
+                       case 11:
+                         _sensorSummary.lidarNearObstacle = val.toInt() == 1;
+                         break;
+                       case 12:
+                         _sensorSummary.liftTriggered = val.toInt() == 1;
+                         break;
+                       case 13:
+                         _sensorSummary.rainTriggered = val.toInt() == 1;
+                         break;
+                       }
+                     });
+
+  _sensorSummary.timestamp = now;
 }
 
 void MowerAdapter::parseVersionResponse(String line)

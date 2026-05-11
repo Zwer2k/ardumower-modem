@@ -12,6 +12,7 @@ import type {
   ConsoleLine,
   ConsoleResponseData,
   MapRaw,
+  SensorSummary,
 } from "../model";
 import { ResponseDataType, RequestDataType } from "../model";
 import { handleMapChunk } from "../map/map-chunk-buffer";
@@ -23,6 +24,7 @@ export interface SocketState {
   state: State | null;
   stats: Stats | null;
   desiredState: DesiredState | null;
+  sensorSummary: SensorSummary | null;
   modemLog: LogLine[];
   consoleLines: ConsoleLine[];
   modemDbgLevel: number;
@@ -36,6 +38,7 @@ const initialState: SocketState = {
   state: null,
   stats: null,
   desiredState: null,
+  sensorSummary: null,
   modemLog: [],
   consoleLines: [],
   modemDbgLevel: 15,
@@ -180,6 +183,9 @@ class SocketService {
                   ) {
                     handleMapChunk(jsonData.data);
                   }
+                  break;
+                case ResponseDataType.sensorSummary:
+                  newState.sensorSummary = jsonData.data as SensorSummary;
                   break;
                 default:
               }

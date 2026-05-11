@@ -32,6 +32,7 @@ namespace ArduMower
         modemLog,
         mowerConsole,
         map,
+        sensorSummary,
         responseDataTypeLength
       };
 
@@ -127,6 +128,7 @@ namespace ArduMower
         
         void versionRequestLoop();
         void stateRequestLoop();
+        void sensorRequestLoop();
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);

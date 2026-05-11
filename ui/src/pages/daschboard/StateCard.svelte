@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { DesiredState, State, Stats, ValueDescriptions } from "../../model";
+    import { SensorDescriptions } from "../../model";
     import { RobotCommandService } from "../../service";
     import MowMotorIcon from "carbon-icons-svelte/lib/TropicalStormTracks.svelte";
     import PlayFilled from "carbon-icons-svelte/lib/PlayFilled.svelte";
@@ -55,6 +56,7 @@
                 #{state.position?.visible_satellites ?? 0}/{state.position?.visible_satellites_dgps ?? 0}
             </div>
             <div class="label">State</div><div>{valueDescriptions.job[state.job ?? 0]}</div>
+            <div class="label">Sensor</div><div>{SensorDescriptions[state.sensor ?? 0] ?? "unknown"}</div>
             <div class="label">Map CRC</div><div>{state.map_crc ?? 0}</div>
         </div>
     {/if}

@@ -48,6 +48,21 @@ const char * _t_position_delta = "delta";
 const char * _t_position_solution = "solution";
 const char * _t_position_age = "age";
 const char * _t_position_accuracy = "accuracy";
+
+const char * _t_sensor_summary = "sensor_summary";
+const char * _t_sensor_sonar_left = "sonar_left";
+const char * _t_sensor_sonar_center = "sonar_center";
+const char * _t_sensor_sonar_right = "sonar_right";
+const char * _t_sensor_sonar_obstacle = "sonar_obstacle";
+const char * _t_sensor_sonar_near_obstacle = "sonar_near_obstacle";
+const char * _t_sensor_bumper_left = "bumper_left";
+const char * _t_sensor_bumper_right = "bumper_right";
+const char * _t_sensor_bumper_obstacle = "bumper_obstacle";
+const char * _t_sensor_bumper_near_obstacle = "bumper_near_obstacle";
+const char * _t_sensor_lidar_obstacle = "lidar_obstacle";
+const char * _t_sensor_lidar_near_obstacle = "lidar_near_obstacle";
+const char * _t_sensor_lift_triggered = "lift_triggered";
+const char * _t_sensor_rain_triggered = "rain_triggered";
 const char * _t_position_visibleSatellites = "visible_satellites";
 const char * _t_position_visibleSatellitesDgps = "visible_satellites_dgps";
 const char * _t_position_mowPointIndex = "mow_point_index";
@@ -207,4 +222,39 @@ void DesiredState::marshal(const JsonObject &o) const
   o[_t_desiredState_finishAndRestart] = finishAndRestart;
   o[_t_desiredState_op] = op;
   o[_t_desiredState_fixTimeout] = fixTimeout;
+}
+
+bool SensorSummary::operator==(const SensorSummary &other)
+{
+  return timestamp == other.timestamp &&
+         sonarLeft == other.sonarLeft &&
+         sonarCenter == other.sonarCenter &&
+         sonarRight == other.sonarRight &&
+         sonarObstacle == other.sonarObstacle &&
+         sonarNearObstacle == other.sonarNearObstacle &&
+         bumperLeft == other.bumperLeft &&
+         bumperRight == other.bumperRight &&
+         bumperObstacle == other.bumperObstacle &&
+         bumperNearObstacle == other.bumperNearObstacle &&
+         lidarObstacle == other.lidarObstacle &&
+         lidarNearObstacle == other.lidarNearObstacle &&
+         liftTriggered == other.liftTriggered &&
+         rainTriggered == other.rainTriggered;
+}
+
+void SensorSummary::marshal(const JsonObject &o) const
+{
+  o[_t_sensor_sonar_left] = sonarLeft;
+  o[_t_sensor_sonar_center] = sonarCenter;
+  o[_t_sensor_sonar_right] = sonarRight;
+  o[_t_sensor_sonar_obstacle] = sonarObstacle;
+  o[_t_sensor_sonar_near_obstacle] = sonarNearObstacle;
+  o[_t_sensor_bumper_left] = bumperLeft;
+  o[_t_sensor_bumper_right] = bumperRight;
+  o[_t_sensor_bumper_obstacle] = bumperObstacle;
+  o[_t_sensor_bumper_near_obstacle] = bumperNearObstacle;
+  o[_t_sensor_lidar_obstacle] = lidarObstacle;
+  o[_t_sensor_lidar_near_obstacle] = lidarNearObstacle;
+  o[_t_sensor_lift_triggered] = liftTriggered;
+  o[_t_sensor_rain_triggered] = rainTriggered;
 }

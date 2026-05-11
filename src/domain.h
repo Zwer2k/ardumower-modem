@@ -169,6 +169,39 @@ namespace ArduMower
         void marshal(const JsonObject &o) const;
       };
 
+      class SensorSummary
+      {
+      public:
+        uint32_t timestamp;
+        float sonarLeft;
+        float sonarCenter;
+        float sonarRight;
+        bool sonarObstacle;
+        bool sonarNearObstacle;
+        bool bumperLeft;
+        bool bumperRight;
+        bool bumperObstacle;
+        bool bumperNearObstacle;
+        bool lidarObstacle;
+        bool lidarNearObstacle;
+        bool liftTriggered;
+        bool rainTriggered;
+
+        SensorSummary()
+            : timestamp(0), sonarLeft(0), sonarCenter(0), sonarRight(0),
+              sonarObstacle(false), sonarNearObstacle(false),
+              bumperLeft(false), bumperRight(false),
+              bumperObstacle(false), bumperNearObstacle(false),
+              lidarObstacle(false), lidarNearObstacle(false),
+              liftTriggered(false), rainTriggered(false)
+        {
+        }
+
+        bool operator==(const SensorSummary &other);
+        bool operator!=(const SensorSummary &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
+      };
+
       class StateSource
       {
       public:
@@ -181,6 +214,8 @@ namespace ArduMower
         virtual ArduMower::Domain::Robot::Stats::Stats *statsP() = 0;
         virtual ArduMower::Domain::Robot::Properties *propsP() = 0;
         virtual DesiredState *desiredStateP() = 0;
+        virtual SensorSummary sensorSummary() = 0;
+        virtual SensorSummary *sensorSummaryP() = 0;
 
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
       };
@@ -203,6 +238,7 @@ namespace ArduMower
         virtual bool requestVersion() = 0;
         virtual bool requestStatus() = 0;
         virtual bool requestStats() = 0;
+        virtual bool requestSensorSummary() = 0;
 
         virtual bool manualDrive(float linear, float angular) = 0;
 

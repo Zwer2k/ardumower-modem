@@ -176,9 +176,15 @@ void UiSocketHandler::loop()
     case 7:
       logToUiLoop();
       break;
+    case 8:
+      sensorRequestLoop();
+      break;
+    case 9:
+      sendData(ResponseDataType::sensorSummary);
+      break;
     }
     loopCase++;
-    if (loopCase > 7) loopCase = 0;
+    if (loopCase > 9) loopCase = 0;
   yield();
   
   //pingClients();
@@ -208,6 +214,14 @@ void UiSocketHandler::stateRequestLoop()
   } 
 }
 
+void UiSocketHandler::sensorRequestLoop()
+{
+  if ((lastDataRequestTimestamp[ResponseDataType::sensorSummary] > 0) && ((millis() - lastDataRequestTimestamp[ResponseDataType::sensorSummary]) < 500))
+    return;
+  _cmd.requestSensorSummary();
+  lastDataRequestTimestamp[ResponseDataType::sensorSummary] = millis();
+}
+
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, bool force)
 {
   switch (dataType) {
@@ -223,6 +237,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     case ResponseDataType::map:
       // Starte asynchronen Map-Chunk-Versand
       startMapChunkSend(sendTo, force);
+      break;
+    case ResponseDataType::sensorSummary:
+      sendData(dataType, sendTo, _source.sensorSummary(), force);
       break;
     default:
       break;
