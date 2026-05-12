@@ -1,9 +1,14 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
     import { socketStore, socketService } from '../../stores/socket';
-    import { ubxCommands, ubxCategories, getParser, type UbxCommand } from './ubxCommands';
+    import { gpsStore } from '../../stores/gpsStore';
+
+    import GpsSkyplot from './GpsSkyplot.svelte';
+    import GpsDeviationMap from './GpsDeviationMap.svelte';
+    import GpsAltitudeChart from './GpsAltitudeChart.svelte';
+    import GpsNavStatus from './GpsNavStatus.svelte';
+    import GpsAdvancedConfig from './GpsAdvancedConfig.svelte';
 
     function gnssName(gnssId: number): string {
         switch (gnssId) {
@@ -45,9 +50,13 @@
         if (dashboard === 'gps') {
             console.log('[GpsDashboard] Activating GPS polling');
             socketService.requestGpsDetails();
+            gpsStore.connect();
+            gpsStore.startPolling();
         } else {
             console.log('[GpsDashboard] Deactivating GPS polling');
             socketService.stopGpsDetails();
+            gpsStore.stopPolling();
+            gpsStore.disconnect();
         }
     });
 
@@ -59,86 +68,6 @@
     let isStale = $derived(lastUpdate > 0 && (Date.now() - lastUpdate) > 10000);
 
     let mode = $state<'simple' | 'advanced'>('simple');
-    let activeCategory = $state('Receiver');
-    let selectedCommandId = $state<string>('');
-    let customHex = $state('');
-    let ubxHistory: { commandId: string; commandName: string; customHex: string; resp: string; time: string }[] = $state([]);
-    let parsedResult: Record<string, any> | null = $state(null);
-
-    // Non-reactive bookkeeping variables
-    let lastCommandId = '';
-    let processedUbxKey: string | number = '';
-
-    let filteredCommands = $derived(ubxCommands.filter(c => c.category === activeCategory));
-    let selectedCommand = $derived(ubxCommands.find(c => c.id === selectedCommandId) ?? null);
-
-    function sendSelectedCommand() {
-        const cmd = selectedCommand;
-        if (!cmd) return;
-        const hex = cmd.id === 'raw-custom' ? customHex.trim().replace(/\s/g, '') : cmd.hex;
-        if (!hex || hex.length % 2 !== 0) return;
-        lastCommandId = cmd.id;
-        parsedResult = null;
-        socketService.sendUbx(hex);
-    }
-
-    function handleUbxResponse(resp: import('../../model').UbxResponse) {
-        if (!resp || !resp.hex || resp.hex.length === 0) return;
-        // Robust dedup: prefer timestamp, fallback to hex (in case backend omits timestamp)
-        const dedupKey = (resp.timestamp && resp.timestamp > 0) ? resp.timestamp : resp.hex;
-        if (dedupKey === processedUbxKey) {
-            console.log('[GpsDashboard] Duplicate UBX response ignored, key:', dedupKey);
-            return;
-        }
-        processedUbxKey = dedupKey;
-
-        console.log('[GpsDashboard] Processing UBX response, key:', dedupKey, 'hex length:', resp.hex.length, 'lastCommandId:', lastCommandId);
-
-        const cmd = ubxCommands.find(c => c.id === lastCommandId);
-        const entry = {
-            commandId: lastCommandId,
-            commandName: cmd?.name || 'Custom',
-            customHex: cmd?.id === 'raw-custom' ? customHex : '',
-            resp: resp.hex,
-            time: new Date().toLocaleTimeString()
-        };
-        ubxHistory = [entry, ...ubxHistory].slice(0, 20);
-        if (cmd) {
-            const parser = getParser(cmd.id);
-            console.log('[GpsDashboard] Parser for', cmd.id, ':', parser ? 'found' : 'none');
-            if (parser) {
-                try {
-                    const parsed = parser(resp.hex);
-                    console.log('[GpsDashboard] Parsed result:', parsed);
-                    parsedResult = parsed;
-                } catch (e) {
-                    console.error('[GpsDashboard] Parser error:', e);
-                    parsedResult = { "Parse Error": String(e), "Raw Hex": resp.hex.substring(0, 200) };
-                }
-            } else {
-                parsedResult = { "Raw Hex": resp.hex.substring(0, 200) };
-            }
-        } else {
-            console.log('[GpsDashboard] No command found for id:', lastCommandId);
-        }
-    }
-
-    let unsubscribeUbx: (() => void) | null = null;
-
-    onMount(() => {
-        unsubscribeUbx = socketStore.subscribe((state) => {
-            if (state.ubxResponse) {
-                handleUbxResponse(state.ubxResponse);
-            }
-        });
-    });
-
-    onDestroy(() => {
-        if (unsubscribeUbx) {
-            unsubscribeUbx();
-            unsubscribeUbx = null;
-        }
-    });
 </script>
 
 <div class="dashboard-content">
@@ -148,154 +77,106 @@
     </div>
 
     {#if mode === 'advanced'}
-    <div class="ubx-panel">
-        <div class="ubx-categories">
-            {#each ubxCategories as cat}
-                <button class:active={activeCategory === cat} onclick={() => { activeCategory = cat; selectedCommandId = ''; parsedResult = null; }}>
-                    {cat}
-                </button>
-            {/each}
-        </div>
-
-        <div class="ubx-command-row">
-            <select bind:value={selectedCommandId}>
-                <option value="">Select command...</option>
-                {#each filteredCommands as cmd}
-                    <option value={cmd.id}>{cmd.name}</option>
-                {/each}
-            </select>
-            {#if selectedCommand?.id === 'raw-custom'}
-                <input type="text" placeholder="Hex bytes (e.g. B56206080000000E)" bind:value={customHex} />
-            {/if}
-            <button class="send-btn" onclick={sendSelectedCommand} disabled={!selectedCommandId || (selectedCommand?.id === 'raw-custom' && !customHex)}>
-                Send
-            </button>
-        </div>
-
-        {#if selectedCommand}
-            <div class="cmd-desc">{selectedCommand.description}</div>
-        {/if}
-
-        {#if parsedResult}
-            <div class="parsed-response">
-                <h5>Parsed Response</h5>
-                {#if Array.isArray(parsedResult)}
-                    <div class="parsed-table-wrapper">
-                        <table class="parsed-table">
-                            <thead>
-                                <tr>
-                                    {#each Object.keys(parsedResult[0]) as key}
-                                        <th>{key}</th>
-                                    {/each}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {#each parsedResult as row}
-                                    <tr>
-                                        {#each Object.values(row) as val}
-                                            <td>{val}</td>
-                                        {/each}
-                                    </tr>
-                                {/each}
-                            </tbody>
-                        </table>
-                    </div>
-                {:else}
-                    <div class="parsed-kv">
-                        {#each Object.entries(parsedResult) as [key, val]}
-                            <div class="kv-row">
-                                <span class="kv-key">{key}</span>
-                                <span class="kv-val">{val}</span>
-                            </div>
-                        {/each}
-                    </div>
-                {/if}
-            </div>
-        {:else}
-            <div class="parsed-response">
-                <h5>Parsed Response</h5>
-                <div class="parsed-kv">
-                    <div class="kv-row">
-                        <span class="kv-key">Status</span>
-                        <span class="kv-val">Waiting for response...</span>
-                    </div>
-                </div>
-            </div>
-        {/if}
-
-        {#if ubxHistory.length > 0}
-        <div class="ubx-history">
-            <h5>History ({ubxHistory.length})</h5>
-            {#each ubxHistory as entry}
-                <div class="ubx-entry">
-                    <div class="ubx-time">{entry.time} — {entry.commandName}</div>
-                    {#if entry.customHex}
-                        <div class="ubx-cmd">Custom: {entry.customHex.substring(0, 40)}</div>
-                    {/if}
-                    <div class="ubx-resp">{entry.resp.substring(0, 120)}{entry.resp.length > 120 ? '...' : ''}</div>
-                </div>
-            {/each}
-        </div>
-        {/if}
-    </div>
+        <GpsAdvancedConfig />
     {/if}
 
     {#if mode === 'simple'}
     {#if $socketStore.gpsDetails != null}
         {@const d = $socketStore.gpsDetails}
-        <div class="gps-stats">
-            <div class="stat-card">
-                <div class="stat-label">Solution</div>
-                <div class="stat-value" class:fix={d.solution === 2} class:float={d.solution === 1}>
-                    {solutionName(d.solution)}
-                </div>
+        {@const gps = $gpsStore}
+        <!-- u-Center-style Status Bar -->
+        <div class="uc-status-bar">
+            <div class="uc-status-item solution-{d.solution}">
+                <div class="uc-status-icon">📡</div>
+                <div class="uc-status-label">Fix</div>
+                <div class="uc-status-value">{solutionName(d.solution)}</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Satellites</div>
-                <div class="stat-value">{d.numSV} <span class="stat-small">({usedCount} used, {dgpsCount} dgps)</span></div>
+            <div class="uc-status-item">
+                <div class="uc-status-icon">🛰️</div>
+                <div class="uc-status-label">Satellites</div>
+                <div class="uc-status-value">{d.numSV} <span class="uc-status-sub">{usedCount} used</span></div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">H-Accuracy</div>
-                <div class="stat-value">{d.hAccuracy.toFixed(3)} m</div>
+            <div class="uc-status-item">
+                <div class="uc-status-icon">↔️</div>
+                <div class="uc-status-label">H-Accuracy</div>
+                <div class="uc-status-value">{d.hAccuracy.toFixed(2)} m</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">V-Accuracy</div>
-                <div class="stat-value">{d.vAccuracy.toFixed(3)} m</div>
+            <div class="uc-status-item">
+                <div class="uc-status-icon">↕️</div>
+                <div class="uc-status-label">V-Accuracy</div>
+                <div class="uc-status-value">{d.vAccuracy.toFixed(2)} m</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">DGPs Age</div>
-                <div class="stat-value">{d.dgpsAge} ms</div>
+            <div class="uc-status-item">
+                <div class="uc-status-icon">⏱️</div>
+                <div class="uc-status-label">DGPS Age</div>
+                <div class="uc-status-value">{d.dgpsAge} ms</div>
+            </div>
+            <div class="uc-status-item">
+                <div class="uc-status-icon">📶</div>
+                <div class="uc-status-label">DGPS Sats</div>
+                <div class="uc-status-value">{d.numSVdgps}</div>
             </div>
         </div>
 
-        <div class="cn0-section">
-            <h4>Signal Strength (C/N₀)</h4>
-            <div class="cn0-bars">
-                {#each sortedSats as sat}
-                    {@const gnss = gnssName(sat.gnssId)}
-                    {@const pct = Math.min(100, (sat.cno / 55) * 100)}
-                    <div class="cn0-row">
-                        <div class="cn0-label">{gnss} {sat.svId}</div>
-                        <div class="cn0-bar-bg">
-                            <div class="cn0-bar-fill" style="width: {pct}%; background: {sat.cno >= 40 ? '#1e8e3e' : sat.cno >= 30 ? '#b06000' : '#c5221f'}"></div>
+        <!-- New u-Center Style Visualizations -->
+        <div class="uc-visual-grid">
+            <div class="uc-visual-col">
+                <GpsSkyplot satellites={gps.navSat} />
+                <GpsDeviationMap positionHistory={gps.positionHistory} refLat={gps.refLat} refLon={gps.refLon} />
+            </div>
+            <div class="uc-visual-col">
+                <GpsNavStatus navPvt={gps.navPvt} navDop={gps.navDop} gpsDetails={gps.gpsDetails} />
+                <GpsAltitudeChart history={gps.altitudeHistory} />
+            </div>
+        </div>
+
+        <!-- CN0 Chart like u-Center -->
+        <div class="uc-cn0-panel">
+            <div class="uc-panel-header">
+                <span class="uc-panel-title">Signal Strength (C/N₀)</span>
+                <span class="uc-panel-sub">{satellites.length} satellites tracked</span>
+            </div>
+            <div class="uc-cn0-grid">
+                {#each [0,1,2,3,4,5,6] as gnssId}
+                    {@const gnssSats = sortedSats.filter(s => s.gnssId === gnssId)}
+                    {#if gnssSats.length > 0}
+                        <div class="uc-cn0-group">
+                            <div class="uc-cn0-group-label">{gnssName(gnssId)}</div>
+                            {#each gnssSats as sat}
+                                {@const pct = Math.min(100, (sat.cno / 55) * 100)}
+                                {@const barColor = sat.cno >= 40 ? '#00c853' : sat.cno >= 30 ? '#ffab00' : '#ff1744'}
+                                <div class="uc-cn0-bar-row">
+                                    <div class="uc-cn0-sv">{sat.svId}</div>
+                                    <div class="uc-cn0-bar-wrap">
+                                        <div class="uc-cn0-bar-bg">
+                                            <div class="uc-cn0-bar-fill" style="width: {pct}%; background: {barColor};"></div>
+                                        </div>
+                                    </div>
+                                    <div class="uc-cn0-val">{sat.cno}</div>
+                                    <div class="uc-cn0-badges">
+                                        {#if sat.prUsed}<span class="uc-badge used" title="Used">U</span>{/if}
+                                        {#if sat.crCorrUsed}<span class="uc-badge dgps" title="DGPS">D</span>{/if}
+                                    </div>
+                                </div>
+                            {/each}
                         </div>
-                        <div class="cn0-value">{sat.cno} dB-Hz</div>
-                        {#if sat.prUsed}<span class="badge used">U</span>{/if}
-                        {#if sat.crCorrUsed}<span class="badge dgps">D</span>{/if}
-                    </div>
+                    {/if}
                 {/each}
             </div>
         </div>
 
-        <div class="sat-table-section">
-            <h4>Satellite Details</h4>
+        <!-- Satellite Table -->
+        <div class="uc-table-panel">
+            <div class="uc-panel-header">
+                <span class="uc-panel-title">Satellite Details</span>
+            </div>
             <div class="sat-table-wrapper">
                 <table class="sat-table">
                     <thead>
                         <tr>
                             <th>GNSS</th>
                             <th>SV</th>
-                            <th>Sig</th>
+                            <th>Signal</th>
                             <th>C/N₀</th>
                             <th>Quality</th>
                             <th>PR Res</th>
@@ -306,14 +187,14 @@
                     <tbody>
                         {#each sortedSats as sat}
                             <tr class:used-row={sat.prUsed} class:dgps-row={sat.crCorrUsed}>
-                                <td>{gnssName(sat.gnssId)}</td>
+                                <td><span class="gnss-tag gnss-{sat.gnssId}">{gnssName(sat.gnssId)}</span></td>
                                 <td>{sat.svId}</td>
                                 <td>{sat.sigId}</td>
                                 <td class:good={sat.cno >= 40} class:weak={sat.cno < 30}>{sat.cno}</td>
                                 <td>{qualityName(sat.qualityInd)}</td>
                                 <td>{sat.prRes.toFixed(1)} m</td>
-                                <td>{sat.prUsed ? "Yes" : "No"}</td>
-                                <td>{sat.crCorrUsed ? "Yes" : "No"}</td>
+                                <td>{sat.prUsed ? "✓" : "—"}</td>
+                                <td>{sat.crCorrUsed ? "✓" : "—"}</td>
                             </tr>
                         {/each}
                     </tbody>
@@ -731,14 +612,645 @@
         font-size: 0.8em;
     }
 
+    .frames-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 8px;
+        padding: 0 4px;
+    }
+    .frames-filtered {
+        color: #888;
+        font-weight: 400;
+        font-size: 0.9em;
+    }
+    .frames-toggle {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.85em;
+        font-weight: 400;
+        cursor: pointer;
+    }
+    .frames-toggle input {
+        cursor: pointer;
+    }
+
+    .frame-card {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        overflow: hidden;
+    }
+
+    .frame-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: #f4f4f4;
+        border-bottom: 1px solid #ddd;
+        font-size: 0.85em;
+    }
+
+    .frame-badge {
+        font-size: 0.8em;
+        width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-weight: bold;
+    }
+
+    .frame-badge.valid {
+        background: #e6f4ea;
+        color: #1e8e3e;
+    }
+
+    .frame-badge.invalid {
+        background: #fce8e8;
+        color: #c5221f;
+    }
+
+    .frame-title {
+        flex: 1;
+        font-weight: 600;
+        color: #333;
+        font-family: monospace;
+    }
+
+    .frame-meta {
+        color: #888;
+        font-size: 0.85em;
+    }
+
+    .frame-no-parser {
+        padding: 8px 10px;
+    }
+
+    .frame-no-parser-title {
+        font-size: 0.8em;
+        color: #888;
+        margin-bottom: 4px;
+    }
+
+    .hex-dump {
+        margin: 0;
+        padding: 6px 8px;
+        background: #f8f8f8;
+        border: 1px solid #eee;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 0.75em;
+        color: #333;
+        line-height: 1.4;
+        overflow-x: auto;
+    }
+
+    .parsed-kv.compact {
+        padding: 6px 10px;
+        gap: 2px;
+    }
+
+    .parsed-kv.compact .kv-row {
+        padding: 2px 4px;
+        font-size: 0.8em;
+    }
+
+    .raw-section {
+        padding: 0;
+    }
+
+    .raw-toggle {
+        width: 100%;
+        text-align: left;
+        padding: 8px 10px;
+        background: #f4f4f4;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85em;
+        font-family: monospace;
+        color: #555;
+    }
+
+    .raw-toggle:hover {
+        background: #e8e8e8;
+    }
+
+    .raw-hex {
+        padding: 8px 10px;
+        font-family: monospace;
+        font-size: 0.75em;
+        color: #333;
+        word-break: break-all;
+        background: #fafafa;
+        border-top: 1px solid #eee;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+
+    .ubx-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 4px 0;
+    }
+
+    .ubx-expand {
+        font-size: 0.85em;
+        color: #888;
+        width: 12px;
+    }
+
     .ubx-time {
         color: #888;
         font-size: 0.85em;
-        margin-bottom: 2px;
+        white-space: nowrap;
     }
 
-    .ubx-resp {
+    .ubx-name {
+        flex: 1;
+        color: #333;
+        font-weight: 600;
+    }
+
+    .ubx-bytes {
+        color: #888;
+        font-size: 0.85em;
+    }
+
+    .ubx-body {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid #eee;
+    }
+
+    .ubx-custom {
+        color: #006064;
+        margin-bottom: 4px;
+    }
+
+    .ubx-hex {
         color: #333;
         word-break: break-all;
+        max-height: 120px;
+        overflow-y: auto;
+    }
+
+    /* ─── RTK Card (NAV-RELPOSNED) ─── */
+    .rtk-card {
+        padding: 10px;
+    }
+    .rtk-status {
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    .rtk-status.none {
+        background: #f4f4f4;
+        color: #888;
+    }
+    .rtk-status.float {
+        background: #fff3e0;
+        color: #b06000;
+    }
+    .rtk-status.fixed {
+        background: #e6f4ea;
+        color: #1e8e3e;
+    }
+    .rtk-label {
+        font-size: 0.75em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+    }
+    .rtk-value {
+        font-size: 1.4em;
+        font-weight: bold;
+    }
+    .rtk-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .rtk-big {
+        background: #f8f8f8;
+        border-radius: 4px;
+        padding: 10px;
+        text-align: center;
+    }
+    .rtk-big-val {
+        font-size: 1.3em;
+        font-weight: bold;
+        color: #333;
+    }
+    .rtk-big-label {
+        font-size: 0.75em;
+        color: #888;
+        margin-top: 2px;
+    }
+    .rtk-coords {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        justify-content: center;
+    }
+    .rtk-coord {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85em;
+        font-family: monospace;
+    }
+    .rtk-coord span {
+        font-weight: bold;
+        color: #006064;
+        width: 16px;
+        text-align: center;
+    }
+    .rtk-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+    .rtk-detail {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 6px;
+        background: #fafafa;
+        border-radius: 3px;
+        font-size: 0.8em;
+    }
+    .rtk-dk {
+        color: #888;
+    }
+    .rtk-dv {
+        font-weight: 600;
+        color: #333;
+    }
+
+    /* ─── ODO Card (NAV-ODO) ─── */
+    .odo-card {
+        padding: 10px;
+        text-align: center;
+    }
+    .odo-big {
+        margin-bottom: 10px;
+    }
+    .odo-value {
+        font-size: 2em;
+        font-weight: bold;
+        color: #006064;
+    }
+    .odo-label {
+        font-size: 0.8em;
+        color: #888;
+    }
+    .odo-row {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+    }
+    .odo-item {
+        text-align: center;
+    }
+    .odo-ik {
+        display: block;
+        font-size: 0.75em;
+        color: #888;
+    }
+    .odo-iv {
+        font-weight: 600;
+        color: #333;
+        font-size: 0.95em;
+    }
+
+    /* ─── DGPS Card (NAV-DGPS) ─── */
+    .dgps-card {
+        padding: 10px;
+    }
+    .dgps-status {
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-align: center;
+        font-size: 0.95em;
+        font-weight: 600;
+    }
+    .dgps-status.active {
+        background: #e6f4ea;
+        color: #1e8e3e;
+    }
+    .dgps-status.inactive {
+        background: #f4f4f4;
+        color: #888;
+    }
+    .dgps-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    .dgps-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 6px;
+        background: #fafafa;
+        border-radius: 3px;
+        font-size: 0.8em;
+    }
+    .dgps-item span {
+        color: #888;
+    }
+
+    /* ─── Status Card (NAV-STATUS) ─── */
+    .status-card {
+        padding: 10px;
+    }
+    .status-badge {
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-align: center;
+        font-size: 1.1em;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: white;
+    }
+    .status-badge.fix3d {
+        background: #1e8e3e;
+    }
+    .status-badge.fix2d {
+        background: #b06000;
+    }
+    .status-badge.dr {
+        background: #555;
+    }
+    .status-badge.nofix {
+        background: #c5221f;
+    }
+    .status-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+    .status-item {
+        padding: 4px 6px;
+        background: #fafafa;
+        border-radius: 3px;
+        font-size: 0.8em;
+        color: #666;
+    }
+    .status-item.ok {
+        color: #1e8e3e;
+        font-weight: 600;
+    }
+    .status-times {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8em;
+        color: #888;
+        padding: 4px 6px;
+    }
+
+    /* ─── RF Card (MON-RF) ─── */
+    .rf-card {
+        padding: 10px;
+    }
+    .rf-block {
+        padding: 6px 8px;
+        background: #f8f8f8;
+        border-radius: 4px;
+        margin-bottom: 6px;
+    }
+    .rf-title {
+        font-size: 0.75em;
+        color: #888;
+        margin-bottom: 2px;
+    }
+    .rf-val {
+        font-size: 0.85em;
+        color: #333;
+    }
+    .rf-count {
+        font-size: 0.8em;
+        color: #888;
+        text-align: right;
+    }
+
+    /* ─── VER Card (MON-VER) ─── */
+    .ver-card {
+        padding: 10px;
+    }
+    .ver-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .ver-icon {
+        font-size: 1.2em;
+    }
+    .ver-label {
+        font-size: 0.75em;
+        color: #888;
+    }
+    .ver-value {
+        font-size: 0.95em;
+        font-weight: 600;
+        color: #333;
+        font-family: monospace;
+    }
+    .ver-ext {
+        font-size: 0.8em;
+        color: #666;
+        background: #f4f4f4;
+        padding: 6px 8px;
+        border-radius: 3px;
+        margin-top: 4px;
+    }
+
+    /* ─── u-Center Style Dashboard ─── */
+    .uc-status-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+        padding: 10px;
+        background: linear-gradient(180deg, #f0f0f0 0%, #e8e8e8 100%);
+        border-bottom: 2px solid #ccc;
+    }
+    .uc-status-item {
+        background: white;
+        border-radius: 6px;
+        padding: 10px 8px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-left: 4px solid #006064;
+    }
+    .uc-status-item.solution-0 { border-left-color: #c5221f; }
+    .uc-status-item.solution-1 { border-left-color: #ffab00; }
+    .uc-status-item.solution-2 { border-left-color: #00c853; }
+    .uc-status-icon {
+        font-size: 1.3em;
+        margin-bottom: 2px;
+    }
+    .uc-status-label {
+        font-size: 0.7em;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .uc-status-value {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #333;
+    }
+    .uc-status-sub {
+        font-size: 0.75em;
+        font-weight: normal;
+        color: #888;
+    }
+
+    .uc-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #f4f4f4;
+        border-bottom: 1px solid #ddd;
+        font-size: 0.9em;
+    }
+    .uc-panel-title {
+        font-weight: 600;
+        color: #333;
+    }
+    .uc-panel-sub {
+        font-size: 0.8em;
+        color: #888;
+    }
+
+    .uc-cn0-panel {
+        background: white;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 10px;
+    }
+    .uc-cn0-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        padding: 10px 12px;
+    }
+    .uc-cn0-group {
+        background: #fafafa;
+        border-radius: 6px;
+        padding: 8px 10px;
+        border: 1px solid #eee;
+    }
+    .uc-cn0-group-label {
+        font-size: 0.8em;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .uc-cn0-bar-row {
+        display: grid;
+        grid-template-columns: 28px 1fr 32px 40px;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 4px;
+        font-size: 0.8em;
+    }
+    .uc-cn0-sv {
+        font-family: monospace;
+        color: #555;
+        text-align: right;
+    }
+    .uc-cn0-bar-wrap {
+        display: flex;
+        align-items: center;
+    }
+    .uc-cn0-bar-bg {
+        width: 100%;
+        height: 12px;
+        background: #e0e0e0;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .uc-cn0-bar-fill {
+        height: 100%;
+        border-radius: 6px;
+        transition: width 0.4s ease;
+    }
+    .uc-cn0-val {
+        font-family: monospace;
+        text-align: right;
+        color: #333;
+    }
+    .uc-cn0-badges {
+        display: flex;
+        gap: 3px;
+    }
+    .uc-badge {
+        font-size: 0.65em;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    .uc-badge.used {
+        background: #e6f4ea;
+        color: #1e8e3e;
+    }
+    .uc-badge.dgps {
+        background: #e0f7fa;
+        color: #006064;
+    }
+
+    .uc-table-panel {
+        background: white;
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .gnss-tag {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 0.75em;
+        font-weight: 600;
+    }
+    .gnss-tag.gnss-0 { background: #e3f2fd; color: #1565c0; } /* GPS */
+    .gnss-tag.gnss-1 { background: #fff3e0; color: #e65100; } /* SBAS */
+    .gnss-tag.gnss-2 { background: #e8f5e9; color: #2e7d32; } /* Galileo */
+    .gnss-tag.gnss-3 { background: #fce4ec; color: #c2185b; } /* BeiDou */
+    .gnss-tag.gnss-4 { background: #f3e5f5; color: #7b1fa2; } /* IMES */
+    .gnss-tag.gnss-5 { background: #e0f2f1; color: #00695c; } /* QZSS */
+    .gnss-tag.gnss-6 { background: #e8eaf6; color: #283593; } /* GLONASS */
+
+    /* ─── Visual Grid for new components ─── */
+    .uc-visual-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 8px;
+        padding: 8px;
+        background: #f0f0f0;
+    }
+    .uc-visual-col {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
     }
 </style>

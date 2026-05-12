@@ -229,8 +229,10 @@ void UiSocketHandler::loop()
       }
       break;
     case 12:
-      if (ubxResponseActive && _source.ubxResponse().timestamp > 0) {
+      if (ubxResponseActive && _source.ubxResponse().timestamp > 0 && _source.ubxResponse().timestamp != _lastSentUbxTimestamp) {
         sendData(ResponseDataType::ubxResponse);
+        _lastSentUbxTimestamp = _source.ubxResponse().timestamp;
+        ubxResponseActive = false; // Only deliver one response per request
       }
       break;
     }
@@ -284,6 +286,8 @@ void UiSocketHandler::gpsRequestLoop()
 bool UiSocketHandler::sendUbx(const String &hexCmd)
 {
   pendingUbxCmd = hexCmd;
+  _source.ubxResponseP()->timestamp = 0; // Discard stale/periodic frames
+  _lastSentUbxTimestamp = 0;
   return true;
 }
 

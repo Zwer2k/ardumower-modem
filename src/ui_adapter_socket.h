@@ -127,6 +127,7 @@ namespace ArduMower
         uint32_t oldDataTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastDataRequestTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastclientPing = 0;
+        uint32_t _lastSentUbxTimestamp = 0;
         
   #ifdef MOWER_TERMINAL
   Terminal &_terminal;
