@@ -22,6 +22,18 @@ public:
     bool isFull() { bool ret; xSemaphoreTake(_lock, portMAX_DELAY); ret = size == BUFFSIZE; xSemaphoreGive(_lock); return ret; }
     bool isEmpty() { bool ret; xSemaphoreTake(_lock, portMAX_DELAY); ret = size == 0; xSemaphoreGive(_lock);  return ret; }
     uint16_t maxSize() { return BUFFSIZE; }
+    bool peekAt(uint16_t index, BUFFTYPE &value) {
+        xSemaphoreTake(_lock, portMAX_DELAY);
+        if (index >= size) {
+            xSemaphoreGive(_lock);
+            return false;
+        }
+        uint16_t pos = readPos + index;
+        if (pos >= BUFFSIZE) pos -= BUFFSIZE;
+        value = buffer[pos];
+        xSemaphoreGive(_lock);
+        return true;
+    }
 };
 
 template <typename BUFFTYPE, uint16_t BUFFSIZE>

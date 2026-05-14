@@ -7,8 +7,8 @@
     export let logLevels: LogLevelDescT;
     export let dbgLevels: DropdownItem[];
     export let logData: LogLine[];
-    export let dbgLevel: number; 
-    
+    export let dbgLevel: number;
+
     let items: LogLine[] = [];
     let seenLogNumbers = new Set<number>();
 
@@ -65,6 +65,12 @@
 
     $: { dbgLevel = dbgLevels[logLevelIndex].id; }
 
+    function getExportUrl(): string {
+        const proto = window.location.protocol;
+        const host = window.location.host;
+        return `${proto}//${host}/api/log/export`;
+    }
+
 </script>
 
 <div class="modem-log">
@@ -76,10 +82,13 @@
             items={dbgLevels}/>
         <Toggle
             class="autoscroll-toggle"
-            labelText="Autoscroll" 
+            labelText="Autoscroll"
             labelA={""}
             labelB={""}
             bind:toggled={autoscroll}/>
+        <a class="export-link" href={getExportUrl()} target="_blank">
+            Export CSV
+        </a>
     </div>
     <div class="log-list">
         <VirtualList {items}
@@ -141,7 +150,7 @@
 
     .log-line {
         display: flex;
-        padding: 3px; 
+        padding: 3px;
     }
 
     .log-line.ignore  {
@@ -187,5 +196,28 @@
 
     .log-line .text {
         line-break: anywhere;
+    }
+
+    .export-link {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 12px;
+        margin-left: 10px;
+        font-size: .875rem;
+        font-weight: 400;
+        line-height: 1.125rem;
+        letter-spacing: .16px;
+        color: #161616;
+        background-color: #e0e0e0;
+        border: none;
+        border-radius: 0;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background-color 70ms cubic-bezier(0,0,.38,.9);
+    }
+
+    .export-link:hover {
+        background-color: #cacaca;
     }
 </style>

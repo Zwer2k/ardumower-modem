@@ -5,7 +5,7 @@
 #include <ArduinoJson.h>
 #include "ringbuffer.h"
 
-#define RINGBUFFER_SIZE 50
+#define RINGBUFFER_SIZE 300
 
 struct LogLine {
     uint32_t nr;
@@ -22,13 +22,12 @@ class LogToUi {
         size_t printf(const char *format, ...);
         size_t log(const LogLevel logLevel, const char *format, ...);
         bool hasData();
-        bool pull(LogLine &line);
         void marshal(const JsonObject &o);
+        void exportAll(String &csv);
         uint32_t timestamp = 0;
 
     private:
         Ringbuffer<LogLine, RINGBUFFER_SIZE> *modemLog = NULL;
-
         uint32_t modemLineNrIn = 0;
 };
 

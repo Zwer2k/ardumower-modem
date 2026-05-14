@@ -1,6 +1,6 @@
 import { writable, derived } from "svelte/store";
 import { browser } from "$app/environment";
-import { socketStore, socketService } from "./socket";
+import { socketStore } from "./socket";
 import {
   parseUbxFrames,
   getParserForFrame,
@@ -64,7 +64,7 @@ export interface GpsStoreState {
   // From S4 CSV
   gpsDetails: GpsDetails | null;
 
-  // From UBX polling
+  // From UBX responses (polled by modem backend)
   navSat: NavSatInfo[];
   navPvt: NavPvtInfo | null;
   navDop: NavDopInfo | null;
@@ -76,15 +76,9 @@ export interface GpsStoreState {
   // Reference position for deviation map (mean of first N valid fixes)
   refLat: number | null;
   refLon: number | null;
-
-  // Polling state
-  lastNavSatPoll: number;
-  lastNavPvtPoll: number;
-  lastNavDopPoll: number;
-  pendingPolls: Set<string>;
 }
 
-const HISTORY_SIZE = 200;
+const HISTORY_SIZE = 1000;
 const REF_FIX_COUNT = 20;
 
 const initialState: GpsStoreState = {
@@ -96,81 +90,14 @@ const initialState: GpsStoreState = {
   positionHistory: [],
   refLat: null,
   refLon: null,
-  lastNavSatPoll: 0,
-  lastNavPvtPoll: 0,
-  lastNavDopPoll: 0,
-  pendingPolls: new Set(),
 };
 
 function createGpsStore() {
   const { subscribe, set, update } = writable<GpsStoreState>(initialState);
 
+  let refCount = 0;
   let unsubscribeSocket: (() => void) | null = null;
-  let pollInterval: ReturnType<typeof setInterval> | null = null;
   let processedUbxTimestamp = 0;
-
-  // Hex commands for polling (with Fletcher checksum)
-  const NAV_SAT_POLL = "B5620135000036A3"; // UBX-NAV-SAT poll
-  const NAV_PVT_POLL = "B562010700000819"; // UBX-NAV-PVT poll
-  const NAV_DOP_POLL = "B562010400000510"; // UBX-NAV-DOP poll
-
-  function startPolling() {
-    if (!browser) return;
-    stopPolling();
-
-    // Immediate first poll
-    sendPolls();
-
-    // Then every 5 seconds
-    pollInterval = setInterval(() => {
-      sendPolls();
-    }, 5000);
-  }
-
-  function stopPolling() {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
-  }
-
-  function sendPolls() {
-    const now = Date.now();
-    update((s) => {
-      // Reset stale pending polls (timeout 10s)
-      for (const key of Array.from(s.pendingPolls)) {
-        const lastPoll =
-          key === "nav-sat"
-            ? s.lastNavSatPoll
-            : key === "nav-pvt"
-              ? s.lastNavPvtPoll
-              : s.lastNavDopPoll;
-        if (now - lastPoll > 10000) {
-          s.pendingPolls.delete(key);
-        }
-      }
-
-      // NAV-SAT every 5s
-      if (now - s.lastNavSatPoll >= 5000 && !s.pendingPolls.has("nav-sat")) {
-        socketService.sendUbx(NAV_SAT_POLL);
-        s.pendingPolls.add("nav-sat");
-        s.lastNavSatPoll = now;
-      }
-      // NAV-PVT every 5s
-      if (now - s.lastNavPvtPoll >= 5000 && !s.pendingPolls.has("nav-pvt")) {
-        socketService.sendUbx(NAV_PVT_POLL);
-        s.pendingPolls.add("nav-pvt");
-        s.lastNavPvtPoll = now;
-      }
-      // NAV-DOP every 10s
-      if (now - s.lastNavDopPoll >= 10000 && !s.pendingPolls.has("nav-dop")) {
-        socketService.sendUbx(NAV_DOP_POLL);
-        s.pendingPolls.add("nav-dop");
-        s.lastNavDopPoll = now;
-      }
-      return s;
-    });
-  }
 
   function handleSocketState(state: {
     gpsDetails: GpsDetails | null;
@@ -209,12 +136,10 @@ function createGpsStore() {
 
       if (frame.msgName === "NAV-SAT") {
         s.navSat = parseNavSat(hex) || [];
-        s.pendingPolls.delete("nav-sat");
       } else if (frame.msgName === "NAV-PVT") {
         const pvt = parseNavPvt(hex);
         if (pvt) {
           s.navPvt = pvt;
-          s.pendingPolls.delete("nav-pvt");
 
           // Update altitude history
           s.altitudeHistory.push({
@@ -257,7 +182,6 @@ function createGpsStore() {
         const dop = parseNavDop(hex);
         if (dop) {
           s.navDop = dop;
-          s.pendingPolls.delete("nav-dop");
         }
       }
     }
@@ -350,22 +274,25 @@ function createGpsStore() {
   }
 
   function connect() {
-    if (unsubscribeSocket) return;
-    unsubscribeSocket = socketStore.subscribe(handleSocketState);
+    refCount++;
+    if (refCount === 1) {
+      unsubscribeSocket = socketStore.subscribe(handleSocketState);
+    }
   }
 
   function disconnect() {
-    stopPolling();
-    if (unsubscribeSocket) {
-      unsubscribeSocket();
-      unsubscribeSocket = null;
+    refCount--;
+    if (refCount <= 0) {
+      refCount = 0;
+      if (unsubscribeSocket) {
+        unsubscribeSocket();
+        unsubscribeSocket = null;
+      }
     }
   }
 
   return {
     subscribe,
-    startPolling,
-    stopPolling,
     connect,
     disconnect,
   };

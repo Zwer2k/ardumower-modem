@@ -49,14 +49,21 @@
 
     let activeCategory = $state<ConfigCategory | 'all'>('all');
     let expertMode = $state(false);
+    let showMore = $state(false);
     let customHex = $state('');
     let expertResult: { frames: UbxFrameResult[]; rawHex: string } | null = $state(null);
+
+    const moreCommandIds = new Set([
+        'cfg-valget-rate',
+        'cfg-valget-port1',
+        'cfg-valget-uart1-proto',
+        'cfg-valget-gnss',
+        'cfg-valget-sbas',
+        'cfg-valget-rtcm',
+    ]);
     let showRawHex = $state(false);
 
-    // Poll state
-    let pollQueue: string[] = [];
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
-    let processedHex = '';
+    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
 
     // Map commandId -> card
     function cardByCmdId(cmdId: string): ConfigCard | undefined {
@@ -64,58 +71,35 @@
     }
 
     // ─── Polling ────────────────────────────────────────────────────────────
+    // UBX polling is now coordinated by the modem backend.
+    // The backend polls NAV-PVT, NAV-SAT, NAV-DOP, MON-VER, MON-HW, CFG-NAV5, CFG-RATE.
+    // Clients only subscribe and display cached responses.
 
-    function refreshAll() {
-        // Stop any ongoing poll
-        if (pollTimer) {
-            clearTimeout(pollTimer);
-            pollTimer = null;
-        }
-
-        // Reset all cards
-        for (const c of cards) {
-            c.loading = true;
-            c.error = '';
-        }
-        cards = [...cards];
-
-        // Build queue (order matters: start with receiver info)
-        pollQueue = cards.map(c => c.commandId);
-        processedHex = '';
-        sendNextPoll();
+    function isCardVisible(card: ConfigCard): boolean {
+        const categoryMatch = activeCategory === 'all' || card.category === activeCategory;
+        const moreMatch = showMore || !moreCommandIds.has(card.commandId);
+        return categoryMatch && moreMatch;
     }
 
-    function sendNextPoll() {
-        if (pollQueue.length === 0) {
-            // Queue done: clear remaining loading states after grace period
-            pollTimer = setTimeout(() => {
-                for (const c of cards) {
-                    if (c.loading) {
-                        c.loading = false;
-                        c.error = 'No response';
-                    }
+    function refreshAll() {
+        // Reset loading states only for currently visible cards
+        for (const c of cards) {
+            if (isCardVisible(c)) {
+                c.loading = true;
+                c.error = '';
+            }
+        }
+
+        // Timeout: backend polls 16 cmds every 0.8s = ~13s cycle. Give 20s.
+        if (refreshTimeout) clearTimeout(refreshTimeout);
+        refreshTimeout = setTimeout(() => {
+            for (const c of cards) {
+                if (c.loading) {
+                    c.loading = false;
+                    c.error = 'No response from receiver';
                 }
-                cards = [...cards];
-            }, 3000);
-            return;
-        }
-
-        const cmdId = pollQueue.shift()!;
-        const cmd = ubxCommands.find(c => c.id === cmdId);
-        if (!cmd || !cmd.hex) {
-            const card = cardByCmdId(cmdId);
-            if (card) { card.loading = false; card.error = 'No hex'; }
-            cards = [...cards];
-            sendNextPoll();
-            return;
-        }
-
-        socketService.sendUbx(cmd.hex);
-
-        // Wait 300ms before next poll to avoid flooding the GPS receiver
-        pollTimer = setTimeout(() => {
-            sendNextPoll();
-        }, 300);
+            }
+        }, 20000);
     }
 
     // ─── Socket handler ─────────────────────────────────────────────────────
@@ -123,23 +107,16 @@
     function handleUbxResponse(resp: { timestamp: number; hex: string }) {
         if (!resp || !resp.hex) return;
         const cleanHex = (resp.hex || '').replace(/[^0-9a-fA-F]/g, '');
-        if (cleanHex.length === 0 || cleanHex === processedHex) return;
-        processedHex = cleanHex;
+        if (cleanHex.length === 0) return;
 
         const frames = parseUbxFrames(cleanHex);
 
         for (const frame of frames) {
             if (!frame.valid) continue;
 
-            // Find matching card(s) by parser
-            const parserName = frame.msgName;
-            let matched = false;
-
             for (const card of cards) {
-                const cmd = ubxCommands.find(c => c.id === card.commandId);
-                if (!cmd) continue;
-
-                // Match by expected response frame
+                // Only process data for cards that are currently visible
+                if (!isCardVisible(card)) continue;
                 const expectedParser = getParserForFrameByCommand(card.commandId);
                 const actualParser = getParserForFrame(frame.classId, frame.msgId);
                 if (expectedParser === actualParser && actualParser) {
@@ -149,7 +126,6 @@
                         card.timestamp = Date.now();
                         card.loading = false;
                         card.error = '';
-                        matched = true;
                     } catch (e) {
                         card.error = String(e);
                         card.loading = false;
@@ -157,7 +133,6 @@
                 }
             }
 
-            // Also populate expert mode result
             if (expertMode) {
                 expertResult = {
                     frames,
@@ -166,7 +141,6 @@
             }
         }
 
-        cards = [...cards];
     }
 
     function getParserForFrameByCommand(commandId: string) {
@@ -186,10 +160,10 @@
             case 'cfg-rate-get': return getParserForFrame(0x06, 0x08);
             case 'cfg-nav5-get': return getParserForFrame(0x06, 0x24);
             case 'cfg-valget-port1':
-            case 'cfg-valget-sbas':
-            case 'cfg-valget-rtcm':
             case 'cfg-valget-uart1-proto':
             case 'cfg-valget-gnss':
+            case 'cfg-valget-sbas':
+            case 'cfg-valget-rtcm':
             case 'cfg-valget-rate':
                 return getParserForFrame(0x06, 0x8b);
             default: return null;
@@ -208,13 +182,12 @@
                 handleUbxResponse(state.ubxResponse);
             }
         });
-
-        // Auto-refresh on mount
+        // Set loading states on first mount; parent GpsDashboard handles requestGpsDetails
         refreshAll();
     });
 
     onDestroy(() => {
-        if (pollTimer) clearTimeout(pollTimer);
+        if (refreshTimeout) clearTimeout(refreshTimeout);
         if (unsubscribeSocket) {
             unsubscribeSocket();
             unsubscribeSocket = null;
@@ -224,9 +197,8 @@
     // ─── Derived ──────────────────────────────────────────────────────────────
 
     let filteredCards = $derived(
-        activeCategory === 'all'
-            ? cards
-            : cards.filter(c => c.category === activeCategory)
+        (activeCategory === 'all' ? cards : cards.filter(c => c.category === activeCategory))
+            .filter(c => showMore || !moreCommandIds.has(c.commandId))
     );
 
     let categoryCounts = $derived(() => {
@@ -237,8 +209,12 @@
         return counts;
     });
 
-    let loadedCount = $derived(cards.filter(c => c.data !== null && !c.loading).length);
-    let totalCount = $derived(cards.length);
+    let visibleCards = $derived(
+        (activeCategory === 'all' ? cards : cards.filter(c => c.category === activeCategory))
+            .filter(c => showMore || !moreCommandIds.has(c.commandId))
+    );
+    let loadedCount = $derived(visibleCards.filter(c => c.data !== null && !c.loading).length);
+    let totalCount = $derived(visibleCards.length);
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -273,17 +249,20 @@
     <!-- Toolbar -->
     <div class="adv-toolbar">
         <div class="adv-categories">
-            <button class:active={activeCategory === 'all'} onclick={() => activeCategory = 'all'}>
+            <button class:active={activeCategory === 'all'} onclick={() => { activeCategory = 'all'; refreshAll(); }}>
                 All ({totalCount})
             </button>
             {#each ['receiver', 'navigation', 'satellites', 'ports', 'gnss', 'rate'] as cat}
-                <button class:active={activeCategory === cat} onclick={() => activeCategory = cat}>
+                <button class:active={activeCategory === cat} onclick={() => { activeCategory = cat; refreshAll(); }}>
                     {categoryLabel(cat as ConfigCategory)}
                 </button>
             {/each}
         </div>
         <div class="adv-actions">
             <div class="adv-progress">{loadedCount}/{totalCount}</div>
+            <button class="adv-more-toggle" class:active={showMore} onclick={() => { showMore = !showMore; refreshAll(); }}>
+                {showMore ? '✕ More' : '➕ More'}
+            </button>
             <button class="adv-refresh" onclick={refreshAll}>
                 🔄 Refresh All
             </button>
@@ -492,6 +471,22 @@
 
     .adv-refresh:hover {
         background: #004d4f;
+    }
+
+    .adv-more-toggle {
+        padding: 6px 12px;
+        background: #f4f4f4;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85em;
+        color: #555;
+    }
+
+    .adv-more-toggle.active {
+        background: #006064;
+        color: white;
+        border-color: #006064;
     }
 
     .adv-expert-toggle {

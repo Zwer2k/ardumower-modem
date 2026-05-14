@@ -1,5 +1,7 @@
 <script lang="ts">
     import { page } from '$app/stores';
+    import { afterNavigate } from '$app/navigation';
+    import { onMount } from 'svelte';
     import { browser } from '$app/environment';
     import { socketStore, socketService } from '../../stores/socket';
     import { gpsStore } from '../../stores/gpsStore';
@@ -44,21 +46,26 @@
     }
 
     // Reagiere auf Sichtbarkeit (Dashboard ist immer im DOM, nur CSS hidden)
-    $effect(() => {
+    // afterNavigate funktioniert zuverlässiger als $effect für Query-Param-Änderungen
+    let lastGpsActive = false;
+    function syncGpsPolling() {
         if (!browser) return;
-        const dashboard = $page.url?.searchParams?.get('dashboard');
-        if (dashboard === 'gps') {
+        const dashboard = $page.url.searchParams.get('dashboard');
+        const isGps = dashboard === 'gps';
+        if (isGps && !lastGpsActive) {
             console.log('[GpsDashboard] Activating GPS polling');
             socketService.requestGpsDetails();
             gpsStore.connect();
-            gpsStore.startPolling();
-        } else {
+            lastGpsActive = true;
+        } else if (!isGps && lastGpsActive) {
             console.log('[GpsDashboard] Deactivating GPS polling');
             socketService.stopGpsDetails();
-            gpsStore.stopPolling();
             gpsStore.disconnect();
+            lastGpsActive = false;
         }
-    });
+    }
+    onMount(syncGpsPolling);
+    afterNavigate(syncGpsPolling);
 
     let satellites = $derived($socketStore.gpsDetails?.satellites ?? []);
     let sortedSats = $derived([...satellites].sort((a, b) => b.cno - a.cno));
@@ -99,12 +106,12 @@
             <div class="uc-status-item">
                 <div class="uc-status-icon">↔️</div>
                 <div class="uc-status-label">H-Accuracy</div>
-                <div class="uc-status-value">{d.hAccuracy.toFixed(2)} m</div>
+                <div class="uc-status-value">{(d.hAccuracy ?? 0).toFixed(2)} m</div>
             </div>
             <div class="uc-status-item">
                 <div class="uc-status-icon">↕️</div>
                 <div class="uc-status-label">V-Accuracy</div>
-                <div class="uc-status-value">{d.vAccuracy.toFixed(2)} m</div>
+                <div class="uc-status-value">{(d.vAccuracy ?? 0).toFixed(2)} m</div>
             </div>
             <div class="uc-status-item">
                 <div class="uc-status-icon">⏱️</div>
@@ -192,7 +199,7 @@
                                 <td>{sat.sigId}</td>
                                 <td class:good={sat.cno >= 40} class:weak={sat.cno < 30}>{sat.cno}</td>
                                 <td>{qualityName(sat.qualityInd)}</td>
-                                <td>{sat.prRes.toFixed(1)} m</td>
+                                <td>{(sat.prRes ?? 0).toFixed(1)} m</td>
                                 <td>{sat.prUsed ? "✓" : "—"}</td>
                                 <td>{sat.crCorrUsed ? "✓" : "—"}</td>
                             </tr>

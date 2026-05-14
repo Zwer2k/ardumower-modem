@@ -64,54 +64,54 @@
             {#if navPvt}
                 <div class="navstatus-item">
                     <span class="navstatus-key">Longitude</span>
-                    <span class="navstatus-val">{navPvt.lon.toFixed(7)}°</span>
+                    <span class="navstatus-val">{(navPvt.lon ?? 0).toFixed(7)}°</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">Latitude</span>
-                    <span class="navstatus-val">{navPvt.lat.toFixed(7)}°</span>
+                    <span class="navstatus-val">{(navPvt.lat ?? 0).toFixed(7)}°</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">Altitude (Ell)</span>
-                    <span class="navstatus-val">{navPvt.height.toFixed(3)} m</span>
+                    <span class="navstatus-val">{(navPvt.height ?? 0).toFixed(3)} m</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">Altitude (MSL)</span>
-                    <span class="navstatus-val">{navPvt.hMSL.toFixed(3)} m</span>
+                    <span class="navstatus-val">{(navPvt.hMSL ?? 0).toFixed(3)} m</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">Ground Speed</span>
-                    <span class="navstatus-val">{navPvt.gSpeed.toFixed(2)} m/s</span>
+                    <span class="navstatus-val">{(navPvt.gSpeed ?? 0).toFixed(2)} m/s</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">Heading</span>
-                    <span class="navstatus-val">{navPvt.heading.toFixed(2)}°</span>
+                    <span class="navstatus-val">{(navPvt.heading ?? 0).toFixed(2)}°</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">3D Acc</span>
-                    <span class="navstatus-val {navPvt.hAcc < 0.1 ? 'good' : navPvt.hAcc < 1.0 ? 'ok' : 'warn'}">{navPvt.hAcc.toFixed(2)} m</span>
+                    <span class="navstatus-val {(navPvt.hAcc ?? 999) < 0.1 ? 'good' : (navPvt.hAcc ?? 999) < 1.0 ? 'ok' : 'warn'}">{(navPvt.hAcc ?? 0).toFixed(2)} m</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">V-Acc</span>
-                    <span class="navstatus-val">{navPvt.vAcc.toFixed(2)} m</span>
+                    <span class="navstatus-val">{(navPvt.vAcc ?? 0).toFixed(2)} m</span>
                 </div>
             {/if}
 
             {#if navDop}
                 <div class="navstatus-item">
                     <span class="navstatus-key">PDOP</span>
-                    <span class="navstatus-val {navDop.pDOP < 2 ? 'good' : navDop.pDOP < 5 ? 'ok' : 'warn'}">{navDop.pDOP.toFixed(1)}</span>
+                    <span class="navstatus-val {(navDop.pDOP ?? 999) < 2 ? 'good' : (navDop.pDOP ?? 999) < 5 ? 'ok' : 'warn'}">{(navDop.pDOP ?? 0).toFixed(1)}</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">HDOP</span>
-                    <span class="navstatus-val {navDop.hDOP < 1 ? 'good' : navDop.hDOP < 2 ? 'ok' : 'warn'}">{navDop.hDOP.toFixed(1)}</span>
+                    <span class="navstatus-val {(navDop.hDOP ?? 999) < 1 ? 'good' : (navDop.hDOP ?? 999) < 2 ? 'ok' : 'warn'}">{(navDop.hDOP ?? 0).toFixed(1)}</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">VDOP</span>
-                    <span class="navstatus-val">{navDop.vDOP.toFixed(1)}</span>
+                    <span class="navstatus-val">{(navDop.vDOP ?? 0).toFixed(1)}</span>
                 </div>
                 <div class="navstatus-item">
                     <span class="navstatus-key">GDOP</span>
-                    <span class="navstatus-val">{navDop.gDOP.toFixed(1)}</span>
+                    <span class="navstatus-val">{(navDop.gDOP ?? 0).toFixed(1)}</span>
                 </div>
             {/if}
 

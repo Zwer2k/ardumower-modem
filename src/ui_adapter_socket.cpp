@@ -1,4 +1,5 @@
 #include <functional>
+#include <time.h>
 #include "ui_adapter_socket.h"
 #include "json.h"
 #include "log.h"
@@ -21,6 +22,14 @@ UiSocketItem::UiSocketItem(
   _socketHandler->sendData(ResponseDataType::mowerState, this, true);
   _socketHandler->sendData(ResponseDataType::desiredState, this, true);
   _socketHandler->sendData(ResponseDataType::map, this, true);
+
+  // Send cached UBX data to new client if available
+  if (_source.ubxResponse().timestamp > 0) {
+    _socketHandler->sendData(ResponseDataType::ubxResponse, this, true);
+  }
+  if (_source.gpsDetails().timestamp > 0) {
+    _socketHandler->sendData(ResponseDataType::gpsDetails, this, true);
+  }
 }
 
 void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jsonData)
@@ -38,25 +47,47 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     break;
 
   case RequestDataType::requestGpsDetails:
+    _socketHandler->gpsDetailsRefCount++;
     _socketHandler->gpsDetailsActive = true;
-    _socketHandler->resetRequestTimestamp(ResponseDataType::gpsDetails);
-    Log(INFO, "%s GPS details polling activated", _LOG_);
+    _socketHandler->ubxResponseActive = true;
+    // Only reset polling timers on first activation (ref was 0)
+    if (_socketHandler->gpsDetailsRefCount == 1) {
+      _socketHandler->resetRequestTimestamp(ResponseDataType::gpsDetails);
+      _socketHandler->lastUbxPollTime = 0;        // first poll immediately
+      _socketHandler->ubxPollSequence = 0;          // start from beginning of cycle
+    }
+    Log(INFO, "%s GPS details polling activated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
 
   case RequestDataType::stopGpsDetails:
-    _socketHandler->gpsDetailsActive = false;
-    Log(INFO, "%s GPS details polling deactivated", _LOG_);
+    if (_socketHandler->gpsDetailsRefCount > 0) {
+      _socketHandler->gpsDetailsRefCount--;
+    }
+    if (_socketHandler->gpsDetailsRefCount == 0) {
+      _socketHandler->gpsDetailsActive = false;
+      _socketHandler->ubxResponseActive = false;
+    }
+    Log(INFO, "%s GPS details polling deactivated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
 
   case RequestDataType::requestSensorSummary:
+    _socketHandler->sensorSummaryRefCount++;
     _socketHandler->sensorSummaryActive = true;
-    _socketHandler->resetRequestTimestamp(ResponseDataType::sensorSummary);
-    Log(INFO, "%s Sensor summary polling activated", _LOG_);
+    // Only reset polling timer on first activation (ref was 0)
+    if (_socketHandler->sensorSummaryRefCount == 1) {
+      _socketHandler->resetRequestTimestamp(ResponseDataType::sensorSummary);
+    }
+    Log(INFO, "%s Sensor summary polling activated (ref=%d)", _LOG_, _socketHandler->sensorSummaryRefCount);
     break;
 
   case RequestDataType::stopSensorSummary:
-    _socketHandler->sensorSummaryActive = false;
-    Log(INFO, "%s Sensor summary polling deactivated", _LOG_);
+    if (_socketHandler->sensorSummaryRefCount > 0) {
+      _socketHandler->sensorSummaryRefCount--;
+    }
+    if (_socketHandler->sensorSummaryRefCount == 0) {
+      _socketHandler->sensorSummaryActive = false;
+    }
+    Log(INFO, "%s Sensor summary polling deactivated (ref=%d)", _LOG_, _socketHandler->sensorSummaryRefCount);
     break;
 
   case RequestDataType::requestUbx:
@@ -175,6 +206,29 @@ void UiSocketHandler::begin()
   _ws->onEvent(std::bind(&ArduMower::Modem::Http::UiSocketHandler::wsEvent, this, std::placeholders::_1, 
     std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
   _server.addHandler(_ws);
+
+  // HTTP endpoint for CSV log export
+  _server.on("/api/log/export", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    String csv;
+    logToUi.exportAll(csv);
+    
+    // Build filename with current date/time or fallback to millis
+    char filename[64];
+    time_t now = time(nullptr);
+    if (now > 1609459200) { // After 2021-01-01, assume valid time
+      struct tm* ti = localtime(&now);
+      snprintf(filename, sizeof(filename), 
+        "ardumower-log-%04d-%02d-%02d-%02d-%02d-%02d.csv",
+        ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
+        ti->tm_hour, ti->tm_min, ti->tm_sec);
+    } else {
+      snprintf(filename, sizeof(filename), "ardumower-log-%lu.csv", millis());
+    }
+    
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/csv; charset=utf-8", csv);
+    response->addHeader("Content-Disposition", String("attachment; filename=\"") + filename + "\"");
+    request->send(response);
+  });
 }
 
 void UiSocketHandler::loop()
@@ -222,6 +276,7 @@ void UiSocketHandler::loop()
       break;
     case 10:
       if (gpsDetailsActive) gpsRequestLoop();
+      if (gpsDetailsActive) ubxPollLoop();
       break;
     case 11:
       if (gpsDetailsActive && _source.gpsDetails().timestamp > 0) {
@@ -229,10 +284,10 @@ void UiSocketHandler::loop()
       }
       break;
     case 12:
-      if (ubxResponseActive && _source.ubxResponse().timestamp > 0 && _source.ubxResponse().timestamp != _lastSentUbxTimestamp) {
-        sendData(ResponseDataType::ubxResponse);
-        _lastSentUbxTimestamp = _source.ubxResponse().timestamp;
-        ubxResponseActive = false; // Only deliver one response per request
+      // Send UBX response immediately when available (no deduplication – frontend handles that)
+      if (ubxResponseActive && _source.ubxResponse().timestamp > 0) {
+        sendData(ResponseDataType::ubxResponse, NULL, true); // force=true: bypass oldDataTimestamp
+        _source.ubxResponseP()->timestamp = 0; // Mark as consumed
       }
       break;
     }
@@ -283,6 +338,38 @@ void UiSocketHandler::gpsRequestLoop()
   lastDataRequestTimestamp[ResponseDataType::gpsDetails] = millis();
 }
 
+void UiSocketHandler::ubxPollLoop()
+{
+  // Don't overwrite a pending command that hasn't been sent yet
+  if (pendingUbxCmd.length() > 0) return;
+  if (millis() - lastUbxPollTime < UBX_POLL_INTERVAL_MS) return;
+
+  static const char* ubxCmds[] = {
+    "B562010700000819",                   // 0: NAV-PVT
+    "B5620135000036A3",                   // 1: NAV-SAT
+    "B562010400000510",                   // 2: NAV-DOP
+    "B5620A0400000E34",                   // 3: MON-VER
+    "B5620A0900001343",                   // 4: MON-HW
+    "B5620A38000042D0",                   // 5: MON-RF
+    "B562062400002A84",                   // 6: CFG-NAV5
+    "B562060800000E30",                   // 7: CFG-RATE
+    "B5620A36000040CA",                   // 8: MON-COMMS
+    "B56201030000040D",                   // 9: NAV-STATUS
+    "B562068B080000000000010052402C79",   // 10: CFG-VALGET-PORT1
+    "B562068B080000000000010052402C79",   // 11: CFG-VALGET-UART1-PROTO
+    "B562068B0800000000003F000000D88D",   // 12: CFG-VALGET-GNSS
+    "B562068B08000000000036100000DF99",   // 13: CFG-VALGET-SBAS
+    "B562068B080000000000010091406BF7",   // 14: CFG-VALGET-RTCM
+    "B562068B08000000000001002130EB07",   // 15: CFG-VALGET-RATE
+  };
+  pendingUbxCmd = ubxCmds[ubxPollSequence];
+  ubxPollSequence = (ubxPollSequence + 1) % 16;
+  lastUbxPollTime = millis();
+  _source.ubxResponseP()->timestamp = 0;
+  _lastSentUbxTimestamp = 0;
+  Log(DBG, "%subxPollLoop seq=%d", _LOG_, ubxPollSequence);
+}
+
 bool UiSocketHandler::sendUbx(const String &hexCmd)
 {
   pendingUbxCmd = hexCmd;
@@ -298,12 +385,17 @@ void UiSocketHandler::resetRequestTimestamp(ResponseDataType dataType)
 
 void UiSocketHandler::ubxLoop()
 {
+  static uint32_t lastUbxSendAttempt = 0;
   if (pendingUbxCmd.length() == 0) return;
+  if (millis() - lastUbxSendAttempt < 200) return; // Throttle: ~5 msg/s max
   if (_cmd.sendUbx(pendingUbxCmd)) {
     Log(DBG, "%subxLoop sent pending cmd", _LOG_);
     pendingUbxCmd = "";
   }
+  lastUbxSendAttempt = millis();
 }
+
+static String sanitizeUtf8(const String& input);
 
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, bool force)
 {
@@ -431,8 +523,6 @@ void UiSocketHandler::processMapChunkSend() {
 }
 
 // Hilfsfunktion: Sende einen Chunk eines MapPoint-Vektors
-static String sanitizeUtf8(const String& input);
-
 bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem* sendTo, int exclusionIdx, size_t startIdx, size_t blockSize) {
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
@@ -663,6 +753,15 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     if (itemMap.find(client->id()) != itemMap.end()) {
       delete itemMap[client->id()];
       itemMap.erase(client->id());
+    }
+    // Clean up ref counts if this was the last client
+    if (itemMap.empty()) {
+      gpsDetailsRefCount = 0;
+      sensorSummaryRefCount = 0;
+      gpsDetailsActive = false;
+      sensorSummaryActive = false;
+      ubxResponseActive = false;
+      Log(INFO, "%s last client disconnected, resetting all ref counts", _LOG_);
     }
   } else if(type == WS_EVT_ERROR){
     //error was received from the other end

@@ -87,6 +87,13 @@
         iconDescription="GPS">
         <span class="button-text">GPS</span>
     </Button>
+    <Button
+        href="/?dashboard=livemap"
+        kind="tertiary"
+        icon={IconMap}
+        iconDescription="Live Map">
+        <span class="button-text">Live Map</span>
+    </Button>
     <!-- <Button
         on:click={() => { url = "/map"; navigate(url, { replace: true }); }}
         kind="tertiary"

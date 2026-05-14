@@ -63,46 +63,53 @@ size_t LogToUi::log(const LogLevel logLevel, const char *format, ...)
 }
 
 bool LogToUi::hasData() {
-    if (!modemLog->isEmpty()) {
-        timestamp = millis();   
-        return true;
-    } else {
-        return false;
-    }
+    // Prüfe, ob es überhaupt Logs gibt
+    return !modemLog->isEmpty();
 } 
-
-bool LogToUi::pull(LogLine &line) 
-{
-    if (modemLog->pull(line)) {
-        if (!modemLog->isEmpty())
-            timestamp = millis();   
-        return true;
-    } else {
-        return false;
-    }
-}
 
 void LogToUi::marshal(const JsonObject &o)
 {
-    if (modemLog->isEmpty())
-        return;
+    uint16_t count = modemLog->currentSize();
+    if (count == 0) return;
     
     JsonArray logJson = o.createNestedArray("log");
 
     LogLine line;
-    int lineNr = 0;
-    bool hasData = true;
-    while (hasData && (lineNr < 6)) {
-        hasData = pull(line);
-        if (hasData) {
+    int sent = 0;
+    // Sende die letzten 6 Zeilen (neueste zuerst)
+    uint16_t startIdx = count > 6 ? count - 6 : 0;
+    for (uint16_t i = startIdx; i < count && sent < 6; i++) {
+        if (modemLog->peekAt(i, line)) {
             JsonObject jsonLine = logJson.createNestedObject();
             jsonLine["nr"] = line.nr;
             jsonLine["level"] = line.level;
             jsonLine["text"] = line.text;
             jsonLine["freeHeap"] = line.freeHeap;
-            lineNr++;            
+            sent++;
         }
     }
-    Serial.printf("(%d)\r\n", lineNr); 
+    
+    Serial.printf("(%d/%d)\r\n", sent, count); 
 }
 
+void LogToUi::exportAll(String &csv)
+{
+    csv = "nr,level,freeHeap,text\r\n";
+    
+    uint16_t count = modemLog->currentSize();
+    LogLine line;
+    for (uint16_t i = 0; i < count; i++) {
+        if (modemLog->peekAt(i, line)) {
+            csv += String(line.nr) + "," + String(line.level) + "," + String(line.freeHeap) + ",";
+            // Escape quotes and replace line breaks with spaces for clean CSV
+            String text = line.text;
+            text.replace("\r\n", " ");
+            text.replace("\r", " ");
+            text.replace("\n", " ");
+            text.replace("\"", "\"\"");
+            csv += "\"" + text + "\"\r\n";
+        }
+    }
+    
+    Serial.printf("[LogToUi] Exported %d log lines to CSV (%d bytes)\r\n", count, csv.length());
+}

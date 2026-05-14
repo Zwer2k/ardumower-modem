@@ -35,7 +35,7 @@ export const waypointsStore = writable<MapPoint[]>([]);
 export const exclusionsStore = writable<MapPoint[][]>([]);
 
 export function handleMapChunk(chunk: MapChunk) {
-  console.log('[MapChunkBuffer] handleMapChunk received:', chunk);
+  //console.log('[MapChunkBuffer] handleMapChunk received:', chunk);
   // Helper for shared logic, chunk is in closure
   function handleGeneric(buffer: MapPoint[], total: number, store: typeof perimeterStore): [MapPoint[], number] {
     if (chunk.startIndex === 0 || chunk.total !== total) {
@@ -46,7 +46,7 @@ export function handleMapChunk(chunk: MapChunk) {
       buffer[chunk.startIndex + i] = chunk.points[i];
     }
     const filled = buffer.filter(Boolean).length;
-    console.log(`[MapChunkBuffer] ${chunk.pointType} buffer filled:`, filled, total);
+    //console.log(`[MapChunkBuffer] ${chunk.pointType} buffer filled:`, filled, total);
     if (filled === total) {
       store.set([...buffer]);
     }
@@ -69,7 +69,7 @@ export function handleMapChunk(chunk: MapChunk) {
     return;
   }
 
-  console.log('[MapChunkBuffer] Handling chunk for pointType:', chunk.pointType);
+  //console.log('[MapChunkBuffer] Handling chunk for pointType:', chunk.pointType);
   switch (chunk.pointType) {
     case MapPointType.Perimeter:
       [perimeterBuffer, perimeterTotal] = handleGeneric(perimeterBuffer, perimeterTotal, perimeterStore);

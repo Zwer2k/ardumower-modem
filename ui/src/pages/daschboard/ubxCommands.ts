@@ -256,10 +256,21 @@ export function findUbxFrames(hex: string): Array<{
       const payloadStart = i + 6;
       const payloadEnd = payloadStart + length;
       const ckPos = payloadEnd;
-      if (ckPos + 1 >= bytes.length) continue;
+      // Ensure the complete frame (header + payload + 2-byte checksum) fits in the buffer
+      if (ckPos + 1 >= bytes.length) {
+        // Not enough data for checksum - skip this potential sync byte
+        continue;
+      }
       const ckA = bytes[ckPos];
       const ckB = bytes[ckPos + 1];
       const calc = ubxChecksum(bytes, i + 2, length + 4);
+      const valid = ckA === calc.ckA && ckB === calc.ckB;
+      // Only accept if it's a known class (0x01=NAV, 0x02=RXM, 0x05=ACK, 0x06=CFG, 0x0A=MON)
+      // This filters out false positives from random B5 62 sequences in data
+      const knownClasses = [0x01, 0x02, 0x05, 0x06, 0x0a, 0x0d, 0x13, 0x21];
+      if (!knownClasses.includes(classId)) {
+        continue;
+      }
       frames.push({
         start: i,
         classId,
@@ -271,10 +282,11 @@ export function findUbxFrames(hex: string): Array<{
         ckB,
         ckA_calc: calc.ckA,
         ckB_calc: calc.ckB,
-        valid: ckA === calc.ckA && ckB === calc.ckB,
+        valid,
         className: ubxClassName(classId),
         msgName: ubxMessageName(classId, msgId),
       });
+      // Advance past this frame to avoid overlapping matches
       i = ckPos + 1;
     }
   }
@@ -1235,8 +1247,11 @@ export function getParser(commandId: string) {
     case "cfg-nav5-get":
       return parseUbxCfgNav5;
     case "cfg-valget-port1":
+    case "cfg-valget-uart1-proto":
+    case "cfg-valget-gnss":
     case "cfg-valget-sbas":
     case "cfg-valget-rtcm":
+    case "cfg-valget-rate":
       return parseUbxCfgValget;
     default:
       return null;

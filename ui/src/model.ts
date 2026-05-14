@@ -265,6 +265,7 @@ export enum ResponseDataType {
   sensorSummary,
   gpsDetails,
   ubxResponse,
+  logExport,
 }
 
 // Map data for WebSocket
@@ -294,6 +295,7 @@ export enum RequestDataType {
   requestSensorSummary,
   stopSensorSummary,
   requestUbx,
+  requestLogExport,
 }
 
 export interface ModemLogSettings {

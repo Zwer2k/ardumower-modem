@@ -90,7 +90,7 @@
         <span class="uc-panel-title">Altitude</span>
         <span class="uc-panel-sub">
             {#if history.length > 0}
-                Ell: {history[history.length - 1].height.toFixed(2)} m | MSL: {history[history.length - 1].hMSL.toFixed(2)} m
+                Ell: {(history[history.length - 1].height ?? 0).toFixed(2)} m | MSL: {(history[history.length - 1].hMSL ?? 0).toFixed(2)} m
             {:else}
                 no data
             {/if}

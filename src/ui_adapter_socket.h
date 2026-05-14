@@ -26,6 +26,7 @@ namespace ArduMower
         requestSensorSummary,
         stopSensorSummary,
         requestUbx,
+        requestLogExport,
         requestDataTypeLength
       };
 
@@ -40,6 +41,7 @@ namespace ArduMower
         sensorSummary,
         gpsDetails,
         ubxResponse,
+        logExport,
         responseDataTypeLength
       };
 
@@ -117,6 +119,15 @@ namespace ArduMower
         bool ubxResponseActive = false;
         String pendingUbxCmd;
 
+        // Coordinated UBX polling (managed by modem, not clients)
+        static const uint32_t UBX_POLL_INTERVAL_MS = 800;   // 0.8s between polls
+        uint32_t lastUbxPollTime = 0;
+        uint8_t ubxPollSequence = 0;     // 0-15: cycles through all 16 UBX commands
+
+        // Reference counting for multi-client support
+        uint32_t gpsDetailsRefCount = 0;
+        uint32_t sensorSummaryRefCount = 0;
+
       private:
         void startMapChunkSend(UiSocketItem* sendTo, bool force);
         void processMapChunkSend();
@@ -146,6 +157,7 @@ namespace ArduMower
         void sensorRequestLoop();
         void gpsRequestLoop();
         void ubxLoop();
+        void ubxPollLoop();
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);
