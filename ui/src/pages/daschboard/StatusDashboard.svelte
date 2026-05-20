@@ -19,13 +19,15 @@
 
 <div class="dashboard-content">
     {#if browser && $socketStore.valueDescriptions != null}
-        <StateCard
-            state={$socketStore.state}
-            stats={$socketStore.stats}
-            desiredState={$socketStore.desiredState}
-            valueDescriptions={$socketStore.valueDescriptions}
-        />
-        <SensorEvents summary={$socketStore.sensorSummary} />
+        <div class="dashboard-main">
+            <StateCard
+                state={$socketStore.state}
+                stats={$socketStore.stats}
+                desiredState={$socketStore.desiredState}
+                valueDescriptions={$socketStore.valueDescriptions}
+            />
+            <SensorEvents summary={$socketStore.sensorSummary} />
+        </div>
     {/if}
 </div>
 
@@ -41,5 +43,13 @@
 
         /* Abzug der Header-Höhe */
         padding-top: 48px; /* Standard Carbon Header Höhe */
+    }
+
+    .dashboard-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
     }
 </style>

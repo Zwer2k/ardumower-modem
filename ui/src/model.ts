@@ -296,6 +296,7 @@ export enum RequestDataType {
   stopSensorSummary,
   requestUbx,
   requestLogExport,
+  joystickMove,
 }
 
 export interface ModemLogSettings {
@@ -306,7 +307,12 @@ export interface ConsoleRequestData {
   cmd: string;
 }
 
+export interface JoystickMoveData {
+  linear: number;
+  angular: number;
+}
+
 export interface RequestSocketMessage {
   type: RequestDataType;
-  data: ModemLogSettings | ConsoleRequestData;
+  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData;
 }

@@ -30,6 +30,7 @@
     let toast = $state<ToastData | null>(null);
     $effect(() => { toast = $toastStore });
     import HelpDialog from "../widget/HelpDialog.svelte";
+    import RemoteControlPopover from "../pages/daschboard/RemoteControlPopover.svelte";
 
     let { children } = $props();
     let helpOpen = $state(false);
@@ -105,6 +106,7 @@
     </div>
 
     <HeaderUtilities>
+            <RemoteControlPopover />
             <SaveDiscard />
             <Button
             href="/settings"

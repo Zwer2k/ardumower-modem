@@ -27,6 +27,7 @@ namespace ArduMower
         stopSensorSummary,
         requestUbx,
         requestLogExport,
+        joystickMove,
         requestDataTypeLength
       };
 
@@ -113,6 +114,7 @@ namespace ArduMower
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
         bool sendUbx(const String &hexCmd);
         void resetRequestTimestamp(ResponseDataType dataType);
+        void joystickMove(float linear, float angular);
 
         bool gpsDetailsActive = false;
         bool sensorSummaryActive = false;

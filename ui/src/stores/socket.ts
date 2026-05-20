@@ -319,6 +319,14 @@ class SocketService {
     this.sendMessage(req);
   }
 
+  sendJoystickMove(linear: number, angular: number) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.joystickMove,
+      data: { linear, angular },
+    };
+    this.sendMessage(req);
+  }
+
   disconnect() {
     this.reconnect = false;
     this.clearAllTimers();

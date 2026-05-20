@@ -102,6 +102,14 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     }
     break;
 
+  case RequestDataType::joystickMove:
+    {
+      float linear = jsonData["linear"] | 0.0f;
+      float angular = jsonData["angular"] | 0.0f;
+      _socketHandler->joystickMove(linear, angular);
+    }
+    break;
+
   default:
     break;
   }
@@ -613,6 +621,11 @@ bool UiSocketHandler::cmdToMower(String) {
   return false;
 }
 #endif
+
+void UiSocketHandler::joystickMove(float linear, float angular) {
+  _cmd.manualDrive(linear, angular);
+  Log(DBG, "%s joystickMove(%.2f, %.2f)", _LOG_, linear, angular);
+}
 
 static String sanitizeUtf8(const String& input) {
   String output;
