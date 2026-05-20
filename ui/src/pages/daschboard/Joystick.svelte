@@ -156,8 +156,16 @@
         // Standard differential-drive mapping (same convention as PS4 controller):
         //   linear  = -StickY  (up = forward, positive)
         //   angular = -StickX  (left = turn-left, positive)
-        linearSpeed  = Math.round(-ny * MAX_FORCE * 100) / 100;
-        angularSpeed = Math.round(-nx * MAX_FORCE * 100) / 100;
+        let lin = Math.round(-ny * MAX_FORCE * 100) / 100;
+        let ang = Math.round(-nx * MAX_FORCE * 100) / 100;
+        // Car-style steering: when driving backwards, invert angular so the
+        // rear of the mower turns in the direction the stick is pushed.
+        if (lin < 0) ang = -ang;
+        // Avoid -0.00 display artifact
+        if (Math.abs(lin) < 0.005) lin = 0;
+        if (Math.abs(ang) < 0.005) ang = 0;
+        linearSpeed = lin;
+        angularSpeed = ang;
     }
 
     function sendNow(force = false) {
@@ -181,6 +189,13 @@
             clearInterval(keepAliveTimer);
             keepAliveTimer = null;
         }
+    }
+
+    function formatLabel(name: string, val: number): string {
+        // Pad positive values with a space so width stays constant in monospace
+        const sign = val >= 0 ? '\u00A0' : '-';
+        const absVal = Math.abs(val).toFixed(2);
+        return `${name}: ${sign}${absVal}`;
     }
 
     function resetStick() {
@@ -250,8 +265,8 @@
         aria-label="Joystick remote control"
     ></canvas>
     <div class="joystick-readout">
-        <span class="joystick-label">Lin: {linearSpeed.toFixed(2)}</span>
-        <span class="joystick-label">Ang: {angularSpeed.toFixed(2)}</span>
+        <span class="joystick-label">{formatLabel('Lin', linearSpeed)}</span>
+        <span class="joystick-label">{formatLabel('Ang', angularSpeed)}</span>
     </div>
 </div>
 
@@ -286,9 +301,13 @@
     }
 
     .joystick-label {
+        display: inline-block;
+        min-width: 7.5ch;
+        text-align: center;
         background: #f4f4f4;
         padding: 2px 8px;
         border-radius: 4px;
         border: 1px solid #ddd;
+        font-variant-numeric: tabular-nums;
     }
 </style>

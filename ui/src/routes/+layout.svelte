@@ -17,6 +17,7 @@
     import IconDashboard from "carbon-icons-svelte/lib/Dashboard.svelte";
     import IconMap from "carbon-icons-svelte/lib/Map.svelte";
     import IconGps from "carbon-icons-svelte/lib/Location.svelte";
+    import IconTest from "carbon-icons-svelte/lib/Tools.svelte";
 
     import { Busy } from "../stores/busy";
     import SaveDiscard from "../widget/SaveDiscard.svelte";
@@ -94,6 +95,13 @@
         icon={IconMap}
         iconDescription="Live Map">
         <span class="button-text">Live Map</span>
+    </Button>
+    <Button
+        href="/?dashboard=tests"
+        kind="tertiary"
+        icon={IconTest}
+        iconDescription="Tests">
+        <span class="button-text">Tests</span>
     </Button>
     <!-- <Button
         on:click={() => { url = "/map"; navigate(url, { replace: true }); }}

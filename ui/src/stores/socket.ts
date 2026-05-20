@@ -53,6 +53,15 @@ const initialState: SocketState = {
 
 export const socketStore = writable<SocketState>(initialState);
 
+/** Dedizierter Store für MotorPlot-Daten. Wird im WS-Handler befüllt und
+ *  ist NICHT von clearConsoleLines() betroffen (vermeidet Race Condition
+ *  mit dem Terminal, das sofort nach Empfang der Lines cleart). */
+export const motorPlotStore = writable<ConsoleLine[]>([]);
+
+export function clearMotorPlotStore() {
+  motorPlotStore.set([]);
+}
+
 class SocketService {
   private restartTimer: NodeJS.Timeout | null = null;
   private reconnect = true;
@@ -176,9 +185,14 @@ class SocketService {
                   newState.modemLog = (jsonData.data as ModemLog).log;
                   break;
                 case ResponseDataType.mowerConsole:
-                  newState.consoleLines = (
-                    jsonData.data as ConsoleResponseData
-                  ).lines;
+                  const incomingLines = (jsonData.data as ConsoleResponseData)
+                    .lines;
+                  newState.consoleLines = incomingLines;
+                  // MotorPlot-Daten separat sammeln (nicht von Terminal clearen)
+                  motorPlotStore.update((existing) => [
+                    ...existing,
+                    ...incomingLines,
+                  ]);
                   break;
                 case ResponseDataType.map:
                   // Map-Chunk-Logik: Chunks sammeln, MapStore wird im Buffer gesetzt
