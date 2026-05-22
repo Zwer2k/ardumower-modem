@@ -8,7 +8,6 @@
         Loading,
         SkipToContent,
     } from "carbon-components-svelte";
-    //import { Router, Route, navigate } from "svelte-routing";
     import IconHelp from "carbon-icons-svelte/lib/Help.svelte";
     import IconHome from "carbon-icons-svelte/lib/Home.svelte";
     import IconSettings from "carbon-icons-svelte/lib/Settings.svelte";
@@ -32,6 +31,7 @@
     $effect(() => { toast = $toastStore });
     import HelpDialog from "../widget/HelpDialog.svelte";
     import RemoteControlPopover from "../pages/daschboard/RemoteControlPopover.svelte";
+    import HeaderOverflowMenu from "../widget/HeaderOverflowMenu.svelte";
 
     let { children } = $props();
     let helpOpen = $state(false);
@@ -69,20 +69,6 @@
         <span class="button-text">Map</span>
     </Button>
     <Button
-        href="/?dashboard=log"
-        kind="tertiary"
-        icon={IconLog}
-        iconDescription="Modem Log">
-        <span class="button-text">Log</span>
-    </Button>
-    <Button
-        href="/?dashboard=terminal"
-        kind="tertiary"
-        icon={IconTerminal}
-        iconDescription="Terminal">
-        <span class="button-text">Terminal</span>
-    </Button>
-    <Button
         href="/?dashboard=gps"
         kind="tertiary"
         icon={IconGps}
@@ -96,39 +82,16 @@
         iconDescription="Live Map">
         <span class="button-text">Live Map</span>
     </Button>
-    <Button
-        href="/?dashboard=tests"
-        kind="tertiary"
-        icon={IconTest}
-        iconDescription="Tests">
-        <span class="button-text">Tests</span>
-    </Button>
-    <!-- <Button
-        on:click={() => { url = "/map"; navigate(url, { replace: true }); }}
-        kind="tertiary"
-        icon={IconMap}>
-        Map
-    </Button> -->
+
     <div slot="skip-to-content">
         <SkipToContent />
     </div>
 
     <HeaderUtilities>
-            <RemoteControlPopover />
-            <SaveDiscard />
-            <Button
-            href="/settings"
-            kind="tertiary"
-            icon={IconSettings}
-            iconDescription="Settings"
-            />
-            <Button
-            on:click={help}
-            kind="tertiary"
-            icon={IconHelp}
-            iconDescription="Help"
-            />
-            <Toasts />
+        <RemoteControlPopover />
+        <SaveDiscard />
+        <HeaderOverflowMenu onHelp={help} />
+        <Toasts />
     </HeaderUtilities>
 
     {#if toast}

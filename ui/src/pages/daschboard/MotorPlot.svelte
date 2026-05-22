@@ -16,6 +16,7 @@
     let unsubStore: (() => void) | null = null;
     let stopTimer: ReturnType<typeof setTimeout> | null = null;
     let ackWarning = $state(false);
+    let hasStarted = $state(false);
 
     // ─── Colors ─────────────────────────────────────────────────────────────
     const COLORS = {
@@ -255,6 +256,7 @@
         if (isRunning || !ackWarning) return;
 
         isRunning = true;
+        hasStarted = true;
         dataPoints = [];
         lastProcessedIndex = 0;
         startTime = Date.now();
@@ -276,6 +278,8 @@
     function clearPlot() {
         dataPoints = [];
         lastProcessedIndex = 0;
+        hasStarted = false;
+        ackWarning = false;
         clearMotorPlotStore();
         if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
@@ -290,6 +294,7 @@
             60-Sekunden-Motortest. Motoren beschleunigen auf Volllast und bremsen wieder ab.
             <strong>Links</strong> = PWM (±255), <strong>Rechts</strong> = Ticks.
         </p>
+        {#if !hasStarted}
         <div class="mp-warning">
             ⚠ <strong>Verletzungsgefahr!</strong> Beim Start dieses Tests laufen die
             Fahrmotoren <strong>und das Mähwerk</strong> mit voller Geschwindigkeit an.
@@ -299,6 +304,7 @@
                 <span>Verstanden – Sicherheitsvorkehrungen getroffen</span>
             </label>
         </div>
+        {/if}
         <div class="mp-actions">
             <button class="mp-btn start" onclick={startPlot} disabled={isRunning || !ackWarning}>
                 {isRunning ? '⏳ Läuft...' : '▶ Start'}
