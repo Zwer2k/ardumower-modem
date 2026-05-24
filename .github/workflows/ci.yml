@@ -76,12 +76,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: firmware
-          path: firmware
+          path: .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: firmware/**/*
+          files: |
+            esp32/*
+            esp32-s3/*
           generate_release_notes: true
 
   nightly:
@@ -98,7 +100,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: firmware
-          path: firmware
+          path: .
 
       - name: Get date and commit hash
         id: version
@@ -122,4 +124,8 @@ jobs:
           prerelease: true
           allowUpdates: true
           replacesArtifacts: true
-          artifacts: firmware/**/*.bin,firmware/**/*.elf,firmware/**/*.bin
+          artifacts: |
+            esp32/*.bin
+            esp32/*.elf
+            esp32-s3/*.bin
+            esp32-s3/*.elf
