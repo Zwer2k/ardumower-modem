@@ -28,6 +28,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 OR OTHER DEALINGS IN THE SOFTWARE.
 
+## Requirements
+
+Before building or flashing the firmware, install the following tools:
+
+- Node.js and npm (required for building the web UI)
+- Go (required for packaging the web UI into `src/asset_bundle.h`)
+- PlatformIO CLI (recommended for firmware builds)
+- Arduino CLI (optional, only required for `task compile`)
+- `task` from [Taskfile](https://taskfile.dev/) to run the repository automation tasks
+
 ## Flashing the ArduMower Modem firmware
 
 Flashing the firmware onto the ESP32 for the first time requires some effort. Subsequent updates can be installed comfortably using the web interface of the Modem.
@@ -46,6 +56,10 @@ For the ESP32 variant:
 ```
 task compile-pio PIO_ENV=esp32
 ```
+
+The `compile-pio` task depends on `package-ui`, so the UI is built and packaged automatically before the firmware build starts.
+
+If `pio` is not on your PATH, the Taskfile currently calls the local PlatformIO venv executable at `~/.platformio/penv/bin/pio`.
 
 ### Compiling with Arduino CLI
 
