@@ -413,7 +413,7 @@ export function hexDump(hex: string, startOffset: number = 0): string {
   return lines.join("\n");
 }
 
-function gnssName(id: number): string {
+export function gnssName(id: number): string {
   const names: Record<number, string> = {
     0: "GPS",
     1: "SBAS",

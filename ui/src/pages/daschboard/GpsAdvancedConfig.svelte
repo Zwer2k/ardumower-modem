@@ -7,9 +7,10 @@
         findUbxFrames,
         hexDump,
         getParserForFrame,
+        gnssName,
         type UbxFrameResult,
     } from './ubxCommands';
-    import type { GpsDetails } from '../../model';
+    import type { GpsDetails, GpsSatellite } from '../../model';
 
     // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -164,16 +165,50 @@
         }
     }
 
+    // ─── Fallback: Satellite-Daten aus gpsDetails (S4) ────────────────────
+    // UBX NAV-SAT-Antworten werden im UART-Puffer (512 Byte) des Mowers
+    // abgeschnitten, sobald 40+ Satelliten + periodische UBX-Frames anfallen.
+    // Die S4-Daten enthalten dieselben Satelliten-Infos und sind zuverlässig.
+
+    function s4SatToTableRow(sat: GpsSatellite): Record<string, string | number> {
+        const quals = ['searching', 'locked', 'locked+time', 'q3', 'q4', 'q5', 'q6', 'q7'];
+        return {
+            GNSS: gnssName(sat.gnssId),
+            SV: sat.svId,
+            'C/N₀': `${sat.cno} dB-Hz`,
+            Quality: quals[sat.qualityInd] ?? `q${sat.qualityInd}`,
+            Used: sat.prUsed ? '✓' : '—',
+            DGPS: sat.crCorrUsed ? '✓' : '—',
+            'PR Res': `${(sat.prRes * 0.01).toFixed(2)} m`,
+        };
+    }
+
+    function handleGpsDetails(details: GpsDetails) {
+        if (!details || !details.satellites || details.satellites.length === 0) return;
+        const card = cards.find(c => c.commandId === 'nav-sat');
+        if (!card) return;
+        const rows = details.satellites.map(s4SatToTableRow);
+        card.data = rows;
+        card.timestamp = Date.now();
+        card.loading = false;
+        card.error = '';
+    }
+
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     let unsubscribeSocket: (() => void) | null = null;
     let processedUbxTimestamp = 0;
+    let processedGpsTimestamp = 0;
 
     onMount(() => {
         unsubscribeSocket = socketStore.subscribe((state) => {
             if (state.ubxResponse && state.ubxResponse.timestamp !== processedUbxTimestamp) {
                 processedUbxTimestamp = state.ubxResponse.timestamp;
                 handleUbxResponse(state.ubxResponse);
+            }
+            if (state.gpsDetails && state.gpsDetails.timestamp !== processedGpsTimestamp) {
+                processedGpsTimestamp = state.gpsDetails.timestamp;
+                handleGpsDetails(state.gpsDetails);
             }
         });
         // Don't call refreshAll() here — it would start a timeout before

@@ -659,7 +659,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     lastDataRequestTimestamp[dataType] = 0;
   }
 
-  const size_t docSize = (dataType == ResponseDataType::gpsDetails) ? 8192 : 4096;
+  const size_t docSize = (dataType == ResponseDataType::gpsDetails || dataType == ResponseDataType::ubxResponse) ? 8192 : 4096;
   DynamicJsonDocument doc(docSize);
   doc["type"] = dataType;
   data.marshal(doc.createNestedObject("data"));
