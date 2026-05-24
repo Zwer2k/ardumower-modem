@@ -17,7 +17,7 @@
 */
 
 #include "stm32ota.h"
-#include "log.h"
+#include "../log.h"
 
 FirmwareWriterSTM32::FirmwareWriterSTM32(HardwareSerial &serial): serial(serial) {
   pinMode(BOOT0_PIN, OUTPUT);

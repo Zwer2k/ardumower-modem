@@ -1,0 +1,7 @@
+NimBLE-Arduino@1.4.3
+ArduinoJson@6.21.2
+MQTT@2.5.2
+AUnit@1.7.1
+ArduinoWebsockets@0.5.3
+Async TCP@3.4.1
+ESP Async WebServer@3.7.7

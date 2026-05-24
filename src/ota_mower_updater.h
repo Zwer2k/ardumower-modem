@@ -4,7 +4,7 @@
 #include "terminal.h"
 #endif
 #include "stm32ota/stm32ota.h"
-#include <fs.h>
+#include <FS.h>
 #include <ArduinoJson.h>
 
 namespace ArduMower

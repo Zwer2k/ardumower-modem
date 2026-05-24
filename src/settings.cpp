@@ -6,8 +6,10 @@
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 #include <string.h>
+#ifdef ENABLE_PS4_CONTROLLER
 #include "esp_bt_main.h"
 #include "esp_bt_device.h"
+#endif
 
 using namespace ArduMower::Modem::Settings;
 
@@ -612,6 +614,7 @@ void PropertiesClass::marshal(const JsonObject &o) const
 
 bool PropertiesClass::initBluetooth() const
 {
+#ifdef ENABLE_PS4_CONTROLLER
   if (!btStart()) {
     Log(ERR, "Failed to initialize controller");
     return false;
@@ -628,10 +631,15 @@ bool PropertiesClass::initBluetooth() const
   }
 
   return true;
+#else
+  (void)0; // Bluetooth not enabled in this build
+  return false;
+#endif
 }
 
 String PropertiesClass::getBTMacAddress() const
 { 
+#ifdef ENABLE_PS4_CONTROLLER
   const uint8_t* point = esp_bt_dev_get_address();
   if (point == NULL)
     initBluetooth();
@@ -642,17 +650,24 @@ String PropertiesClass::getBTMacAddress() const
 
   String mac = "";
   for (int i = 0; i < 6; i++) {
- 
     char str[3];
     sprintf(str, "%02X", (int)point[i]);
     mac += str;
- 
     if (i < 5){
       mac += ":";
     }
   }
 
   return mac;
+#else
+  // Return device MAC from efuse as a BLE-friendly fallback
+  uint64_t mac = ESP.getEfuseMac();
+  char buf[18];
+  sprintf(buf, "%02X:%02X:%02X:%02X:%02X:%02X",
+          (int)((mac >> 40) & 0xFF), (int)((mac >> 32) & 0xFF), (int)((mac >> 24) & 0xFF),
+          (int)((mac >> 16) & 0xFF), (int)((mac >> 8) & 0xFF), (int)(mac & 0xFF));
+  return String(buf);
+#endif
 }
 
 
