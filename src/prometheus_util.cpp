@@ -47,11 +47,11 @@ namespace ArduMower
     {
       void registerSystemProperties()
       {
-        addFnMetric("ardumower_modem_total_runtime", millis, Attributes());
-        addFnMetric(keyModemHeap, ESP.getHeapSize, Attributes(Attribute(keyAttrType, "total")));
-        addFnMetric(keyModemHeap, ESP.getFreeHeap, Attributes(Attribute(keyAttrType, "free")));
-        addFnMetric(keyModemHeap, ESP.getMinFreeHeap, Attributes(Attribute(keyAttrType, "min_free")));
-        addFnMetric(keyModemHeap, ESP.getMaxAllocHeap, Attributes(Attribute(keyAttrType, "max_alloc")));
+        addFnMetric("ardumower_modem_total_runtime", []() { return millis(); }, Attributes());
+        addFnMetric(keyModemHeap, []() { return ESP.getHeapSize(); }, Attributes(Attribute(keyAttrType, "total")));
+        addFnMetric(keyModemHeap, []() { return ESP.getFreeHeap(); }, Attributes(Attribute(keyAttrType, "free")));
+        addFnMetric(keyModemHeap, []() { return ESP.getMinFreeHeap(); }, Attributes(Attribute(keyAttrType, "min_free")));
+        addFnMetric(keyModemHeap, []() { return ESP.getMaxAllocHeap(); }, Attributes(Attribute(keyAttrType, "max_alloc")));
       }
 
       void registerRobotProperties(ArduMower::Domain::Robot::Properties *p)

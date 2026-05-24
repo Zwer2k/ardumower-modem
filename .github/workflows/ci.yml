@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build UI
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Package UI into asset_bundle.h
+        working-directory: util/package_ui
+        run: go run .
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Build ESP32 firmware
+        run: pio run -e esp32
+
+      - name: Build ESP32-S3 firmware
+        run: pio run -e esp32-S3-N16-R8
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/esp32 artifacts/esp32-s3
+          for dir in esp32 esp32-S3-N16-R8; do
+            src=".pio/build/$dir"
+            dst="artifacts/${dir/-N16-R8/-s3}"
+            mkdir -p "$dst"
+            cp -v "$src/firmware.bin" "$dst/" 2>/dev/null || true
+            cp -v "$src/firmware.elf" "$dst/" 2>/dev/null || true
+            cp -v "$src/partitions.bin" "$dst/" 2>/dev/null || true
+            cp -v "$src/bootloader.bin" "$dst/" 2>/dev/null || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: artifacts/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: firmware
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: firmware/**/*
+          generate_release_notes: true
