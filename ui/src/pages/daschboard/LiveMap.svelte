@@ -5,7 +5,8 @@
     import { browser } from '$app/environment';
     import { socketService } from '../../stores/socket';
     import { gpsStore } from '../../stores/gpsStore';
-    import type { PositionSample, NavPvtInfo } from '../../stores/gpsStore';
+    import * as gotoService from '../../gotoService';
+    import type { PositionSample } from '../../stores/gpsStore';
 
     const TIME_WINDOWS: { label: string; ms: number }[] = [
         { label: '5 min', ms: 5 * 60 * 1000 },
@@ -16,7 +17,7 @@
         { label: 'All', ms: Infinity },
     ];
 
-    let selectedWindow = $state(TIME_WINDOWS[3].ms); // Default: 1h
+    let selectedWindow = $state(TIME_WINDOWS[3].ms);
     let showAccuracy = $state(true);
 
     let mapContainer: HTMLDivElement;
@@ -25,9 +26,16 @@
     let trackPolyline: any = null;
     let accuracyCircle: any = null;
     let roverMarker: any = null;
-    let headingLine: any = null;
+    let targetMarker: any = null;
+    let targetLine: any = null;
+
+    let targetSet = $state(false);
+    let isDriving = $state(false);
+    let targetDist = $state(0);
+    let targetBearing = $state(0);
 
     let gpsState = $derived($gpsStore);
+
     let filteredHistory = $derived(() => {
         const now = Date.now();
         if (selectedWindow === Infinity) return gpsState.positionHistory;
@@ -53,8 +61,74 @@
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(map);
 
+            // Click to set target
+            map.on('click', (e: any) => {
+                if (isDriving) return; // ignore clicks while driving
+                setTarget(e.latlng.lat, e.latlng.lng);
+            });
+
             updateLayers();
         });
+    }
+
+    function setTarget(lat: number, lon: number) {
+        if (!map || !L) return;
+        gotoService.setTarget(lat, lon);
+        targetSet = true;
+
+        if (targetMarker) map.removeLayer(targetMarker);
+        targetMarker = L.marker([lat, lon], {
+            icon: L.divIcon({
+                className: 'goto-target-marker',
+                html: '<div class="goto-target-pin"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10],
+            }),
+            zIndexOffset: 500,
+        }).addTo(map);
+
+        updateTargetLine();
+    }
+
+    function clearTarget() {
+        gotoService.clearTarget();
+        targetSet = false;
+        if (targetMarker) { map.removeLayer(targetMarker); targetMarker = null; }
+        if (targetLine) { map.removeLayer(targetLine); targetLine = null; }
+    }
+
+    function startDrive() {
+        if (!targetSet) return;
+        if (gotoService.start()) {
+            isDriving = true;
+        }
+    }
+
+    function stopDrive() {
+        gotoService.stop();
+        isDriving = false;
+    }
+
+    function updateTargetLine() {
+        if (!map || !L) return;
+        const pvt = gpsState.navPvt;
+        const target = gotoService.getTarget();
+        if (!pvt || !pvt.fixOk || !target) {
+            if (targetLine) { map.removeLayer(targetLine); targetLine = null; }
+            return;
+        }
+
+        const latlngs = [[pvt.lat, pvt.lon], [target.lat, target.lon]];
+        if (targetLine) {
+            targetLine.setLatLngs(latlngs);
+        } else {
+            targetLine = L.polyline(latlngs, {
+                color: '#e65100',
+                weight: 2,
+                opacity: 0.8,
+                dashArray: '6,6',
+            }).addTo(map);
+        }
     }
 
     function updateLayers() {
@@ -81,15 +155,13 @@
             }).addTo(map);
         }
 
-        // ─── Rover Marker + Accuracy + Heading ──────────────────────────
+        // ─── Rover Marker + Accuracy ────────────────────────────────────
         if (roverMarker) { map.removeLayer(roverMarker); roverMarker = null; }
         if (accuracyCircle) { map.removeLayer(accuracyCircle); accuracyCircle = null; }
-        if (headingLine) { map.removeLayer(headingLine); headingLine = null; }
 
         if (pvt && pvt.fixOk && pvt.fixType >= 2) {
             const pos: [number, number] = [pvt.lat, pvt.lon];
 
-            // Custom rover icon (SVG circle with heading arrow)
             const roverIcon = L.divIcon({
                 className: 'rover-marker',
                 html: `<div class="rover-marker-inner" style="transform: rotate(${pvt.heading}deg)">
@@ -114,13 +186,13 @@
             }
         }
 
+        // ─── Target line ────────────────────────────────────────────────
+        updateTargetLine();
+
         // ─── Auto-fit or center ─────────────────────────────────────────
         if (trackLatLngs.length >= 2) {
             const bounds = L.latLngBounds(trackLatLngs);
-            if (pvt && pvt.fixOk) {
-                bounds.extend([pvt.lat, pvt.lon]);
-            }
-            // Only fit bounds on first load or significant track change
+            if (pvt && pvt.fixOk) bounds.extend([pvt.lat, pvt.lon]);
             if (!map._livemap_fitted) {
                 map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
                 map._livemap_fitted = true;
@@ -134,12 +206,13 @@
     // React to store changes
     $effect(() => {
         if (map && L) {
+            // Feed GPS state to goto service
+            gotoService.setGpsState(gpsState as any);
             updateLayers();
         }
     });
 
-    // Reagiere auf Sichtbarkeit (Dashboard ist immer im DOM, nur CSS hidden)
-    // afterNavigate funktioniert zuverlässiger als $effect für Query-Param-Änderungen
+    // ─── Lifecycle / visibility ───────────────────────────────────────────
     let lastLivemapActive = false;
     function syncLivemapPolling() {
         if (!browser) return;
@@ -153,18 +226,27 @@
         } else if (!isLivemap && lastLivemapActive) {
             socketService.stopGpsDetails();
             gpsStore.disconnect();
+            if (isDriving) stopDrive();
             lastLivemapActive = false;
         }
     }
-    onMount(syncLivemapPolling);
+    onMount(() => {
+        syncLivemapPolling();
+        gotoService.onUpdate((dist, bearing) => {
+            targetDist = dist;
+            targetBearing = bearing;
+        });
+        gotoService.onArrive(() => {
+            isDriving = false;
+        });
+    });
     afterNavigate(syncLivemapPolling);
 
     onDestroy(() => {
-        // Note: Dashboard tabs are CSS-hidden, not unmounted,
-        // so this rarely fires. syncLivemapPolling handles normal lifecycle.
         if (lastLivemapActive) {
             socketService.stopGpsDetails();
             gpsStore.disconnect();
+            if (isDriving) stopDrive();
             lastLivemapActive = false;
         }
         if (map) {
@@ -187,7 +269,7 @@
         <div class="livemap-title">🗺️ Live Map</div>
         <div class="livemap-controls">
             <label class="livemap-label">
-                Track window
+                Track
                 <select bind:value={selectedWindow} onchange={onWindowChange}>
                     {#each TIME_WINDOWS as w}
                         <option value={w.ms}>{w.label}</option>
@@ -198,28 +280,33 @@
                 <input type="checkbox" bind:checked={showAccuracy} onchange={updateLayers} />
                 Accuracy
             </label>
+
+            <!-- GoTo controls -->
+            <div class="goto-controls">
+                {#if targetSet}
+                    <span class="goto-badge">
+                        🎯 {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
+                    </span>
+                    {#if isDriving}
+                        <button class="goto-btn stop" onclick={stopDrive}>⏹ Stop</button>
+                    {:else}
+                        <button class="goto-btn drive" onclick={startDrive}>▶ Drive</button>
+                    {/if}
+                    <button class="goto-btn clear" onclick={clearTarget}>✕</button>
+                {:else}
+                    <span class="goto-hint">Click map to set target</span>
+                {/if}
+            </div>
+
             <div class="livemap-stats">
                 {#if gpsState.navPvt}
                     {@const p = gpsState.navPvt}
-                    <span class="stat-item" title="Latitude, Longitude">
-                        {(p.lat ?? 0).toFixed(6)}°, {(p.lon ?? 0).toFixed(6)}°
-                    </span>
-                    <span class="stat-item" title="Horizontal accuracy">
-                        ±{(p.hAcc ?? 0).toFixed(2)} m
-                    </span>
-                    <span class="stat-item" title="Fix type">
-                        {p.fixType === 3 ? '3D' : p.fixType === 2 ? '2D' : p.fixType === 1 ? 'DR' : 'No Fix'}
-                        {p.carrSoln === 2 ? ' Fixed' : p.carrSoln === 1 ? ' Float' : ''}
-                    </span>
-                    <span class="stat-item" title="Speed / Heading">
-                        {(p.gSpeed ?? 0).toFixed(2)} m/s · {(p.heading ?? 0).toFixed(1)}°
-                    </span>
+                    <span class="stat-item">{(p.lat ?? 0).toFixed(6)}°, {(p.lon ?? 0).toFixed(6)}°</span>
+                    <span class="stat-item">±{(p.hAcc ?? 0).toFixed(2)} m</span>
+                    <span class="stat-item">{(p.gSpeed ?? 0).toFixed(2)} m/s</span>
                 {:else}
-                    <span class="stat-item stat-wait">Waiting for GPS fix…</span>
+                    <span class="stat-item stat-wait">Waiting for GPS…</span>
                 {/if}
-                <span class="stat-item" title="Track points">
-                    {filteredHistory().length} pts
-                </span>
             </div>
         </div>
     </div>
@@ -240,7 +327,7 @@
         flex-direction: column;
         width: 100%;
         height: 100vh;
-        padding-top: 48px; /* Header height */
+        padding-top: 48px;
         box-sizing: border-box;
     }
 
@@ -314,6 +401,59 @@
         font-style: italic;
     }
 
+    /* ─── GoTo controls ──────────────────────────────────────────────────── */
+    .goto-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .goto-hint {
+        font-size: 0.8em;
+        color: #888;
+        font-style: italic;
+    }
+
+    .goto-badge {
+        font-size: 0.8em;
+        padding: 4px 10px;
+        background: #fff3e0;
+        border: 1px solid #ffab00;
+        border-radius: 4px;
+        color: #b06000;
+        font-family: monospace;
+    }
+
+    .goto-btn {
+        padding: 5px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.8em;
+        cursor: pointer;
+        transition: background 0.15s;
+
+        &.drive {
+            background: #e8f5e9;
+            border-color: #4caf50;
+            color: #2e7d32;
+            &:hover { background: #c8e6c9; }
+        }
+
+        &.stop {
+            background: #ffebee;
+            border-color: #ef5350;
+            color: #c62828;
+            &:hover { background: #ffcdd2; }
+        }
+
+        &.clear {
+            background: #f4f4f4;
+            color: #888;
+            padding: 5px 8px;
+            &:hover { background: #e0e0e0; }
+        }
+    }
+
     .livemap-map {
         flex: 1;
         width: 100%;
@@ -352,6 +492,26 @@
         position: absolute;
         top: -2px;
         left: 7px;
+    }
+
+    :global(.goto-target-marker) {
+        background: transparent !important;
+        border: none !important;
+    }
+
+    :global(.goto-target-pin) {
+        width: 16px;
+        height: 16px;
+        background: #e65100;
+        border: 2px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 8px rgba(230, 81, 0, 0.6);
+        animation: goto-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes goto-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.3); opacity: 0.7; }
     }
 
     :global(.leaflet-container) {
