@@ -53,7 +53,6 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     // Only reset polling timers on first activation (ref was 0)
     if (_socketHandler->gpsDetailsRefCount == 1) {
       _socketHandler->resetRequestTimestamp(ResponseDataType::gpsDetails);
-      _socketHandler->lastUbxPollTime = 0;        // first poll immediately
       _socketHandler->ubxPollSequence = 0;          // start from beginning of cycle
     }
     Log(INFO, "%s GPS details polling activated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
@@ -296,6 +295,7 @@ void UiSocketHandler::loop()
       if (ubxResponseActive && _source.ubxResponse().timestamp > 0) {
         sendData(ResponseDataType::ubxResponse, NULL, true); // force=true: bypass oldDataTimestamp
         _source.ubxResponseP()->timestamp = 0; // Mark as consumed
+        _lastSentUbxTimestamp = 0; // Allow next poll to advance immediately
       }
       break;
     }
@@ -350,7 +350,12 @@ void UiSocketHandler::ubxPollLoop()
 {
   // Don't overwrite a pending command that hasn't been sent yet
   if (pendingUbxCmd.length() > 0) return;
-  if (millis() - lastUbxPollTime < UBX_POLL_INTERVAL_MS) return;
+
+  // Wait until the previous response was consumed by case 12
+  if (ubxResponseActive && _source.ubxResponse().timestamp > 0) return;
+
+  // Safety: if we sent a command but got no response for 2s, advance anyway
+  if (_lastSentUbxTimestamp > 0 && millis() - _lastSentUbxTimestamp < 2000) return;
 
   static const char* ubxCmds[] = {
     "B562010700000819",                   // 0: NAV-PVT
@@ -372,9 +377,7 @@ void UiSocketHandler::ubxPollLoop()
   };
   pendingUbxCmd = ubxCmds[ubxPollSequence];
   ubxPollSequence = (ubxPollSequence + 1) % 16;
-  lastUbxPollTime = millis();
   _source.ubxResponseP()->timestamp = 0;
-  _lastSentUbxTimestamp = 0;
   Log(DBG, "%subxPollLoop seq=%d", _LOG_, ubxPollSequence);
 }
 
@@ -393,14 +396,12 @@ void UiSocketHandler::resetRequestTimestamp(ResponseDataType dataType)
 
 void UiSocketHandler::ubxLoop()
 {
-  static uint32_t lastUbxSendAttempt = 0;
   if (pendingUbxCmd.length() == 0) return;
-  if (millis() - lastUbxSendAttempt < 200) return; // Throttle: ~5 msg/s max
   if (_cmd.sendUbx(pendingUbxCmd)) {
     Log(DBG, "%subxLoop sent pending cmd", _LOG_);
     pendingUbxCmd = "";
+    _lastSentUbxTimestamp = millis();
   }
-  lastUbxSendAttempt = millis();
 }
 
 static String sanitizeUtf8(const String& input);

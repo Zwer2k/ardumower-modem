@@ -121,9 +121,7 @@ namespace ArduMower
         bool ubxResponseActive = false;
         String pendingUbxCmd;
 
-        // Coordinated UBX polling (managed by modem, not clients)
-        static const uint32_t UBX_POLL_INTERVAL_MS = 800;   // 0.8s between polls
-        uint32_t lastUbxPollTime = 0;
+        // Sequentielles UBX-Polling: 16 Befehle in schneller Folge
         uint8_t ubxPollSequence = 0;     // 0-15: cycles through all 16 UBX commands
 
         // Reference counting for multi-client support
