@@ -73,17 +73,21 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           name: firmware
-          path: .
+          path: artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            esp32/*
-            esp32-s3/*
+            artifacts/esp32/*
+            artifacts/esp32-s3/*
           generate_release_notes: true
 
   nightly:
@@ -100,7 +104,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: firmware
-          path: .
+          path: artifacts
 
       - name: Get date and commit hash
         id: version
@@ -125,7 +129,7 @@ jobs:
           allowUpdates: true
           replacesArtifacts: true
           artifacts: |
-            esp32/*.bin
-            esp32/*.elf
-            esp32-s3/*.bin
-            esp32-s3/*.elf
+            artifacts/esp32/*.bin
+            artifacts/esp32/*.elf
+            artifacts/esp32-s3/*.bin
+            artifacts/esp32-s3/*.elf
