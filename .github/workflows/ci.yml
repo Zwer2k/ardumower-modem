@@ -51,15 +51,22 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/esp32 artifacts/esp32-s3
-          for dir in esp32 esp32-S3-N16-R8; do
-            src=".pio/build/$dir"
-            dst="artifacts/${dir/-N16-R8/-s3}"
-            mkdir -p "$dst"
-            cp -v "$src/firmware.bin" "$dst/" 2>/dev/null || true
-            cp -v "$src/firmware.elf" "$dst/" 2>/dev/null || true
-            cp -v "$src/partitions.bin" "$dst/" 2>/dev/null || true
-            cp -v "$src/bootloader.bin" "$dst/" 2>/dev/null || true
-          done
+          
+          # ESP32
+          src=".pio/build/esp32"
+          dst="artifacts/esp32"
+          cp -v "$src/firmware.bin" "$dst/" 2>/dev/null || true
+          cp -v "$src/firmware.elf" "$dst/" 2>/dev/null || true
+          cp -v "$src/partitions.bin" "$dst/" 2>/dev/null || true
+          cp -v "$src/bootloader.bin" "$dst/" 2>/dev/null || true
+          
+          # ESP32-S3
+          src=".pio/build/esp32-S3-N16-R8"
+          dst="artifacts/esp32-s3"
+          cp -v "$src/firmware.bin" "$dst/" 2>/dev/null || true
+          cp -v "$src/firmware.elf" "$dst/" 2>/dev/null || true
+          cp -v "$src/partitions.bin" "$dst/" 2>/dev/null || true
+          cp -v "$src/bootloader.bin" "$dst/" 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
