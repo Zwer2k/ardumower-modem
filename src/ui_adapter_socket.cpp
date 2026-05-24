@@ -356,7 +356,7 @@ void UiSocketHandler::ubxPollLoop()
   if (ubxResponseActive && _source.ubxResponse().timestamp > 0) return;
 
   // Safety: advance even without response after timeout
-  if (_lastSentUbxTimestamp > 0 && millis() - _lastSentUbxTimestamp < 2000) return;
+  if (_lastSentUbxTimestamp > 0 && millis() - _lastSentUbxTimestamp < 5000) return;
 
   // Fast commands: polled every cycle for responsive Simple Dashboard
   static const char* fastCmds[] = {
@@ -420,6 +420,11 @@ void UiSocketHandler::resetRequestTimestamp(ResponseDataType dataType)
 void UiSocketHandler::ubxLoop()
 {
   if (pendingUbxCmd.length() == 0) return;
+
+  static uint32_t lastAttempt = 0;
+  if (millis() - lastAttempt < 200) return; // Throttle: ~5 retries/s max
+  lastAttempt = millis();
+
   if (_cmd.sendUbx(pendingUbxCmd)) {
     Log(DBG, "%subxLoop sent pending cmd", _LOG_);
     pendingUbxCmd = "";

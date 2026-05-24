@@ -355,12 +355,16 @@ bool MowerAdapter::requestSensorSummary()
 bool MowerAdapter::requestGpsDetails()
 {
   Log(DBG, "%srequestGpsDetails", _LOG_);
+  if (!assertSendIsInitialized())
+    return false;
   return sendCommand("AT+S4", true);
 }
 
 bool MowerAdapter::sendUbx(const String &hexCmd)
 {
   Log(DBG, "%ssendUbx(%s)", _LOG_, hexCmd.c_str());
+  if (!assertSendIsInitialized())
+    return false;
   return sendCommand("AT+U," + hexCmd, true);
 }
 
@@ -579,10 +583,8 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
 
   int satCount = 0;
   int fieldIdx = -1;
-  int fieldsPerSat = 8; // backward-compatible default
 
-  // Collect all values first to determine format
-  std::vector<String> tokens;
+  // Erster Durchlauf: Header-Felder parsen und Gesamtzahl der Token ermitteln
   processCSVResponse(line, [&](int index, String val)
                      {
                        fieldIdx = index;
@@ -608,51 +610,50 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
                          break;
                        case 7:
                          satCount = val.toInt();
-                         _gpsDetails.satellites.clear();
-                         break;
-                       default:
-                         if (index >= 8) {
-                           tokens.push_back(val);
-                         }
                          break;
                        }
                      });
 
-  // Determine fields per satellite from total token count
-  if (satCount > 0) {
-    int totalSatFields = tokens.size();
-    fieldsPerSat = totalSatFields / satCount;
-    // Clamp to known formats
-    if (fieldsPerSat != 10 && fieldsPerSat != 8) {
-      Log(WARN, "%sparseGpsDetailsResponse unexpected fieldsPerSat=%d sats=%d total=%d",
-          _LOG_, fieldsPerSat, satCount, totalSatFields);
-      fieldsPerSat = 8;
-    }
+  // Format anhand der Gesamtfeldzahl bestimmen
+  int totalFields = fieldIdx + 1;
+  int dataFields = totalFields - 8;
+  int fieldsPerSat = (satCount > 0) ? dataFields / satCount : 8;
+
+  if (fieldsPerSat != 10 && fieldsPerSat != 8) {
+    Log(WARN, "%sparseGpsDetailsResponse unexpected fieldsPerSat=%d sats=%d total=%d",
+        _LOG_, fieldsPerSat, satCount, totalFields);
+    fieldsPerSat = 8;
   }
 
-  // Parse satellite tokens with known format
+  // Zweiter Durchlauf: Satellitenfelder on-the-fly parsen (kein Vector!)
   _gpsDetails.satellites.clear();
-  for (int satIdx = 0; satIdx < satCount && satIdx < 40; satIdx++) {
-    ArduMower::Domain::Robot::GpsSatellite sat;
-    int base = satIdx * fieldsPerSat;
-    if (base + 7 >= (int)tokens.size()) break;
+  processCSVResponse(line, [&](int index, String val)
+                     {
+                       if (index < 8) return;
 
-    sat.gnssId = tokens[base + 0].toInt();
-    sat.svId = tokens[base + 1].toInt();
-    sat.sigId = tokens[base + 2].toInt();
-    sat.cno = tokens[base + 3].toInt();
-    sat.qualityInd = tokens[base + 4].toInt();
-    sat.prUsed = tokens[base + 5].toInt() == 1;
-    sat.crCorrUsed = tokens[base + 6].toInt() == 1;
-    sat.prRes = tokens[base + 7].toFloat();
+                       int satField = index - 8;
+                       int satIdx = satField / fieldsPerSat;
+                       int col = satField % fieldsPerSat;
 
-    if (fieldsPerSat >= 10 && base + 9 < (int)tokens.size()) {
-      sat.elevation = (int8_t)tokens[base + 8].toInt();
-      sat.azimuth = (int8_t)tokens[base + 9].toInt();
-    }
+                       if (satIdx >= satCount || satIdx >= 40) return;
 
-    _gpsDetails.satellites.push_back(sat);
-  }
+                       if ((size_t)satIdx >= _gpsDetails.satellites.size())
+                         _gpsDetails.satellites.resize(satIdx + 1);
+
+                       auto& sat = _gpsDetails.satellites[satIdx];
+                       switch (col) {
+                       case 0: sat.gnssId = val.toInt(); break;
+                       case 1: sat.svId = val.toInt(); break;
+                       case 2: sat.sigId = val.toInt(); break;
+                       case 3: sat.cno = val.toInt(); break;
+                       case 4: sat.qualityInd = val.toInt(); break;
+                       case 5: sat.prUsed = val.toInt() == 1; break;
+                       case 6: sat.crCorrUsed = val.toInt() == 1; break;
+                       case 7: sat.prRes = val.toFloat(); break;
+                       case 8: sat.elevation = (int8_t)val.toInt(); break;
+                       case 9: sat.azimuth = (int8_t)val.toInt(); break;
+                       }
+                     });
 
   Log(DBG, "%sparseGpsDetailsResponse done sats=%d/%d fields=%d fps=%d",
       _LOG_, (int)_gpsDetails.satellites.size(), satCount, fieldIdx, fieldsPerSat);
