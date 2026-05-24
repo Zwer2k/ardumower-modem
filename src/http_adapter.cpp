@@ -44,6 +44,7 @@ void HttpAdapter::begin()
   _server.on("/", HTTP_OPTIONS, std::bind(&HttpAdapter::handleCORSPreflightRequest, this, std::placeholders::_1));
   _server.on("/api/modem/reboot", HTTP_POST, std::bind(&HttpAdapter::apiReboot, this, std::placeholders::_1));
   _server.on("/api/mower/reboot", HTTP_POST, std::bind(&HttpAdapter::apiMowerReboot, this, std::placeholders::_1));
+  _server.on("/api/mower/rebootGps", HTTP_POST, std::bind(&HttpAdapter::apiMowerRebootGps, this, std::placeholders::_1));
 }
 
 void HttpAdapter::loop()
@@ -206,6 +207,13 @@ void HttpAdapter::apiMowerReboot(AsyncWebServerRequest *req)
 {
   FirmwareWriterSTM32::rebootMcuStatic();
   req->send(200, "text/plain", "mower reboot triggered");
+}
+
+// Reboot GPS receiver via mower command AT+Y2
+void HttpAdapter::apiMowerRebootGps(AsyncWebServerRequest *req)
+{
+  _router.sendWithoutResponse("AT+Y2\r");
+  req->send(200, "text/plain", "gps reboot triggered");
 }
 
 void respondWithCors(AsyncWebServerRequest *req, int status, String contentType, String responseBody)
