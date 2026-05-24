@@ -42,65 +42,162 @@ No additional libraries are required.
 
 Download the source code of the [latest release](https://github.com/timotto/ardumower-modem/releases) and use the Arduino IDE to compile and flash it onto the ESP32 using the Board `ESP32 Dev Module` and Partition Scheme `Minimal SPIFFS`. You will need the Arduino libraries listed in the Dependencies section below to compile the source code.
 
+**Note for ESP32-S3:** When using an ESP32-S3 with 16 MB flash (e.g., `esp32-s3-devkitc-1`), the partition scheme `default_16MB.csv` is required. In PlatformIO this is configured via `board_build.partitions = default_16MB.csv` in the S3 environment (see `platformio.ini`).
+
 ## First time WiFi setup
 
 Once the firmware is running it will start a WiFi access point called `ArduMower Modem` with the password `ArduMower Modem`. Connect to that access point to access the Modem's web interface at [http://192.168.4.1/](http://192.168.4.1/). From there you are able to configure your WiFi credentials, Bluetooth security settings and everything else.
 
-## Secondary features
+## Features
 
-The primary feature of the firmware is the same as the `esp32_ble` Arduino Sketch from the Sunray repository. But there's more.
+The web interface provides full insight and control over the ArduMower.
 
-### MQTT
+### Dashboard
+
+#### Status
+
+![Status](docs/screenshots/status.png)
+
+Real-time status overview including battery, position, satellite info, state, sensor data, speed, and fix timeout.
+
+#### Map
+
+![Map](docs/screenshots/map.png)
+
+Visualizes the mower map with perimeter, docking station, mowing points, and tracks.
+
+#### GPS
+
+![GPS](docs/screenshots/gps.png)
+
+Detailed GPS information with satellite skyplot, position data, and signal quality.
+
+#### Live Map
+
+![Live Map](docs/screenshots/livemap.png)
+
+Real-time tracking on an OpenStreetMap background with configurable track window and accuracy overlay.
+
+### Remote Control
+
+![Remote Control](docs/screenshots/remote-control.png)
+
+Full manual control of the mower including:
+- Virtual joystick for driving (linear/angular speed)
+- Start, Stop, Dock, Skip Waypoint, Reboot, Power Off buttons
+- Mow motor toggle, Finish & Restart, Sonar
+- Adjustable speed, fix timeout, mowing height, and waypoint percentage
+
+### Log
+
+![Log](docs/screenshots/log.png)
+
+Filterable, searchable log output with configurable log level, autoscroll, and CSV export.
+
+### Terminal
+
+![Terminal](docs/screenshots/terminal.png)
+
+Interactive terminal to send commands to the mower and view responses in real time.
+
+### Motor-Test
+
+![Motor-Test](docs/screenshots/motor-test.png)
+
+Motor plot test (60s motor ramp test) with live PWM/tick visualization.
+
+### Settings
+
+![Settings](docs/screenshots/settings.png)
+
+Configuration of WiFi, Bluetooth, MQTT, Prometheus, PS4 controller, and OTA updates.
+
+### Integrations
+
+#### MQTT
 
 The ArduMower Modem supports MQTT for status reporting and control. It has support for HomeAssistant Autodiscovery as a vacuum cleaner. This integrates nicely with Google Assistant, and I'm pretty sure with Alexa as well.
 
-### Prometheus
+#### Prometheus
 
 The Prometheus endpoint of the ArduMower Modem makes it easy to collect metrics about the ArduMower and the Modem.
 
-### PS4 controller 
-- The robotic lawnmower can be controlled with a PS4 controller
-- Button assignment:
-   - left joystick -> fast movements, 
-   - right joystick -> slow movements, 
-   - cross + R2 -> linear movements + rotation on the spot,
-   - triangle -> start automatic mowing,
-   - rectangle -> stop automatic mowing,  
-   - circle -> mowing motor on/off,
-   - cross -> skip next mowing point,
-   - L1 -> reduce mowing speed,
-   - R1 -> increase mowing speed
-- The configuration is done via the web interface
+#### PS4 Controller / Gamepad
 
--> The compilation is done with PlatformIO. Required dependencies are stored in platformio.ini. 
+The robotic lawnmower can be controlled with a gamepad. Multiple controller brands are supported, not only PS4. The controller can be connected via a computer, laptop, or smartphone.
+
+- left joystick -> fast movements
+- right joystick -> slow movements
+- cross + R2 -> linear movements + rotation on the spot
+- triangle -> start automatic mowing
+- rectangle -> stop automatic mowing
+- circle -> mowing motor on/off
+- cross -> skip next mowing point
+- L1 -> reduce mowing speed
+- R1 -> increase mowing speed
+
+Configuration is done via the web interface.
+
+**Note for ESP32-S3:** The S3 variant lacks Bluetooth Classic hardware, so direct PS4 controller pairing is not supported. Instead, use joystick input via the browser (Web Gamepad API) or system-integrated joysticks on a connected computer/laptop/smartphone.
+
 
 ## Dependencies
 
 ### Development Environment
 
-The sketch is developed using [Arduino 1.8.16](https://www.arduino.cc/) and the [Arduino core for the ESP32 1.0.6](https://github.com/espressif/arduino-esp32). All automation is orchestrated by a [Taskfile](https://taskfile.dev/).
+The sketch is compiled with [PlatformIO](https://platformio.org/). All automation is orchestrated by a [Taskfile](https://taskfile.dev/).
 Building the web interface requires Node JS. The tools to package the web interface and to run the validation tests require Go.
 
 
 ### Arduino Libraries
 
-Most libraries are available via the Arduino Library Manager:
-- [AUnit](https://github.com/bxparks/AUnit)
-- [ArduinoJson](https://arduinojson.org/)
-- [ArduinoWebsockets](https://github.com/gilmaimon/ArduinoWebsockets)
-- [MQTT](https://github.com/256dpi/arduino-mqtt)
-- [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino)
-- [PS4-esp32](https://github.com/aed3/PS4-esp32.git)
+All libraries are managed via PlatformIO:
 
-Two libraries need to be installed manually:
-- [ESPAsyncWebServer](https://github.com/timotto/ESPAsyncWebServer)
-- [AsyncTCP](https://github.com/timotto/AsyncTCP)
-
-The original versions from `me-no-dev` work great as long as load and throughput are low. The [AsyncTCP fork from OttoWinter](https://github.com/OttoWinter/AsyncTCP.git) and [ESPAsyncWebServer fork from lorol](https://github.com/lorol/ESPAsyncWebServer.git) were already almost stable. Still, both required a small fix, so I forked them again until I have my commits merged upsream.
+- [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) - Bluetooth LE connectivity
+- [ArduinoJson](https://arduinojson.org/) - JSON serialization
+- [MQTT](https://github.com/256dpi/arduino-mqtt) - MQTT client for home automation
+- [AUnit](https://github.com/bxparks/AUnit) - Unit testing
+- [ArduinoWebsockets](https://github.com/gilmaimon/ArduinoWebsockets) - WebSocket communication
+- [AsyncTCP](https://github.com/ESP32Async/AsyncTCP) - Async TCP library
+- [ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer) - Async web server
 
 ### Automation
 
-Several tasks defined in [Taskfile.yml](Taskfile.yml) allow integration with an arbitrary IDE or just the command line by using the [Arduino CLI](https://github.com/arduino/arduino-cli).
+[Taskfile.yml](Taskfile.yml) defines tasks for compilation, upload, and more. Compilation can be done either via PlatformIO (`compile-pio`) or via Arduino CLI (`compile`).
+
+**Key tasks:**
+
+| Task | Description |
+|------|-------------|
+| `build-ui` | Build the web UI |
+| `package-ui` | Package web UI as a header file |
+| `compile-pio` | Compile with PlatformIO |
+| `compile` | Compile with Arduino CLI |
+| `build` | Build all variants (firmware, sim, test) |
+| `build-firmware` | Build the firmware variant |
+| `flash` | Flash firmware via serial |
+| `run` | Build + flash + serial monitor |
+| `ota` | Update firmware via OTA |
+| `validate` | Run integration tests |
+| `clean` | Remove build artifacts |
+
+**Task parameters (as environment variables or via `--`):**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ESP_TARGET` | `esp32` | Target platform (`esp32` or `esp32-S3`) |
+| `VARIANT` | `ESP_MODEM_APP` | Build variant (`ESP_MODEM_APP`, `ESP_MODEM_SIM`, `ESP_MODEM_TEST`) |
+| `PIO_ENV` | `esp32-S3-N16-R8` | PlatformIO environment |
+| `SERIAL_PORT` | – | Serial port for flash/monitor |
+| `ESP_DEV_IP` | – | ESP IP address for OTA |
+| `ESP_DEV_CREDS` | – | OTA credentials (`user:pass`) |
+
+Example:
+```
+task compile-pio PIO_ENV=esp32
+task flash SERIAL_PORT=/dev/ttyUSB0 VARIANT=ESP_MODEM_SIM
+task ota ESP_DEV_IP=192.168.43.221 ESP_DEV_CREDS=admin:secret
+```
 
 ## Gratitude
 
