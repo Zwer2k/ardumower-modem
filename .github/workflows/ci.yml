@@ -89,13 +89,48 @@ jobs:
           name: firmware
           path: artifacts
 
+      - name: Prepare release assets
+        run: |
+          # copy clearly named firmware files
+          cp artifacts/esp32/firmware.bin artifacts/firmware-esp32.bin 2>/dev/null || true
+          cp artifacts/esp32/firmware.elf artifacts/firmware-esp32.elf 2>/dev/null || true
+          cp artifacts/esp32/partitions.bin artifacts/partitions-esp32.bin 2>/dev/null || true
+          cp artifacts/esp32/bootloader.bin artifacts/bootloader-esp32.bin 2>/dev/null || true
+
+          cp artifacts/esp32-s3/firmware.bin artifacts/firmware-esp32-s3.bin 2>/dev/null || true
+          cp artifacts/esp32-s3/firmware.elf artifacts/firmware-esp32-s3.elf 2>/dev/null || true
+          cp artifacts/esp32-s3/partitions.bin artifacts/partitions-esp32-s3.bin 2>/dev/null || true
+          cp artifacts/esp32-s3/bootloader.bin artifacts/bootloader-esp32-s3.bin 2>/dev/null || true
+
+          # create zip archives for clearer grouping
+          (cd artifacts && zip -r -q esp32.zip esp32) || true
+          (cd artifacts && zip -r -q esp32-s3.zip esp32-s3) || true
+
+      - name: Generate release notes body
+        id: release_notes
+        run: |
+          tag=${GITHUB_REF#refs/tags/}
+          # find previous tag (most recent v* different from current)
+          prev=$(git tag --sort=-creatordate | grep '^v' | grep -v "^$tag$" | head -n1 || true)
+          if [ -n "$prev" ]; then
+            notes=$(git --no-pager log --pretty=format:'- %h %s' "$prev..$tag")
+          else
+            notes=$(git --no-pager log --pretty=format:'- %h %s' -n 50 "$tag")
+          fi
+          echo "body<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$notes" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/esp32/*
             artifacts/esp32-s3/*
-          generate_release_notes: true
+            artifacts/*.zip
+            artifacts/firmware-esp32*.bin
+            artifacts/firmware-esp32-s3*.bin
+          body: ${{ steps.release_notes.outputs.body }}
 
   nightly:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
