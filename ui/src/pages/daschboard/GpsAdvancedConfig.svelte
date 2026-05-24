@@ -82,24 +82,16 @@
     }
 
     function refreshAll() {
-        // Reset loading states only for currently visible cards
+        // Set loading states for currently visible cards.
+        // Don't set an error timeout — the backend polls continuously,
+        // and data will arrive when the receiver responds.
         for (const c of cards) {
             if (isCardVisible(c)) {
                 c.loading = true;
                 c.error = '';
             }
         }
-
-        // Timeout: backend polls 16 cmds every 0.8s = ~13s cycle. Give 20s.
         if (refreshTimeout) clearTimeout(refreshTimeout);
-        refreshTimeout = setTimeout(() => {
-            for (const c of cards) {
-                if (c.loading) {
-                    c.loading = false;
-                    c.error = 'No response from receiver';
-                }
-            }
-        }, 20000);
     }
 
     // ─── Socket handler ─────────────────────────────────────────────────────
@@ -115,8 +107,10 @@
             if (!frame.valid) continue;
 
             for (const card of cards) {
-                // Only process data for cards that are currently visible
-                if (!isCardVisible(card)) continue;
+                // Process data for ALL cards, not just visible ones.
+                // The backend sends each UBX response only once; if we
+                // skip it because the card is hidden, the data is lost
+                // until the next ~13s poll cycle.
                 const expectedParser = getParserForFrameByCommand(card.commandId);
                 const actualParser = getParserForFrame(frame.classId, frame.msgId);
                 if (expectedParser === actualParser && actualParser) {
@@ -182,8 +176,11 @@
                 handleUbxResponse(state.ubxResponse);
             }
         });
-        // Set loading states on first mount; parent GpsDashboard handles requestGpsDetails
-        refreshAll();
+        // Don't call refreshAll() here — it would start a timeout before
+        // the user even opens the GPS dashboard. Instead, visible cards
+        // simply show "No data" until the backend starts polling and UBX
+        // frames arrive. When the user clicks a category or Refresh, then
+        // refreshAll() sets loading states for the visible cards.
     });
 
     onDestroy(() => {
