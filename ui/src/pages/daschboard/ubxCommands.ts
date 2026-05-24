@@ -623,7 +623,7 @@ export function parseUbxNavSat(
   );
   if (!f || f.length < 8) return null;
   const p = f.payloadStart;
-  const numSats = bytes[p + 4] | (bytes[p + 5] << 8);
+  const numSats = bytes[p + 1];
   const sats: Array<Record<string, string | number>> = [];
   for (let i = 0; i < numSats && p + 8 + i * 12 + 11 < bytes.length; i++) {
     const off = p + 8 + i * 12;

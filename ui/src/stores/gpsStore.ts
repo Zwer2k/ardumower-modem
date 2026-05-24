@@ -193,8 +193,8 @@ function createGpsStore() {
     const f = frames.find((x) => x.classId === 0x01 && x.msgId === 0x35);
     if (!f || f.length < 8) return null;
     const p = f.payloadStart;
-    // NAV-SAT: offset +4 = version (U1), +5 = numSvs (U1)
-    const numSats = bytes[p + 5];
+    // NAV-SAT: offset +0 = version (U1), +1 = numSvs (U1)
+    const numSats = bytes[p + 1];
     const sats: NavSatInfo[] = [];
     for (let i = 0; i < numSats && p + 8 + i * 12 + 11 < bytes.length; i++) {
       const off = p + 8 + i * 12;
