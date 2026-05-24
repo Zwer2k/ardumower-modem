@@ -104,7 +104,14 @@ tasks:
 
   compile-with-ps4:
     cmds:
-    - pio run
+    - ~/.platformio/penv/bin/pio run
+    deps: [task: package-ui]
+
+  compile-pio:
+    vars:
+      PIO_ENV: '{{default "esp32-S3-N16-R8" .PIO_ENV}}'
+    cmds:
+    - ~/.platformio/penv/bin/pio run -e {{.PIO_ENV}}
     deps: [task: package-ui]
     
   build:
