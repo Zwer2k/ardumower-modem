@@ -116,6 +116,16 @@
             {/if}
 
             {#if gpsDetails}
+                {#if !navPvt}
+                <div class="navstatus-item">
+                    <span class="navstatus-key">H-Accuracy</span>
+                    <span class="navstatus-val {(gpsDetails.hAccuracy ?? 999) < 0.1 ? 'good' : (gpsDetails.hAccuracy ?? 999) < 1.0 ? 'ok' : 'warn'}">{(gpsDetails.hAccuracy ?? 0).toFixed(2)} m</span>
+                </div>
+                <div class="navstatus-item">
+                    <span class="navstatus-key">V-Accuracy</span>
+                    <span class="navstatus-val">{(gpsDetails.vAccuracy ?? 0).toFixed(2)} m</span>
+                </div>
+                {/if}
                 <div class="navstatus-item">
                     <span class="navstatus-key">Satellites</span>
                     <span class="navstatus-val">{gpsDetails.numSV} <span class="navstatus-sub">/ {gpsDetails.satellites.length}</span></span>

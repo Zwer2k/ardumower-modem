@@ -579,7 +579,10 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
 
   int satCount = 0;
   int fieldIdx = -1;
+  int fieldsPerSat = 8; // backward-compatible default
 
+  // Collect all values first to determine format
+  std::vector<String> tokens;
   processCSVResponse(line, [&](int index, String val)
                      {
                        fieldIdx = index;
@@ -608,38 +611,51 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
                          _gpsDetails.satellites.clear();
                          break;
                        default:
-                         // Satellitenfelder ab Index 8, 8 Felder pro Satellit
-                         {
-                           int satField = index - 8;
-                           if (satField < 0) break;
-                           int satIdx = satField / 8;
-                           int col = satField % 8;
-                           if (satIdx >= satCount || satIdx >= 40) break;
-                           if ((size_t)satIdx >= _gpsDetails.satellites.size()) {
-                             _gpsDetails.satellites.resize(satIdx + 1);
-                           }
-                           switch (col) {
-                           case 0: _gpsDetails.satellites[satIdx].gnssId = val.toInt(); break;
-                           case 1: _gpsDetails.satellites[satIdx].svId = val.toInt(); break;
-                           case 2: _gpsDetails.satellites[satIdx].sigId = val.toInt(); break;
-                           case 3: _gpsDetails.satellites[satIdx].cno = val.toInt(); break;
-                           case 4: _gpsDetails.satellites[satIdx].qualityInd = val.toInt(); break;
-                           case 5: _gpsDetails.satellites[satIdx].prUsed = val.toInt() == 1; break;
-                           case 6: _gpsDetails.satellites[satIdx].crCorrUsed = val.toInt() == 1; break;
-                           case 7: _gpsDetails.satellites[satIdx].prRes = val.toFloat(); break;
-                           }
+                         if (index >= 8) {
+                           tokens.push_back(val);
                          }
                          break;
                        }
                      });
 
-  // Auf tatsächliche Anzahl kürzen (falls Antwort weniger Sats hatte)
-  if ((size_t)satCount < _gpsDetails.satellites.size()) {
-    _gpsDetails.satellites.resize(satCount);
+  // Determine fields per satellite from total token count
+  if (satCount > 0) {
+    int totalSatFields = tokens.size();
+    fieldsPerSat = totalSatFields / satCount;
+    // Clamp to known formats
+    if (fieldsPerSat != 10 && fieldsPerSat != 8) {
+      Log(WARN, "%sparseGpsDetailsResponse unexpected fieldsPerSat=%d sats=%d total=%d",
+          _LOG_, fieldsPerSat, satCount, totalSatFields);
+      fieldsPerSat = 8;
+    }
   }
 
-  Log(DBG, "%sparseGpsDetailsResponse done sats=%d/%d fields=%d",
-      _LOG_, (int)_gpsDetails.satellites.size(), satCount, fieldIdx);
+  // Parse satellite tokens with known format
+  _gpsDetails.satellites.clear();
+  for (int satIdx = 0; satIdx < satCount && satIdx < 40; satIdx++) {
+    ArduMower::Domain::Robot::GpsSatellite sat;
+    int base = satIdx * fieldsPerSat;
+    if (base + 7 >= (int)tokens.size()) break;
+
+    sat.gnssId = tokens[base + 0].toInt();
+    sat.svId = tokens[base + 1].toInt();
+    sat.sigId = tokens[base + 2].toInt();
+    sat.cno = tokens[base + 3].toInt();
+    sat.qualityInd = tokens[base + 4].toInt();
+    sat.prUsed = tokens[base + 5].toInt() == 1;
+    sat.crCorrUsed = tokens[base + 6].toInt() == 1;
+    sat.prRes = tokens[base + 7].toFloat();
+
+    if (fieldsPerSat >= 10 && base + 9 < (int)tokens.size()) {
+      sat.elevation = (int8_t)tokens[base + 8].toInt();
+      sat.azimuth = (int8_t)tokens[base + 9].toInt();
+    }
+
+    _gpsDetails.satellites.push_back(sat);
+  }
+
+  Log(DBG, "%sparseGpsDetailsResponse done sats=%d/%d fields=%d fps=%d",
+      _LOG_, (int)_gpsDetails.satellites.size(), satCount, fieldIdx, fieldsPerSat);
 }
 
 void MowerAdapter::parseVersionResponse(String line)

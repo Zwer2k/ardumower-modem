@@ -186,6 +186,8 @@ export interface GpsSatellite {
   prUsed: boolean;
   crCorrUsed: boolean;
   prRes: number;
+  elevation: number;
+  azimuth: number;
 }
 
 export interface GpsDetails {

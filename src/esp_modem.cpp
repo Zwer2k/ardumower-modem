@@ -102,6 +102,8 @@ PS4controller::Adapter ps4ControllerAdapter(settings, mowerAdapter, mowerAdapter
 void setup() {
   Serial.begin(115200, SERIAL_8N1);
 
+  Serial2.setRxBufferSize(4096); // must be called before begin(), default 256 overflows with UBX responses
+
   #if defined(ROUTER_TX_PIN) && defined(ROUTER_RX_PIN)
     Serial2.begin(115200, SERIAL_8N1, ROUTER_RX_PIN, ROUTER_TX_PIN); // self defined pins
   #elif CONFIG_IDF_TARGET_ESP32S3

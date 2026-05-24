@@ -70,6 +70,7 @@ class SocketService {
   private connectionTimeout: NodeJS.Timeout | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private isPageVisible = true;
+  private pendingMessages: RequestSocketMessage[] = [];
 
   constructor() {
     if (browser) {
@@ -102,6 +103,7 @@ class SocketService {
       }
 
       this.clearAllTimers();
+      this.pendingMessages = [];
 
       if (state.socket != null) {
         state.socket.close();
@@ -129,6 +131,15 @@ class SocketService {
           this.startHeartbeat(socket);
 
           socketStore.update((s) => ({ ...s, connected: true }));
+
+          // Pending-Nachrichten senden, die während der Verbindungslosigkeit aufgelaufen sind
+          const pending = this.pendingMessages;
+          this.pendingMessages = [];
+          for (const msg of pending) {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify(msg));
+            }
+          }
         });
 
         socket.addEventListener("close", (event) => {
@@ -256,6 +267,8 @@ class SocketService {
         state.socket.readyState === WebSocket.OPEN
       ) {
         state.socket.send(JSON.stringify(message));
+      } else if (browser) {
+        this.pendingMessages.push(message);
       }
       return state;
     });
@@ -344,6 +357,7 @@ class SocketService {
   disconnect() {
     this.reconnect = false;
     this.clearAllTimers();
+    this.pendingMessages = [];
 
     socketStore.update((state) => {
       if (state.socket) {

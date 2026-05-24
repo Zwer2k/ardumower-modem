@@ -289,6 +289,8 @@ function createGpsStore() {
         unsubscribeSocket();
         unsubscribeSocket = null;
       }
+      // Reset so next connect re-processes the cached ubxResponse
+      processedUbxTimestamp = 0;
     }
   }
 

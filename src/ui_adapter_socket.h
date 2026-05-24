@@ -121,8 +121,9 @@ namespace ArduMower
         bool ubxResponseActive = false;
         String pendingUbxCmd;
 
-        // Sequentielles UBX-Polling: 16 Befehle in schneller Folge
-        uint8_t ubxPollSequence = 0;     // 0-15: cycles through all 16 UBX commands
+        // UBX-Polling: fast commands (NAV-PVT, NAV-SAT) interleaved with slow config commands
+        uint8_t ubxPollSequence = 0;     // 0=NAV-PVT, 1=NAV-SAT, 2=slow config
+        uint8_t ubxConfigIndex = 0;      // cycles through slow config commands (0-13)
 
         // Reference counting for multi-client support
         uint32_t gpsDetailsRefCount = 0;

@@ -54,6 +54,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     if (_socketHandler->gpsDetailsRefCount == 1) {
       _socketHandler->resetRequestTimestamp(ResponseDataType::gpsDetails);
       _socketHandler->ubxPollSequence = 0;          // start from beginning of cycle
+      _socketHandler->ubxConfigIndex = 0;
     }
     Log(INFO, "%s GPS details polling activated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
@@ -354,31 +355,53 @@ void UiSocketHandler::ubxPollLoop()
   // Wait until the previous response was consumed by case 12
   if (ubxResponseActive && _source.ubxResponse().timestamp > 0) return;
 
-  // Safety: if we sent a command but got no response for 2s, advance anyway
+  // Safety: advance even without response after timeout
   if (_lastSentUbxTimestamp > 0 && millis() - _lastSentUbxTimestamp < 2000) return;
 
-  static const char* ubxCmds[] = {
+  // Fast commands: polled every cycle for responsive Simple Dashboard
+  static const char* fastCmds[] = {
     "B562010700000819",                   // 0: NAV-PVT
     "B5620135000036A3",                   // 1: NAV-SAT
-    "B562010400000510",                   // 2: NAV-DOP
-    "B5620A0400000E34",                   // 3: MON-VER
-    "B5620A0900001343",                   // 4: MON-HW
-    "B5620A38000042D0",                   // 5: MON-RF
+  };
+
+  // Slow config commands: one per cycle, cycled through
+  static const char* slowCmds[] = {
+    "B562010400000510",                   // 0: NAV-DOP
+    "B5620A0400000E34",                   // 1: MON-VER
+    "B5620A0900001343",                   // 2: MON-HW
+    "B5620A38000042D0",                   // 3: MON-RF
+    "B5620A36000040CA",                   // 4: MON-COMMS
+    "B56201030000040D",                   // 5: NAV-STATUS
     "B562062400002A84",                   // 6: CFG-NAV5
     "B562060800000E30",                   // 7: CFG-RATE
-    "B5620A36000040CA",                   // 8: MON-COMMS
-    "B56201030000040D",                   // 9: NAV-STATUS
-    "B562068B080000000000010052402C79",   // 10: CFG-VALGET-PORT1
-    "B562068B080000000000010052402C79",   // 11: CFG-VALGET-UART1-PROTO
-    "B562068B0800000000003F000000D88D",   // 12: CFG-VALGET-GNSS
-    "B562068B08000000000036100000DF99",   // 13: CFG-VALGET-SBAS
-    "B562068B080000000000010091406BF7",   // 14: CFG-VALGET-RTCM
-    "B562068B08000000000001002130EB07",   // 15: CFG-VALGET-RATE
+    "B562068B080000000000010052402C79",   // 8: CFG-VALGET-PORT1
+    "B562068B080000000000010052402C79",   // 9: CFG-VALGET-UART1-PROTO
+    "B562068B0800000000003F000000D88D",   // 10: CFG-VALGET-GNSS
+    "B562068B08000000000036100000DF99",   // 11: CFG-VALGET-SBAS
+    "B562068B080000000000010091406BF7",   // 12: CFG-VALGET-RTCM
+    "B562068B08000000000001002130EB07",   // 13: CFG-VALGET-RATE
   };
-  pendingUbxCmd = ubxCmds[ubxPollSequence];
-  ubxPollSequence = (ubxPollSequence + 1) % 16;
+  const uint8_t slowCount = sizeof(slowCmds) / sizeof(slowCmds[0]);
+
+  // Interleave: fast[0], fast[1], slow[n], fast[0], fast[1], slow[n+1], ...
+  switch (ubxPollSequence) {
+    case 0:
+      pendingUbxCmd = fastCmds[0];  // NAV-PVT
+      ubxPollSequence = 1;
+      break;
+    case 1:
+      pendingUbxCmd = fastCmds[1];  // NAV-SAT
+      ubxPollSequence = 2;
+      break;
+    case 2:
+      pendingUbxCmd = slowCmds[ubxConfigIndex];
+      ubxConfigIndex = (ubxConfigIndex + 1) % slowCount;
+      ubxPollSequence = 0;
+      break;
+  }
+
   _source.ubxResponseP()->timestamp = 0;
-  Log(DBG, "%subxPollLoop seq=%d", _LOG_, ubxPollSequence);
+  Log(DBG, "%subxPollLoop seq=%d configIdx=%d", _LOG_, ubxPollSequence, ubxConfigIndex);
 }
 
 bool UiSocketHandler::sendUbx(const String &hexCmd)

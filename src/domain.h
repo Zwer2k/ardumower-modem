@@ -213,10 +213,12 @@ namespace ArduMower
         bool prUsed;
         bool crCorrUsed;
         float prRes;
+        int8_t elevation;
+        int8_t azimuth;
 
         GpsSatellite()
             : gnssId(0), svId(0), sigId(0), cno(0), qualityInd(0),
-              prUsed(false), crCorrUsed(false), prRes(0)
+              prUsed(false), crCorrUsed(false), prRes(0), elevation(0), azimuth(0)
         {
         }
 

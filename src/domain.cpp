@@ -280,6 +280,8 @@ void GpsSatellite::marshal(const JsonObject &o) const
   o["prUsed"] = prUsed;
   o["crCorrUsed"] = crCorrUsed;
   o["prRes"] = prRes;
+  o["elevation"] = elevation;
+  o["azimuth"] = azimuth;
 }
 
 void GpsDetails::marshal(const JsonObject &o) const

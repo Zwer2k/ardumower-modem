@@ -74,6 +74,22 @@
     let lastUpdate = $derived($socketStore.gpsDetails?.timestamp ?? 0);
     let isStale = $derived(lastUpdate > 0 && (Date.now() - lastUpdate) > 10000);
 
+    // Skyplot: prefer UBX NAV-SAT data, fall back to S4-derived positions
+    let skyplotSats = $derived.by(() => {
+        const navSat = $gpsStore.navSat;
+        if (navSat.length > 0) return navSat;
+        return $socketStore.gpsDetails?.satellites?.map(s => ({
+            gnssId: s.gnssId,
+            svId: s.svId,
+            elev: s.elevation,
+            azim: s.azimuth,
+            cno: s.cno,
+            used: s.prUsed,
+            health: 0,
+            quality: s.qualityInd,
+        })) ?? [];
+    });
+
     let mode = $state<'simple' | 'advanced'>('simple');
 </script>
 
@@ -128,7 +144,7 @@
         <!-- New u-Center Style Visualizations -->
         <div class="uc-visual-grid">
             <div class="uc-visual-col">
-                <GpsSkyplot satellites={gps.navSat} />
+                <GpsSkyplot satellites={skyplotSats} />
                 <GpsDeviationMap positionHistory={gps.positionHistory} refLat={gps.refLat} refLon={gps.refLon} />
             </div>
             <div class="uc-visual-col">
