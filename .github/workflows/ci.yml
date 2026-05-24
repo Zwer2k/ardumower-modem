@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+  schedule:
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -81,3 +83,43 @@ jobs:
         with:
           files: firmware/**/*
           generate_release_notes: true
+
+  nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: firmware
+
+      - name: Get date and commit hash
+        id: version
+        run: |
+          echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          echo "short_hash=$(git log -1 --format=%h)" >> "$GITHUB_OUTPUT"
+
+      - name: Create/Update Nightly Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly
+          name: Nightly ${{ steps.version.outputs.date }} (${{ steps.version.outputs.short_hash }})
+          body: |
+            Nightly build from ${{ steps.version.outputs.date }} (commit ${{ steps.version.outputs.short_hash }}).
+
+            **Firmware files:**
+            - `esp32/firmware.bin` – for ESP32 (Wemos D1 mini)
+            - `esp32-s3/firmware.bin` – for ESP32-S3 (16MB OPI PSRAM)
+
+            Diese Version wird mit jedem neuen Nightly-Build überschrieben.
+          prerelease: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: firmware/**/*.bin,firmware/**/*.elf,firmware/**/*.bin
