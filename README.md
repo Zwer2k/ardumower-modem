@@ -1,6 +1,6 @@
 # ArduMower ESP Modem
 
-This is an Arduino Sketch for the ESP32 companion of the [ArduMower](https://www.ardumower.de/).
+This is a Arduino project for the ESP32 companion of the [ArduMower](https://www.ardumower.de/).
 It provides the same Bluetooth LE and HTTP connectivity as the `esp32_ble` Sketch from the [Sunray](https://github.com/ardumower/Sunray) repository.
 
 It also offers support for MQTT and Prometheus to ease the integration of ArduMower into home automation and monitoring setups.
@@ -32,15 +32,31 @@ OR OTHER DEALINGS IN THE SOFTWARE.
 
 Flashing the firmware onto the ESP32 for the first time requires some effort. Subsequent updates can be installed comfortably using the web interface of the Modem.
 
-### `modem_install` Arduino Sketch
+### Pre-built binaries
 
-Use the [modem_install](util/modem_install/modem_install.ino) Arduino Sketch from the `util` folder to install the latest release binary on your ESP32.
-This Arduino Sketch requires nothing but a vanilla Arduino setup with the ESP32 package installed.
-No additional libraries are required.
+Download the latest release binary from the [releases page](https://github.com/timotto/ardumower-modem/releases). Use the [modem_install](util/modem_install/modem_install.ino) Arduino Sketch (from the `util` folder of the release) to flash it onto your ESP32. This Sketch requires nothing but a vanilla Arduino setup with the ESP32 package installed. No additional libraries are required.
 
-### Source code and Arduino IDE
+### Compiling with PlatformIO (recommended)
 
-Download the source code of the [latest release](https://github.com/timotto/ardumower-modem/releases) and use the Arduino IDE to compile and flash it onto the ESP32 using the Board `ESP32 Dev Module` and Partition Scheme `Minimal SPIFFS`. You will need the Arduino libraries listed in the Dependencies section below to compile the source code.
+Install [PlatformIO](https://platformio.org/) and run:
+```
+task compile-pio PIO_ENV=esp32-S3-N16-R8
+```
+For the ESP32 variant:
+```
+task compile-pio PIO_ENV=esp32
+```
+
+### Compiling with Arduino CLI
+
+Install the [Arduino CLI](https://github.com/arduino/arduino-cli) and the ESP32 core, then run:
+```
+task compile ESP_TARGET=esp32 VARIANT=ESP_MODEM_APP
+```
+For ESP32-S3:
+```
+task compile ESP_TARGET=esp32-S3 VARIANT=ESP_MODEM_APP
+```
 
 **Note for ESP32-S3:** When using an ESP32-S3 with 16 MB flash (e.g., `esp32-s3-devkitc-1`), the partition scheme `default_16MB.csv` is required. In PlatformIO this is configured via `board_build.partitions = default_16MB.csv` in the S3 environment (see `platformio.ini`).
 
@@ -58,7 +74,7 @@ The web interface provides full insight and control over the ArduMower.
 
 ![Status](docs/screenshots/status.png)
 
-Real-time status overview including battery, position, satellite info, state, sensor data, speed, and fix timeout.
+Real-time status overview including battery, position, satellite info, state, sensor data, speed, fix timeout, mower stats (distances, durations, recoveries, obstacles, temperatures), and sensor events.
 
 #### Map
 
@@ -70,7 +86,7 @@ Visualizes the mower map with perimeter, docking station, mowing points, and tra
 
 ![GPS](docs/screenshots/gps.png)
 
-Detailed GPS information with satellite skyplot, position data, and signal quality.
+Detailed GPS information with satellite skyplot, position data, and signal quality. Requires a customized Sunray firmware that includes the GPS details response.
 
 #### Live Map
 
@@ -85,6 +101,7 @@ Real-time tracking on an OpenStreetMap background with configurable track window
 Full manual control of the mower including:
 - Virtual joystick for driving (linear/angular speed)
 - Start, Stop, Dock, Skip Waypoint, Reboot, Power Off buttons
+- Request Stats and Request Status buttons
 - Mow motor toggle, Finish & Restart, Sonar
 - Adjustable speed, fix timeout, mowing height, and waypoint percentage
 
@@ -98,25 +115,25 @@ Filterable, searchable log output with configurable log level, autoscroll, and C
 
 ![Terminal](docs/screenshots/terminal.png)
 
-Interactive terminal to send commands to the mower and view responses in real time.
+Interactive terminal to send commands to the mower and view responses in real time. Available on the ESP32-S3 variant (requires `MOWER_TERMINAL` compile flag). Requires the Sunray firmware to be configured with an additional serial connection (`Serial2`) for the terminal communication.
 
 ### Motor-Test
 
 ![Motor-Test](docs/screenshots/motor-test.png)
 
-Motor plot test (60s motor ramp test) with live PWM/tick visualization.
+Motor plot test (60s motor ramp test) with safety confirmation and live PWM/tick visualization.
 
 ### Settings
 
 ![Settings](docs/screenshots/settings.png)
 
-Configuration of WiFi, Bluetooth, MQTT, Prometheus, PS4 controller, and OTA updates.
+Configuration of WiFi, Bluetooth, MQTT, Prometheus, PS4 controller, and OTA updates. OTA flashing of the Sunray firmware (STM32) requires trigger lines (`BOOT0` on GPIO 5, `NRST` on GPIO 7) between the ESP32 and the STM32.
 
 ### Integrations
 
 #### MQTT
 
-The ArduMower Modem supports MQTT for status reporting and control. It has support for HomeAssistant Autodiscovery as a vacuum cleaner. This integrates nicely with Google Assistant, and I'm pretty sure with Alexa as well.
+The ArduMower Modem supports MQTT for status reporting and control. It has support for HomeAssistant Autodiscovery as a vacuum cleaner and ioBroker integration. This integrates nicely with Google Assistant, and I'm pretty sure with Alexa as well.
 
 #### Prometheus
 
