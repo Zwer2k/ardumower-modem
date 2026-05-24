@@ -23,7 +23,8 @@
   type RestartOption = { id: string; label: string; endpoint: string; text: string };
   let restartOptions: RestartOption[] = [
     { id: 'modem', label: 'Restart modem', endpoint: '/api/modem/reboot', text: 'Restart modem' },
-    { id: 'mower', label: 'Restart mower', endpoint: '/api/mower/reboot', text: 'Restart mower' }
+    { id: 'mower', label: 'Restart mower', endpoint: '/api/mower/reboot', text: 'Restart mower' },
+    { id: 'gps', label: 'Restart GPS', endpoint: '/api/mower/rebootGps', text: 'Restart GPS' }
   ];
   let selectedRestartId: string | null = null;
 
