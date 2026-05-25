@@ -1,5 +1,6 @@
 #include "http_adapter.h"
 #include "prometheus.h"
+#include "checksum.h"
 #include <Arduino.h>
 #include "stm32ota/stm32ota.h"
 #if __has_include("ticker.h")
@@ -212,7 +213,12 @@ void HttpAdapter::apiMowerReboot(AsyncWebServerRequest *req)
 // Reboot GPS receiver via mower command AT+Y2
 void HttpAdapter::apiMowerRebootGps(AsyncWebServerRequest *req)
 {
-  _router.sendWithoutResponse("AT+Y2\r");
+  Checksum chk;
+  String cmd("AT+Y2");
+  chk.update(cmd);
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "AT+Y2,0x%02x\r", chk.value());
+  _router.sendWithoutResponse(buffer);
   req->send(200, "text/plain", "gps reboot triggered");
 }
 
