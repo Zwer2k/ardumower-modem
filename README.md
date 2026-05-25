@@ -38,6 +38,10 @@ Before building or flashing the firmware, install the following tools:
 - Arduino CLI (optional, only required for `task compile`)
 - `task` from [Taskfile](https://taskfile.dev/) to run the repository automation tasks
 
+## Hardware Pinout
+
+The ESP32-S3 pinout (GPIO assignments for STM32 communication, OTA control, and debug console) is described in the separate [Pinout documentation](docs/pinout.md). It applies to the **ESP32-S3-DevKitC-1** development board as well as to soldering an **ESP32-S3-WROOM-1 module** directly onto a custom PCB.
+
 ## Flashing the ArduMower Modem firmware
 
 Flashing the firmware onto the ESP32 for the first time requires some effort. Subsequent updates can be installed comfortably using the web interface of the Modem.
@@ -141,7 +145,7 @@ Motor plot test (60s motor ramp test) with safety confirmation and live PWM/tick
 
 ![Settings](docs/screenshots/settings.png)
 
-Configuration of WiFi, Bluetooth, MQTT, Prometheus, PS4 controller, and OTA updates. OTA flashing of the Sunray firmware (STM32) requires trigger lines (`BOOT0` on GPIO 5, `NRST` on GPIO 7) between the ESP32 and the STM32.
+Configuration of WiFi, Bluetooth, MQTT, Prometheus, PS4 controller, and OTA updates. OTA flashing of the Sunray firmware (STM32) requires trigger lines (`BOOT0` on GPIO 5, `NRST` on GPIO 7) between the ESP32 and the STM32. See [Pinout](docs/pinout.md) for details.
 
 ### Integrations
 

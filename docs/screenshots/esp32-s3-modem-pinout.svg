@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" font-family="Consolas, monospace" font-size="11">
+  <defs>
+    <linearGradient id="board" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2a5c2a"/>
+      <stop offset="100%" stop-color="#1e7a1e"/>
+    </linearGradient>
+    <linearGradient id="usb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#888"/>
+      <stop offset="100%" stop-color="#555"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Board outline -->
+  <rect x="80" y="30" width="740" height="560" rx="8" fill="url(#board)" stroke="#0a3a0a" stroke-width="3"/>
+  <rect x="95" y="45" width="710" height="530" rx="5" fill="none" stroke="#3a8a3a" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- ESP32-S3 Module area -->
+  <rect x="300" y="100" width="300" height="180" rx="4" fill="#1a4a1a" stroke="#3a8a3a" stroke-width="1"/>
+  <text x="450" y="160" text-anchor="middle" fill="#8c8" font-size="14" font-weight="bold">ESP32-S3-WROOM-1</text>
+  <text x="450" y="195" text-anchor="middle" fill="#6a6" font-size="10">ESP32-S3 SoC · 240 MHz · 16 MB Flash · 8 MB PSRAM</text>
+  <text x="450" y="215" text-anchor="middle" fill="#6a6" font-size="10">WiFi + BLE 5.0 · USB OTG</text>
+
+  <!-- J1 header (left) -->
+  <rect x="40" y="50" width="36" height="520" rx="3" fill="#333" stroke="#555" stroke-width="1"/>
+  <text x="58" y="45" text-anchor="middle" fill="#ccc" font-size="9" font-weight="bold">J1</text>
+
+  <!-- J3 header (right) -->
+  <rect x="824" y="50" width="36" height="520" rx="3" fill="#333" stroke="#555" stroke-width="1"/>
+  <text x="842" y="45" text-anchor="middle" fill="#ccc" font-size="9" font-weight="bold">J3</text>
+
+  <!-- Pin functions on J1 -->
+  <!-- Pin 1-3: 3V3, 3V3, RST - skip -->
+  <!-- Pin 4: GPIO4 -->
+  <!-- Pin 5: GPIO5 *BOOT0* -->
+  <!-- Pin 6: GPIO6 -->
+  <!-- Pin 7: GPIO7 *NRST* -->
+  <!-- Pin 8-9: GPIO15, GPIO16 -->
+  <!-- Pin 10: GPIO17 *ROUTER_TX* -->
+  <!-- Pin 11: GPIO18 *ROUTER_RX* -->
+  <!-- Pins 12-22: rest -->
+
+  <!-- USB-to-UART (bottom left) -->
+  <rect x="120" y="580" width="140" height="30" rx="4" fill="url(#usb)" stroke="#444" stroke-width="1"/>
+  <text x="190" y="599" text-anchor="middle" fill="#fff" font-size="9">USB-to-UART (Micro-USB)</text>
+
+  <!-- USB OTG (bottom right) -->
+  <rect x="640" y="580" width="140" height="30" rx="4" fill="url(#usb)" stroke="#444" stroke-width="1"/>
+  <text x="710" y="599" text-anchor="middle" fill="#fff" font-size="9">USB OTG (USB-C)</text>
+
+  <!-- Helper: pin circle function -->
+  <!-- I'll draw the used pins manually -->
+
+  <!-- J1 pins (left header, top to bottom) -->
+  <!-- Pin 4 (GPIO4) - row 1: y=75 -->
+  <!-- Pin 5 (GPIO5 / BOOT0) - row 2: y=95 -->
+  <!-- Pin 6 (GPIO6) - row 3: y=115 -->
+  <!-- Pin 7 (GPIO7 / NRST) - row 4: y=135 -->
+  <!-- ... -->
+  <!-- Pin 10 (GPIO17 / ROUTER_TX) - row 7: y=195 -->
+  <!-- Pin 11 (GPIO18 / ROUTER_RX) - row 8: y=215 -->
+  <!-- etc -->
+
+  <!-- J3 pins (right header, top to bottom) -->
+  <!-- Pin 1: GND -->
+  <!-- Pin 2: TX (GPIO43) - row 2: y=75 -->
+  <!-- Pin 3: RX (GPIO44) - row 3: y=95 -->
+  <!-- ... -->
+  <!-- Pin 16: GPIO48 (RGB LED) - row 16: y=245 -->
+
+  <!-- Draw highlighted pins -->
+  <!-- J1 Pin 5: GPIO5 -->
+  <circle cx="76" cy="103" r="10" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
+  <!-- J1 Pin 7: GPIO7 -->
+  <circle cx="76" cy="143" r="10" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
+  <!-- J1 Pin 10: GPIO17 -->
+  <circle cx="76" cy="203" r="10" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+  <!-- J1 Pin 11: GPIO18 -->
+  <circle cx="76" cy="223" r="10" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+
+  <!-- J3 Pin 2: GPIO43 TX -->
+  <circle cx="824" cy="83" r="10" fill="#f39c12" stroke="#e67e22" stroke-width="2"/>
+  <!-- J3 Pin 3: GPIO44 RX -->
+  <circle cx="824" cy="103" r="10" fill="#f39c12" stroke="#e67e22" stroke-width="2"/>
+  <!-- J3 Pin 16: GPIO48 RGB LED -->
+  <circle cx="824" cy="253" r="10" fill="#9b59b6" stroke="#8e44ad" stroke-width="2"/>
+
+  <!-- Connector lines from pins to annotations -->
+  <!-- GPIO5 -> BOOT0 -->
+  <line x1="76" y1="103" x2="220" y2="60" stroke="#e74c3c" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <rect x="130" y="46" width="130" height="18" rx="3" fill="#e74c3c"/>
+  <text x="195" y="59" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">GPIO5 · BOOT0</text>
+
+  <!-- GPIO7 -> NRST -->
+  <line x1="76" y1="143" x2="220" y2="85" stroke="#e74c3c" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <rect x="130" y="73" width="130" height="18" rx="3" fill="#e74c3c"/>
+  <text x="195" y="86" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">GPIO7 · NRST</text>
+
+  <!-- GPIO17 -> ROUTER_TX -->
+  <line x1="86" y1="203" x2="200" y2="310" stroke="#3498db" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <rect x="120" y="300" width="145" height="18" rx="3" fill="#3498db"/>
+  <text x="193" y="313" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">GPIO17 · ROUTER_TX</text>
+
+  <!-- GPIO18 -> ROUTER_RX -->
+  <line x1="86" y1="223" x2="200" y2="335" stroke="#3498db" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <rect x="120" y="325" width="145" height="18" rx="3" fill="#3498db"/>
+  <text x="193" y="338" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">GPIO18 · ROUTER_RX</text>
+
+  <!-- GPIO43 TX -> serial console -->
+  <line x1="824" y1="83" x2="700" y2="60" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <rect x="590" y="46" width="145" height="18" rx="3" fill="#f39c12"/>
+  <text x="663" y="59" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">GPIO43 · U0TXD (Console)</text>
+
+  <!-- GPIO44 RX -> serial console -->
+  <line x1="824" y1="103" x2="700" y2="85" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <rect x="590" y="73" width="145" height="18" rx="3" fill="#f39c12"/>
+  <text x="663" y="86" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">GPIO44 · U0RXD (Console)</text>
+
+  <!-- GPIO48 -> RGB LED -->
+  <line x1="824" y1="253" x2="700" y2="310" stroke="#9b59b6" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <rect x="590" y="300" width="145" height="18" rx="3" fill="#9b59b6"/>
+  <text x="663" y="313" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">GPIO48 · RGB-LED</text>
+
+  <!-- Direction arrows / connection descriptions -->
+  <!-- BOOT0 -> STM32 -->
+  <line x1="255" y1="55" x2="510" y2="55" stroke="#e74c3c" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <polygon points="515,55 505,50 505,60" fill="#e74c3c"/>
+  <text x="385" y="50" text-anchor="middle" fill="#e74c3c" font-size="9">→ STM32 BOOT0</text>
+
+  <!-- NRST -> STM32 -->
+  <line x1="255" y1="82" x2="500" y2="82" stroke="#e74c3c" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <polygon points="505,82 495,77 495,87" fill="#e74c3c"/>
+  <text x="380" y="77" text-anchor="middle" fill="#e74c3c" font-size="9">→ STM32 NRST</text>
+
+  <!-- ROUTER_TX -> STM32 RX -->
+  <line x1="265" y1="309" x2="500" y2="420" stroke="#3498db" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <polygon points="505,420 495,415 495,425" fill="#3498db"/>
+  <text x="385" y="370" text-anchor="middle" fill="#3498db" font-size="9">→ STM32 UART RX (Serial2)</text>
+
+  <!-- ROUTER_RX <- STM32 TX -->
+  <path d="M 265 334 L 330 440 L 500 440" stroke="#3498db" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
+  <polygon points="505,440 495,435 495,445" fill="#3498db"/>
+  <text x="400" y="455" text-anchor="middle" fill="#3498db" font-size="9">← STM32 UART TX (Serial2)</text>
+
+  <!-- Console USB (bidirectional) -->
+  <line x1="590" y1="595" x2="310" y2="595" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <polygon points="305,595 315,590 315,600" fill="#f39c12"/>
+  <text x="450" y="588" text-anchor="middle" fill="#f39c12" font-size="9">↔ Debug-Konsole (115200 Bd)</text>
+
+  <!-- Legend -->
+  <rect x="80" y="490" width="740" height="85" rx="4" fill="rgba(0,0,0,0.3)" stroke="#3a8a3a" stroke-width="1"/>
+  <text x="100" y="510" fill="#ccc" font-size="11" font-weight="bold">Legende:</text>
+
+  <rect x="100" y="520" width="14" height="14" rx="3" fill="#e74c3c"/>
+  <text x="120" y="532" fill="#ccc" font-size="10">STM32 OTA-Steuerung (BOOT0/ NRST)</text>
+
+  <rect x="360" y="520" width="14" height="14" rx="3" fill="#3498db"/>
+  <text x="380" y="532" fill="#ccc" font-size="10">STM32-Daten (Serial2 · 115200 Bd)</text>
+
+  <rect x="100" y="542" width="14" height="14" rx="3" fill="#f39c12"/>
+  <text x="120" y="554" fill="#ccc" font-size="10">USB-Debug-Konsole</text>
+
+  <rect x="360" y="542" width="14" height="14" rx="3" fill="#9b59b6"/>
+  <text x="380" y="554" fill="#ccc" font-size="10">Onboard RGB-LED (Status)</text>
+</svg>
