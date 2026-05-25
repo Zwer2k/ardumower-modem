@@ -10,14 +10,15 @@ dotenv: ['.env']
 tasks:
   clean:
     cmds:
-    - rm -rf ui/public/build
-  
+    - rm -rf ui/build
+
   build-ui:
     cmds:
     - npm run build
     dir: ui
     generates:
-    - public/build/**/*
+    - build/**/*
+    #- public/build/**/*
     sources:
     - public/index.html
     - public/smui.css
@@ -30,7 +31,7 @@ tasks:
     - npm run dev
     dir: ui
     generates:
-    - public/build/**/*
+    - build/**/*
     sources:
     - public/index.html
     - public/smui.css
@@ -47,33 +48,70 @@ tasks:
     generates:
     - ../../src/asset_bundle.h
     sources:
-    - ../../ui/public/**/*
+    - ../../ui/build/**/*
     - ./**/*
 
   compile:
+    vars:
+      ESP_TARGET: '{{default "esp32" .ESP_TARGET}}'
+      VARIANT: '{{default "ESP_MODEM_APP" .VARIANT}}'
     cmds:
     - |
+      ESP_TARGET="{{.ESP_TARGET}}"
       git_tag_defines=$(ci/bin/git-tag.sh)
-      arduino-cli compile \
-        ardumower-modem.ino \
-        --output-dir build/dist/{{.VARIANT}} \
-        --fqbn esp32:esp32:lolin32 \
-        --build-path $PWD/build/caches/{{.VARIANT}}/build \
-        --build-cache-path $PWD/build/caches/{{.VARIANT}}/build-cache \
-        --build-property build.flash_freq=80m \
-        --build-property build.flash_size=4MB \
-        --build-property build.flash_mode=qio \
-        --build-property build.f_cpu=160000000L \
-        --build-property build.partitions=min_spiffs \
-        --build-property upload.maximum_size=1966080 \
-        --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} $git_tag_defines"
+      if [ "$ESP_TARGET" = "esp32-S3" ]; then
+        target_fqbn=esp32:esp32:esp32s3
+        partitions=default_16MB
+        flash_size=16MB
+        upload_size=16777216
+        flash_mode=qio
+        f_cpu_prop=""
+        arduino-cli core install esp32:esp32
+        arduino-cli compile \
+          ardumower-modem.ino \
+          --output-dir build/dist/{{.VARIANT}} \
+          --fqbn "$target_fqbn" \
+          --build-path $PWD/build/caches/{{.VARIANT}}/build \
+          --build-property build.flash_freq=80m \
+          --build-property build.flash_size="$flash_size" \
+          --build-property build.flash_mode=$flash_mode \
+          $f_cpu_prop \
+          --build-property build.partitions="$partitions" \
+          --build-property upload.maximum_size="$upload_size" \
+          --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} $git_tag_defines"
+      else
+        target_fqbn=esp32:esp32:lolin32
+        partitions=min_spiffs
+        flash_size=4MB
+        upload_size=1966080
+        flash_mode=qio
+        f_cpu_prop="--build-property build.f_cpu=160000000L"
+        arduino-cli core install esp32:esp32
+        arduino-cli compile \
+          ardumower-modem.ino \
+          --output-dir build/dist/{{.VARIANT}} \
+          --fqbn "$target_fqbn" \
+          --build-path $PWD/build/caches/{{.VARIANT}}/build \
+          --build-property build.flash_freq=80m \
+          --build-property build.flash_size="$flash_size" \
+          --build-property build.flash_mode=$flash_mode \
+          $f_cpu_prop \
+          --build-property build.partitions="$partitions" \
+          --build-property upload.maximum_size="$upload_size" \
+          --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} -DENABLE_PS4_CONTROLLER $git_tag_defines"
+      fi
     deps: [task: package-ui]
-    vars:
-      VARIANT: '{{default "ESP_MODEM_APP" .VARIANT}}'
+
+  compile-with-ps4:
+    cmds:
+    - ~/.platformio/penv/bin/pio run
+    deps: [task: package-ui]
 
   compile-pio:
+    vars:
+      PIO_ENV: '{{default "esp32-S3-N16-R8" .PIO_ENV}}'
     cmds:
-    - pio run
+    - ~/.platformio/penv/bin/pio run -e {{.PIO_ENV}}
     deps: [task: package-ui]
     
   build:
@@ -94,10 +132,32 @@ tasks:
     - task: compile
       vars: {VARIANT: ESP_MODEM_SIM}
 
+  build-firmware-with-ps4:
+    cmds:
+    - task: compile-with-ps4
+      vars: {VARIANT: ESP_MODEM_APP}
+
+
   build-test:
     cmds:
     - task: compile
       vars: {VARIANT: ESP_MODEM_TEST}
+
+  install-libraries:
+    silent: true
+    cmds:
+    - |
+      ESP_TARGET=${ESP_TARGET:-esp32}
+      library_file=".libraries.${ESP_TARGET}"
+      if [ ! -f "$library_file" ]; then
+        echo "Library file $library_file not found"
+        exit 1
+      fi
+      while read lib
+      do
+        [ -z "$lib" ] && continue
+        arduino-cli lib install "$lib"
+      done < "$library_file"
 
   flash:
     cmds:
@@ -175,7 +235,18 @@ tasks:
     deps: [task: build-firmware]
     dir: build
 
-  ota-sim-pio:
+  ota-with-ps4:
+    cmds:
+    - |
+      curl ${ESP_DEV_IP}/api/modem/ota/post \
+        -v \
+        -u "${ESP_DEV_CREDS}" \
+        -X POST \
+        -H 'Content-type: application/binary' \
+        --data-binary @.pio/build/esp32/firmware.bin
+    deps: [task: build-firmware-with-ps4]
+  
+  ota-sim-with-ps4:
     cmds:
     - |
       curl ${ESP_DEV_IP}/api/modem/ota/upload \

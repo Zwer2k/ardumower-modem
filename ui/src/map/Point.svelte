@@ -11,7 +11,7 @@
   export let fill = "transparent";
   export let fillActive = "transparent";
   export let fillPassive = "transparent";
-  export let strokeWidth = 0.1;
+  export let strokeWidth = 0.05;
   export let r = 0.25;
 
   $: stroke = editItemId === null ? strokeChoose : mapItemId === editItemId ? strokeActive : strokePassive
@@ -29,5 +29,8 @@
   {stroke}
   {fill}
   stroke-width={strokeWidth}
+  role="none"
   on:click={click}
-/>
+>
+  <title>test</title>
+</circle>

@@ -16,18 +16,32 @@ String Reader::update(char c)
     if (buffer.length() > 0) buffer = buffer.substring(0, buffer.length() - 1);
     return String("");
   }
-  
-  if (isPrintableCharacter(c))
+
+  // Accept all characters (including encrypted data)
+  // Only filter out null bytes and line endings (handled separately)
+  if (c == '\0') {
+    // Ignore null bytes
+  } else if (c == '\r' || c == '\n') {
+    // Line endings - check if we have a complete line
     buffer += String(c);
-  else Log(ERR, "Reader::update::bad-character-ignored(c=0x%02x)", c);
+  } else {
+    buffer += String(c);
+  }
 
   if (!buffer.endsWith(eol))
     return String("");
-  
+
   String result = buffer.substring(0, buffer.length() - eol.length());
   buffer = "";
 
   return result;
+
+}
+
+String Reader::getAndClearBadChars() {
+  String tmp = badChars;
+  badChars = "";
+  return tmp;
 }
 
 String Reader::peek()

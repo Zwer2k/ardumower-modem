@@ -117,18 +117,18 @@ void Adapter::beginSta()
 {
   Log(DBG, "WiFi::Adapter::beginSta");
   _staTimeoutStart = millis();
-  WiFi.mode(WIFI_STA);
   WiFi.setHostname(_settings.general.name.c_str());
+  WiFi.mode(WIFI_STA);
   WiFi.begin(_settings.wifi.sta_ssid.c_str(), _settings.wifi.sta_psk.c_str());
-  WiFi.setAutoConnect(true);
+  //WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
 }
 
 void Adapter::beginAp()
 {
   Log(DBG, "WiFi::Adapter::beginAp");
-  WiFi.mode(WIFI_AP);
   WiFi.setHostname(_settings.general.name.c_str());
+  WiFi.mode(WIFI_AP);
   if (_settings.wifi.apSettingsValid())
     WiFi.softAP(_settings.wifi.ap_ssid.c_str(), _settings.wifi.ap_psk.c_str());
   else

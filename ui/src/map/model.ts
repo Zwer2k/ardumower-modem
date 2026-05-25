@@ -18,9 +18,17 @@ export interface Perimeter extends Area {
 export interface Exclusion extends Area {
 }
 
+export interface Dockpoints extends Area {
+}
+
+export interface Waypoints extends Area {
+}
+
 export interface Map {
-  perimeter: Perimeter
-  exclusions: Exclusion[]
+  perimeter: Perimeter;
+  exclusions: Exclusion[];
+  dockpoints: Dockpoints;
+  waypoints: Waypoints;
 }
 
 export interface MapPresentation {

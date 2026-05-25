@@ -47,11 +47,11 @@ namespace ArduMower
     {
       void registerSystemProperties()
       {
-        addFnMetric("ardumower_modem_total_runtime", millis, Attributes());
-        addFnMetric(keyModemHeap, ESP.getHeapSize, Attributes(Attribute(keyAttrType, "total")));
-        addFnMetric(keyModemHeap, ESP.getFreeHeap, Attributes(Attribute(keyAttrType, "free")));
-        addFnMetric(keyModemHeap, ESP.getMinFreeHeap, Attributes(Attribute(keyAttrType, "min_free")));
-        addFnMetric(keyModemHeap, ESP.getMaxAllocHeap, Attributes(Attribute(keyAttrType, "max_alloc")));
+        addFnMetric("ardumower_modem_total_runtime", []() { return millis(); }, Attributes());
+        addFnMetric(keyModemHeap, []() { return ESP.getHeapSize(); }, Attributes(Attribute(keyAttrType, "total")));
+        addFnMetric(keyModemHeap, []() { return ESP.getFreeHeap(); }, Attributes(Attribute(keyAttrType, "free")));
+        addFnMetric(keyModemHeap, []() { return ESP.getMinFreeHeap(); }, Attributes(Attribute(keyAttrType, "min_free")));
+        addFnMetric(keyModemHeap, []() { return ESP.getMaxAllocHeap(); }, Attributes(Attribute(keyAttrType, "max_alloc")));
       }
 
       void registerRobotProperties(ArduMower::Domain::Robot::Properties *p)
@@ -71,6 +71,12 @@ namespace ArduMower
         new Reference<int>("ardumower_robot_gps_solution", "%d", &s->position.solution);
         new Reference<int>("ardumower_robot_gps_sat_visible", "%d", &s->position.visibleSatellites);
         new Reference<int>("ardumower_robot_gps_sat_visible_dgps", "%d", &s->position.visibleSatellitesDgps);
+
+        new Reference<float>("ardumower_robot_temperature", "%.2f", &s->temperature);
+        new Reference<float>("ardumower_robot_mah", "%.2f", &s->chargingMah, oneAttr(keyAttrType, "charge"));
+        new Reference<float>("ardumower_robot_mah", "%.2f", &s->motorMowMah, oneAttr(keyAttrType, "mow"));
+        new Reference<float>("ardumower_robot_mah", "%.2f", &s->motorLeftMah, oneAttr(keyAttrType, "left"));
+        new Reference<float>("ardumower_robot_mah", "%.2f", &s->motorRightMah, oneAttr(keyAttrType, "right"));
       }
 
       void registerRobotStatistics(ArduMower::Domain::Robot::Stats::Stats *s)

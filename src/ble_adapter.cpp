@@ -1,8 +1,9 @@
 #include "ble_adapter.h"
 #include "log.h"
-#include "esp_bt_main.h"
-#include "esp_bt_device.h"
-#include "esp_gap_bt_api.h"
+
+// #include "esp_bt_main.h"
+// #include "esp_bt_device.h"
+// #include "esp_gap_bt_api.h"
 
 using namespace ArduMower::Modem;
 
@@ -126,24 +127,24 @@ void BleAdapter::loop()
 //   NimBLEDevice::deleteAllBonds();
 // }
 
-bool BleAdapter::initBluetooth()
-{
-  if(!btStart()) {
-    Serial.println("Failed to initialize controller");
-    return false;
-  }
+// bool BleAdapter::initBluetooth()
+// {
+//   if(!btStart()) {
+//     Log(ERR, "Failed to initialize controller");
+//     return false;
+//   }
  
-  if(esp_bluedroid_init() != ESP_OK) {
-    Serial.println("Failed to initialize bluedroid");
-    return false;
-  }
+//   if(esp_bluedroid_init() != ESP_OK) {
+//     Log(ERR, "Failed to initialize bluedroid");
+//     return false;
+//   }
  
-  if(esp_bluedroid_enable() != ESP_OK) {
-    Serial.println("Failed to enable bluedroid");
-    return false;
-  }
-  return true;
-}
+//   if(esp_bluedroid_enable() != ESP_OK) {
+//     Log(ERR, "Failed to enable bluedroid");
+//     return false;
+//   }
+//   return true;
+// }
 
 char *BleAdapter::bda2str(const uint8_t* bda, char *str, size_t size)
 {
@@ -159,39 +160,51 @@ char *BleAdapter::bda2str(const uint8_t* bda, char *str, size_t size)
 #define REMOVE_BONDED_DEVICES 1   // <- Set to 0 to view all bonded devices addresses, set to 1 to remov
 
 void BleAdapter::clearPairings() {
-  initBluetooth();
-  
-  //char bda_str[18];
-  uint8_t pairedDeviceBtAddr[PAIR_MAX_DEVICES][6];
-  // Serial.print("ESP32 bluetooth address: "); 
-  // Serial.println(bda2str(esp_bt_dev_get_address(), bda_str, 18));
-  // Get the numbers of bonded/paired devices in the BT module
-  int count = esp_bt_gap_get_bond_device_num();
-  if(!count) {
-    Serial.println("No bonded device found.");
-  } else {
-    Serial.print("Bonded device count: "); Serial.println(count);
-    if(PAIR_MAX_DEVICES < count) {
-      count = PAIR_MAX_DEVICES; 
-      Serial.print("Reset bonded device count: "); Serial.println(count);
-    }
-    esp_err_t tError =  esp_bt_gap_get_bond_device_list(&count, pairedDeviceBtAddr);
-    if(ESP_OK == tError) {
-      for(int i = 0; i < count; i++) {
-        // Serial.print("Found bonded device # "); Serial.print(i); Serial.print(" -> ");
-        // Serial.println(bda2str(pairedDeviceBtAddr[i], bda_str, 18));     
-        if(REMOVE_BONDED_DEVICES) {
-          esp_err_t tError = esp_bt_gap_remove_bond_device(pairedDeviceBtAddr[i]);
-          if(ESP_OK == tError) {
-            //Serial.print("Removed bonded device # "); 
-          } else {
-            Serial.print("Failed to remove bonded device # ");
+  Log(INFO, "Disconecting BLE clients");
+  size_t numClients = NimBLEDevice::getClientListSize();
+  if (numClients > 0) {
+      std::list<NimBLEClient*> *clientList = NimBLEDevice::getClientList();
+      for (auto it = clientList->begin(); it != clientList->end(); it++) {
+          if ((*it)->isConnected()) {
+              Log(DBG, "disconnect %s", (*it)->getPeerAddress().toString().c_str());
+              (*it)->disconnect();
           }
-          Serial.println(i);
-        }
-      }        
-    }
+      }
   }
+  //NimBLEDevice::deinit();
+
+  //initBluetooth();
+  
+  // //char bda_str[18];
+  // uint8_t pairedDeviceBtAddr[PAIR_MAX_DEVICES][6];
+  // // Serial.print("ESP32 bluetooth address: "); 
+  // // Serial.println(bda2str(esp_bt_dev_get_address(), bda_str, 18));
+  // // Get the numbers of bonded/paired devices in the BT module
+  // int count = esp_bt_gap_get_bond_device_num();
+  // if(!count) {
+  //   Log(ERR, "No bonded device found.");
+  // } else {
+  //   Log(INFO, "Bonded device count: "); Serial.println(count);
+  //   if(PAIR_MAX_DEVICES < count) {
+  //     count = PAIR_MAX_DEVICES; 
+  //     Log(INFO, "Reset bonded device count: "); Serial.println(count);
+  //   }
+  //   esp_err_t tError =  esp_bt_gap_get_bond_device_list(&count, pairedDeviceBtAddr);
+  //   if(ESP_OK == tError) {
+  //     for(int i = 0; i < count; i++) {
+  //       // Serial.print("Found bonded device # "); Serial.print(i); Serial.print(" -> ");
+  //       // Serial.println(bda2str(pairedDeviceBtAddr[i], bda_str, 18));     
+  //       if(REMOVE_BONDED_DEVICES) {
+  //         esp_err_t tError = esp_bt_gap_remove_bond_device(pairedDeviceBtAddr[i]);
+  //         if(ESP_OK == tError) {
+  //           //Serial.print("Removed bonded device # "); 
+  //         } else {
+  //           Log(ERR, "Failed to remove bonded device # ");
+  //         }
+  //       }
+  //     }        
+  //   }
+  // }
 }
 
 void BleAdapter::loopBleRx()

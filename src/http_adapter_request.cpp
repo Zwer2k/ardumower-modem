@@ -9,8 +9,8 @@ Http::CommandRequest::CommandRequest(
     Metrics *metrics,
     AsyncWebServerRequest *_request,
     const uint32_t timeNow)
-    : id(_id), _metrics(metrics), request(_request), timeReceiveHttpRequest(timeNow), state(0), _done(false),
-      httpRequestBody(""), routerResponse("")
+    : _metrics(metrics), id(_id), state(0), httpRequestBody(""), routerResponse(""), request(_request), _done(false), 
+      timeReceiveHttpRequest(timeNow)
 {
   parseHttpRequestBody();
 }
@@ -25,7 +25,7 @@ bool Http::CommandRequest::done(const uint32_t now)
 
 bool Http::CommandRequest::timeout(const uint32_t now)
 {
-  if (now - timeReceiveHttpRequest < 1000)
+  if (now - timeReceiveHttpRequest < 5000)
     return false;
 
   _done = true;
@@ -37,6 +37,7 @@ bool Http::CommandRequest::timeout(const uint32_t now)
 void Http::CommandRequest::parseHttpRequestBody()
 {
   Log(DBG, "Http::CommandRequest::parseHttpRequestBody");
+  serialRequest = request->pause();
   readHttpRequestBody();
   trimHttpRequestBody();
   validateHttpRequestBody();
@@ -44,10 +45,11 @@ void Http::CommandRequest::parseHttpRequestBody()
 
 void Http::CommandRequest::readHttpRequestBody()
 {
-  if (request->hasParam("body", true))
+  if (request->_tempObject)
   {
-    auto body = request->getParam("body", true);
-    httpRequestBody = body->value();
+    httpRequestBody = (char*)request->_tempObject;
+    free(request->_tempObject);
+    request->_tempObject = nullptr;
     return;
   }
 
@@ -72,8 +74,11 @@ void Http::CommandRequest::validateHttpRequestBody()
 
 void Http::CommandRequest::reject(int code, String text)
 {
+  Log(DBG, "Http::CommandRequest::reject code=%d %s", code, text.c_str());
+
   _done = true;
-  respondWithCors(request, code, "text/plain", text);
+  auto request = serialRequest.lock();
+  respondWithCors(request.get(), code, "text/plain", text);
   _metrics->countStatusCode(code);
 }
 
@@ -81,9 +86,26 @@ void Http::CommandRequest::onRouterResponse(String response)
 {
   Log(DBG, "Http::CommandRequest::onRouterResponse [%s]", response.c_str());
 
-  response += "\r\n";
   _done = true;
 
-  respondWithCors(request, 200, "text/html; charset=UTF-8", response);
+  if (response.length() == 0)
+  {
+    Log(DBG, "Http::CommandRequest::onRouterResponse::empty-response");
+    reject(504, "timeout");
+    return;
+  }
+
+  // Short acknowledgment (like 'P', 'C', 'M', etc.) - just send OK
+  if (response.length() <= 3) {
+    Log(DBG, "Http::CommandRequest::onRouterResponse::ack-response(%s)", response.c_str());
+    auto request = serialRequest.lock();
+    respondWithCors(request.get(), 200, "text/html; charset=UTF-8", "OK\r\n");
+    _metrics->countStatusCode(200);
+    return;
+  }
+
+  response += "\r\n";
+  auto request = serialRequest.lock();
+  respondWithCors(request.get(), 200, "text/html; charset=UTF-8", response);
   _metrics->countStatusCode(200);
 }

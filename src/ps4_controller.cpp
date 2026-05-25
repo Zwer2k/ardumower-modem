@@ -1,8 +1,23 @@
+#ifdef ENABLE_PS4_CONTROLLER
+
 #include "ps4_controller.h"
 #include "esp_gap_bt_api.h"
 #include <esp_bt_main.h>
+#include "log.h"
+
+#define LOG_PREF "PS4controller::Adapter"
 
 using namespace ArduMower::Modem::PS4controller;
+
+void ps4Connected()
+{
+    Log(INFO, "%s connected", LOG_PREF);
+}
+
+void ps4Disconnected()
+{
+    Log(INFO, "%s disconnected", LOG_PREF);
+}
 
 Adapter::Adapter(
     ArduMower::Modem::Settings::Settings &_settings, 
@@ -15,9 +30,13 @@ Adapter::Adapter(
 void Adapter::begin()
 {
     if (!settings.ps4controller.enabled) return;
-
-    if (ps4 == NULL)
+    Log(DBG, "%s::begin", LOG_PREF);
+    
+    if (ps4 == NULL) {
         ps4 = new PS4Controller();
+        ps4->attachOnConnect(ps4Connected);
+        ps4->attachOnDisconnect(ps4Disconnected);
+    }
 
     if (settings.ps4controller.use_ps4_mac) {
         ps4->begin(settings.ps4controller.ps4_mac.c_str());
@@ -58,14 +77,10 @@ void Adapter::loop()
             angular = (ps4->Right() || ps4->UpRight() || ps4->DownRight() ? -1 : (ps4->Left() || ps4->UpLeft() || ps4->DownLeft() ? 1 : 0)) * ps4->R2Value() * 0.5 / 255;
             
         } else if ((abs(ps4->RStickX()) > 10) || (abs(ps4->RStickY()) > 10)) {
-            // Serial.printf("Right Stick x at %d\n", ps4->RStickX());
-            // Serial.printf("Right Stick y at %d\n", ps4->RStickY());
             liniar = ps4->RStickY() * 0.1 / 128;
-            angular = -ps4->RStickX() * 0.15 / 128;
+            angular = -ps4->RStickX() * 0.15 / 128;            
             
         } else if ((abs(ps4->LStickX()) > 10) || (abs(ps4->LStickY()) > 10)) {
-            // Serial.printf("Left Stick x at %d\n", ps4->LStickX());
-            // Serial.printf("Left Stick y at %d\n", ps4->LStickY());
             liniar = ps4->LStickY() * 0.33 / 128;
             angular = -ps4->LStickX() * 0.5 / 128;
         }
@@ -78,6 +93,7 @@ void Adapter::loop()
             oldLiniar = liniar;
             oldAngular = angular;
             lastSendTime = millis();
+            Log(DBG, "%s PS4 stick l.x=%d l.y=%d r.x=%d r.y=%d", LOG_PREF, ps4->LStickX(), ps4->LStickY(), ps4->RStickX(), ps4->RStickY());
         }
 
         if (millis() - lastSendTime < PS4_SEND_INTERVAL)
@@ -131,12 +147,13 @@ void Adapter::loop()
                 psButtonPressTime = millis();
         } else if (psButtonPressTime > 0) {
             if (millis() - psButtonPressTime < 800) { // short press
-                Serial.println("disconnect PS4 controller");
+                Log(DBG, "%s disconnect PS4 controller", LOG_PREF);
                 esp_bluedroid_disable();
                 delete ps4;
                 ps4 = NULL;            
                 waitForDisconnect = millis();
             } else { // long press
+                Log(DBG, "%s send power OFF to robot", LOG_PREF);
                 cmd.powerOff();
                 ps4->setLed(255, 0, 0);
                 ps4->setFlashRate(80, 80);
@@ -162,3 +179,5 @@ void Adapter::loop()
 // void Adapter::onConnect() {
 //    Serial.println("PS4 controller connected");
 // }
+
+#endif // ENABLE_PS4_CONTROLLER

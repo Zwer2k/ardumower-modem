@@ -4,6 +4,13 @@ set -eo pipefail
 
 . "$(dirname "$0")/common.sh"
 
+rm -rf /var/cache/apt
+ln -s $PWD/cache/apt /var/cache/apt
+rm -f /etc/apt/apt.conf.d/docker-clean
+
+apt-get update -qq
+apt-get install -y -qq git
+
 artifacts="${PWD}/artifacts"
 temp="${PWD}/temp"
 mkdir -p "${temp}"
@@ -15,16 +22,10 @@ tar -zxf tool-task/task_linux_amd64.tar.gz -C bin
 cp tool-semver-bumper/semver-bumper-* bin/semver-bumper
 chmod +x bin/semver-bumper
 
-mkdir -p $HOME/Arduino/libraries/
-cp -r lib/* $HOME/Arduino/libraries/
-
-arduino-cli lib install AUnit@1.6.1
-arduino-cli lib install ArduinoJson@6.19.3
-arduino-cli lib install ArduinoWebsockets@0.5.3
-arduino-cli lib install MQTT@2.5.0
-arduino-cli lib install NimBLE-Arduino@1.3.7
-
 cd ardumower-modem
+
+arduino-cli lib update-index
+task install-libraries
 
 semver-bumper \
   -o "$temp/release-version" \
@@ -59,7 +60,7 @@ task build
 cpy() {
   variant="$1"
   target="$2"
-  for file in bin elf partitions.bin
+  for file in bin elf bootloader.bin partitions.bin
   do
     cp -v \
       "build/dist/${variant}/ardumower-modem.ino.${file}" \
@@ -71,8 +72,7 @@ cpy ESP_MODEM_APP ""
 cpy ESP_MODEM_SIM "_sim"
 cpy ESP_MODEM_TEST "_test"
 
-cp -v ~/.arduino15/packages/esp32/hardware/esp32/1.0.6/tools/partitions/boot_app0.bin "${temp}/"
-cp -v ~/.arduino15/packages/esp32/hardware/esp32/1.0.6/tools/sdk/bin/bootloader_qio_80m.bin "${temp}/"
+cp -v ~/.arduino15/packages/esp32/hardware/esp32/*/tools/partitions/boot_app0.bin "${temp}/"
 
 tar \
   -czv \

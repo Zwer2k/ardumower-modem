@@ -1,34 +1,79 @@
 import { writable } from "svelte/store";
-import type { Map, MapPresentation, Point } from "./model"
-import { mockMapData } from "./mock"
+import type {
+  Map,
+  MapPresentation,
+  Perimeter,
+  Exclusion,
+  Dockpoints,
+  Waypoints,
+  Point,
+} from "./model";
 import { rotatePointsAroundOrigin } from "./geometry";
+import {
+  perimeterStore,
+  dockpointsStore,
+  exclusionsStore,
+  waypointsStore,
+  resetMapChunkBuffer,
+} from "./map-chunk-buffer";
 
 export interface StoredMap {
-  map: Map,
-  presentation: MapPresentation,
+  map: Map;
+  presentation: MapPresentation;
 }
-export let MapStore = writable<StoredMap>()
+// MapStore is now derived from socketStore
+// Initialize with empty map so $MapStore is always defined
+const emptyMap: Map = {
+  perimeter: { points: [] },
+  exclusions: [],
+  dockpoints: { points: [] },
+  waypoints: { points: [] },
+};
+const emptyPresentation: MapPresentation = {
+  boundary: { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } },
+  center: { x: 0, y: 0 },
+  rotation: 0,
+  viewBox: "0 0 1 1",
+};
+export let MapStore = writable<StoredMap>({
+  map: emptyMap,
+  presentation: emptyPresentation,
+});
 
 interface PresentationTuningParameters {
-  padding: number
+  padding: number;
 }
 
 const presentationParameterTuning: PresentationTuningParameters = {
   padding: 1,
-}
+};
 
-const deg2rad = (deg: number): number => deg * Math.PI / 180
+const deg2rad = (deg: number): number => (deg * Math.PI) / 180;
 
-const calculatePresentation = (m: Map, p: PresentationTuningParameters = presentationParameterTuning): MapPresentation => {
-  const rotation = calculateRotation(m)
-  const pointsRotated: Point[] = rotatePointsAroundOrigin(m.perimeter.points, deg2rad(rotation))
-  const boundary = calculateBoundary(pointsRotated)
-  const center = boundary.center
-  boundary.a.x -= p.padding
-  boundary.a.y -= p.padding
-  boundary.b.x += 2 * p.padding
-  boundary.b.y += 2 * p.padding
-  const viewBox = `${boundary.a.x} ${boundary.a.y} ${boundary.b.x - boundary.a.x} ${boundary.b.y - boundary.a.y}`
+const allMapPoints = (m: Map): Point[] => {
+  const pts: Point[] = [...m.perimeter.points];
+  m.exclusions.forEach((e) => pts.push(...e.points));
+  pts.push(...m.dockpoints.points);
+  pts.push(...m.waypoints.points);
+  return pts;
+};
+
+const calculatePresentation = (
+  m: Map,
+  p: PresentationTuningParameters = presentationParameterTuning,
+): MapPresentation => {
+  const rotation = calculateRotation(m);
+  const pointsRotated: Point[] = rotatePointsAroundOrigin(
+    allMapPoints(m),
+    deg2rad(rotation),
+  );
+  const boundary = calculateBoundary(pointsRotated);
+  const center = boundary.center;
+  boundary.a.x -= p.padding;
+  boundary.a.y -= p.padding;
+  boundary.b.x += p.padding;
+  boundary.b.y += p.padding;
+  const viewBox = `${boundary.a.x} ${boundary.a.y} ${boundary.b.x - boundary.a.x} ${boundary.b.y - boundary.a.y}`;
 
   // const allX: number[] = m.perimeter.points.map(({ x }) => x)
   // const allY: number[] = m.perimeter.points.map(({ y }) => y)
@@ -41,48 +86,55 @@ const calculatePresentation = (m: Map, p: PresentationTuningParameters = present
 
   // const viewBox = `${extremes.x[0]} ${extremes.y[0]} ${extremes.x[1] - extremes.x[0]} ${extremes.y[1] - extremes.y[0]}`;
 
-  return { center, boundary, rotation, viewBox }
-}
+  return { center, boundary, rotation, viewBox };
+};
 
-const calculateBoundary = (value: Point[]): { a: Point, b: Point, center: Point } => {
-  const allX: number[] = value.map(({ x }) => x)
-  const allY: number[] = value.map(({ y }) => y)
-  const extremes = { x: [smallest(allX), largest(allX)], y: [smallest(allY), largest(allY)] }
-  const center: Point = { x: middle(extremes.x), y: middle(extremes.y) }
+const calculateBoundary = (
+  value: Point[],
+): { a: Point; b: Point; center: Point } => {
+  const allX: number[] = value.map(({ x }) => x);
+  const allY: number[] = value.map(({ y }) => y);
+  const extremes = {
+    x: [smallest(allX), largest(allX)],
+    y: [smallest(allY), largest(allY)],
+  };
+  const center: Point = { x: middle(extremes.x), y: middle(extremes.y) };
 
   return {
     a: { x: extremes.x[0], y: extremes.y[0] },
     b: { x: extremes.x[1], y: extremes.y[1] },
     center,
-  }
-}
+  };
+};
 
 const calculateRotation = (m: Map): number => {
   if (m.perimeter.points.length < 3) return 0;
 
   interface edge {
-    edge: Point[],
-    length: number,
-    orientation: number,
+    edge: Point[];
+    length: number;
+    orientation: number;
   }
 
-  const dist = (a: Point[]): number => Math.sqrt(Math.pow(a[0].x - a[1].x, 2) + Math.pow(a[0].y - a[1].y, 2))
+  const dist = (a: Point[]): number =>
+    Math.sqrt(Math.pow(a[0].x - a[1].x, 2) + Math.pow(a[0].y - a[1].y, 2));
 
-  const rad2deg = (rad: number): number => rad * 180 / Math.PI
+  const rad2deg = (rad: number): number => (rad * 180) / Math.PI;
 
-  const angle = (a: Point[]): number => (rad2deg(Math.atan2(a[0].x - a[1].x, a[0].y - a[1].y)) + 90) % 360
+  const angle = (a: Point[]): number =>
+    (rad2deg(Math.atan2(a[0].x - a[1].x, a[0].y - a[1].y)) + 90) % 360;
 
   const raw: edge[] = [...m.perimeter.points, m.perimeter.points[0]]
-    .map((_, i, a) => i === 0 ? undefined : [a[i - 1], a[i]])
-    .filter(x => x !== undefined)
-    .map(edge => ({ edge, length: dist(edge), orientation: angle(edge) }))
+    .map((_, i, a) => (i === 0 ? undefined : [a[i - 1], a[i]]))
+    .filter((x) => x !== undefined)
+    .map((edge) => ({ edge, length: dist(edge), orientation: angle(edge) }));
 
-  const sorted = raw.sort((a, b) => b.length - a.length)
+  const sorted = raw.sort((a, b) => b.length - a.length);
 
   // console.log({ sorted, })
 
   return sorted[0].orientation;
-}
+};
 
 const smallest = (a: number[]): number =>
   a.reduce((a, b) => (a < b ? a : b), Number.MAX_VALUE);
@@ -91,13 +143,68 @@ const largest = (a: number[]): number =>
 const middle = (a: number[]): number =>
   Math.min(a[0], a[1]) + Math.abs(a[0] - a[1]) / 2;
 
-const p2p = (a: { X: number, Y: number }): { x: number, y: number } => ({ x: a.X, y: -a.Y })
+const p2p = (a: { X: number; Y: number }): { x: number; y: number } => ({
+  x: a.X,
+  y: -a.Y,
+});
 
-let mockMap: Map = {
-  perimeter: { points: mockMapData[0].perimeter.map(p2p) },
-  exclusions: mockMapData[0].exclusions.map(e => ({ points: e.map(p2p) })),
+// Helper to convert backend MapRaw to frontend Map
+function mapRawToMap(mapRaw: any): Map {
+  let perimeterPoints = (mapRaw.perimeter || []).map(p2p);
+  // Fallback: Wenn perimeter leer, aber waypoints vorhanden, nutze waypoints
+  if (
+    perimeterPoints.length === 0 &&
+    Array.isArray(mapRaw.waypoints) &&
+    mapRaw.waypoints.length > 0
+  ) {
+    perimeterPoints = mapRaw.waypoints.map(p2p);
+    console.log("[MapService] Fallback: using waypoints as perimeter");
+  }
+  return {
+    perimeter: { points: perimeterPoints },
+    exclusions: (mapRaw.exclusions || []).map((e: any) => ({
+      points: e.map(p2p),
+    })),
+    dockpoints: { points: (mapRaw.dockpoints || []).map(p2p) },
+    waypoints: { points: (mapRaw.waypoints || []).map(p2p) },
+  };
 }
 
-let presentation: MapPresentation = calculatePresentation(mockMap)
+// Map aus Chunks zusammensetzen (alle Typen)
+function updateMapStore() {
+  console.log("[MapService] updateMapStore called");
 
-MapStore.set({ map: mockMap, presentation })
+  let map: Map = {
+    perimeter: { points: [] },
+    exclusions: [],
+    dockpoints: { points: [] },
+    waypoints: { points: [] },
+  };
+
+  perimeterStore.subscribe((arr) => {
+    map.perimeter = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
+    setMap();
+  });
+  dockpointsStore.subscribe((arr) => {
+    map.dockpoints = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
+    setMap();
+  });
+  exclusionsStore.subscribe((arrs) => {
+    map.exclusions = arrs.map((arr) => ({
+      points: arr.map(({ X, Y }) => ({ x: X, y: -Y })),
+    }));
+    setMap();
+  });
+  waypointsStore.subscribe((arr) => {
+    map.waypoints = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
+    setMap();
+  });
+
+  function setMap() {
+    const presentation = calculatePresentation(map);
+    MapStore.set({ map, presentation });
+    console.log("[MapService] Map updated:", { map, presentation });
+  }
+}
+
+updateMapStore();

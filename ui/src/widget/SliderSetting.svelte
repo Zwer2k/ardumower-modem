@@ -1,7 +1,9 @@
 <script lang="ts">
   import { Button, Slider } from "carbon-components-svelte";
-  import IconClear from "carbon-icons-svelte/lib/CloseOutline16";
+  import IconClear from "carbon-icons-svelte/lib/CloseOutline.svelte";
   import { Busy } from "../stores/busy";
+    import { TextService } from "../text";
+    import { Invalid } from "../stores/invalid";
 
   export let label: string;
   export let key: string;
@@ -16,6 +18,12 @@
 
   let labelMod = label;
   $: labelMod = dirty ? `${label} (*)` : label;
+
+  let invalid = false;
+  let invalidText = undefined;
+  
+  $: invalid = $Invalid === key;
+  $: invalidText = !invalid ? undefined : TextService.invalidTextFor(key);
 
   function revert() {
     value = original;
@@ -33,12 +41,11 @@
       iconDescription="Revert changes"
       kind="ghost"
       icon={IconClear}
-      hasIconOnly={true}
     />
   {/if}
 </main>
 
-<style>
+<style lang="scss">
   main {
     display: flex;
     flex-direction: row;

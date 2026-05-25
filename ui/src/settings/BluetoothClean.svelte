@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Modal } from "carbon-components-svelte";
-  import IconTrash from "carbon-icons-svelte/lib/TrashCan16";
+  import IconTrash from "carbon-icons-svelte/lib/TrashCan.svelte";
   import type { Settings } from "../model";
   import { BluetoothService } from "../service";
 
@@ -23,14 +23,16 @@
   };
 </script>
 
+{#if ps4ControllerSettings != null}
 <p>
   <Button
     on:click={clearPairings}
     icon={IconTrash}
     kind="danger-tertiary"
-    disabled={!bluetoothSettings.pin_enabled && !ps4ControllerSettings.enabled}>Delete all Bluetooth Pairings</Button
+    disabled={!bluetoothSettings.pin_enabled && !ps4ControllerSettings?.enabled}>Delete all Bluetooth Pairings</Button
   >
 </p>
+{/if}
 
 <Modal
   danger

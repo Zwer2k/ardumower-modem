@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 #include <inttypes.h>
+#include <ArduinoJson.h>
+#include "mower_map.h"
 
 namespace ArduMower
 {
@@ -12,12 +14,13 @@ namespace ArduMower
       class Properties
       {
       public:
-        uint32_t timestamp;
+        uint32_t timestamp = 0;
         String firmware;
         String version;
 
         bool operator==(const Properties &other);
         bool operator!=(const Properties &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
       };
 
       namespace Stats
@@ -29,6 +32,7 @@ namespace ArduMower
 
           bool operator==(const Durations &other);
           bool operator!=(const Durations &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Recoveries
@@ -40,6 +44,7 @@ namespace ArduMower
 
           bool operator==(const Recoveries &other);
           bool operator!=(const Recoveries &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Obstacles
@@ -52,6 +57,7 @@ namespace ArduMower
 
           bool operator==(const Obstacles &other);
           bool operator!=(const Obstacles &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Stats
@@ -75,6 +81,7 @@ namespace ArduMower
 
           bool operator==(const Stats &other);
           bool operator!=(const Stats &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
       }
 
@@ -90,6 +97,7 @@ namespace ArduMower
 
           bool operator==(const Point &other);
           bool operator!=(const Point &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class Position : public Point
@@ -109,6 +117,7 @@ namespace ArduMower
 
           bool operator==(const Position &other);
           bool operator!=(const Position &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
 
         class State
@@ -122,27 +131,136 @@ namespace ArduMower
           int sensor;
           float amps;
           int mapCrc;
+          float temperature;
+          float chargingMah;
+          float motorMowMah;
+          float motorLeftMah;
+          float motorRightMah;
+
+          static const byte jobDescLen = 5;
+          static const char* jobDesc[jobDescLen];
+
+          static const byte posSolutionDescLen = 3;
+          static const char* posSolutionDesc[posSolutionDescLen];
+
 
           State()
-              : batteryVoltage(0), job(0), sensor(0), amps(0), mapCrc(0)
+              : batteryVoltage(0), job(0), sensor(0), amps(0), mapCrc(0), temperature(0), chargingMah(0), motorMowMah(0), motorLeftMah(0), motorRightMah(0)
           {
           }
 
           bool operator==(const State &other);
           bool operator!=(const State &other) { return !(*this == other); }
+          void marshal(const JsonObject &o) const;
         };
       }
 
       class DesiredState
       {
       public:
+        uint32_t timestamp;
         float speed;
         bool mowerMotorEnabled;
         bool finishAndRestart;
         int op;
         int fixTimeout;
 
-        DesiredState() : speed(0), mowerMotorEnabled(false), finishAndRestart(false), op(-1), fixTimeout(-1){};
+        DesiredState() : timestamp(1), speed(0), mowerMotorEnabled(false), finishAndRestart(false), op(-1), fixTimeout(-1){};
+        void marshal(const JsonObject &o) const;
+      };
+
+      class SensorSummary
+      {
+      public:
+        uint32_t timestamp;
+        float sonarLeft;
+        float sonarCenter;
+        float sonarRight;
+        bool sonarObstacle;
+        bool sonarNearObstacle;
+        bool bumperLeft;
+        bool bumperRight;
+        bool bumperObstacle;
+        bool bumperNearObstacle;
+        bool lidarObstacle;
+        bool lidarNearObstacle;
+        bool liftTriggered;
+        bool rainTriggered;
+
+        SensorSummary()
+            : timestamp(0), sonarLeft(0), sonarCenter(0), sonarRight(0),
+              sonarObstacle(false), sonarNearObstacle(false),
+              bumperLeft(false), bumperRight(false),
+              bumperObstacle(false), bumperNearObstacle(false),
+              lidarObstacle(false), lidarNearObstacle(false),
+              liftTriggered(false), rainTriggered(false)
+        {
+        }
+
+        bool operator==(const SensorSummary &other);
+        bool operator!=(const SensorSummary &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
+      };
+
+      class GpsSatellite
+      {
+      public:
+        uint8_t gnssId;
+        uint8_t svId;
+        uint8_t sigId;
+        uint8_t cno;
+        uint8_t qualityInd;
+        bool prUsed;
+        bool crCorrUsed;
+        float prRes;
+        int8_t elevation;
+        int8_t azimuth;
+
+        GpsSatellite()
+            : gnssId(0), svId(0), sigId(0), cno(0), qualityInd(0),
+              prUsed(false), crCorrUsed(false), prRes(0), elevation(0), azimuth(0)
+        {
+        }
+
+        void marshal(const JsonObject &o) const;
+      };
+
+      class GpsDetails
+      {
+      public:
+        uint32_t timestamp;
+        int numSV;
+        int numSVdgps;
+        int solution;
+        float hAccuracy;
+        float vAccuracy;
+        uint32_t dgpsAge;
+        std::vector<GpsSatellite> satellites;
+
+        GpsDetails()
+            : timestamp(0), numSV(0), numSVdgps(0), solution(0),
+              hAccuracy(0), vAccuracy(0), dgpsAge(0)
+        {
+        }
+
+        bool operator==(const GpsDetails &other);
+        bool operator!=(const GpsDetails &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
+      };
+
+      class UbxResponse
+      {
+      public:
+        uint32_t timestamp;
+        String hexData;
+
+        UbxResponse() : timestamp(0) {}
+
+        bool operator==(const UbxResponse &other) {
+          return timestamp == other.timestamp && hexData == other.hexData;
+        }
+        bool operator!=(const UbxResponse &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
       };
 
       class StateSource
@@ -157,6 +275,14 @@ namespace ArduMower
         virtual ArduMower::Domain::Robot::Stats::Stats *statsP() = 0;
         virtual ArduMower::Domain::Robot::Properties *propsP() = 0;
         virtual DesiredState *desiredStateP() = 0;
+        virtual SensorSummary sensorSummary() = 0;
+        virtual SensorSummary *sensorSummaryP() = 0;
+        virtual GpsDetails gpsDetails() = 0;
+        virtual GpsDetails *gpsDetailsP() = 0;
+        virtual UbxResponse ubxResponse() = 0;
+        virtual UbxResponse *ubxResponseP() = 0;
+
+        virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
       };
 
       class CommandExecutor
@@ -177,12 +303,17 @@ namespace ArduMower
         virtual bool requestVersion() = 0;
         virtual bool requestStatus() = 0;
         virtual bool requestStats() = 0;
+        virtual bool requestSensorSummary() = 0;
+        virtual bool requestGpsDetails() = 0;
+        virtual bool sendUbx(const String &hexCmd) = 0;
 
         virtual bool manualDrive(float linear, float angular) = 0;
 
         virtual bool reboot() = 0;
         virtual bool rebootGPS() = 0;
         virtual bool powerOff() = 0;
+
+        virtual bool customCmd(String cmd) = 0;
       };
     }
   }

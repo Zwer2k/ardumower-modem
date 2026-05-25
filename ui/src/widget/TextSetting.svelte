@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, PasswordInput, TextInput } from "carbon-components-svelte";
-  import IconClear from "carbon-icons-svelte/lib/CloseOutline16";
+  import IconClear from "carbon-icons-svelte/lib/CloseOutline.svelte";
   import { Busy } from "../stores/busy";
   import { Invalid } from "../stores/invalid";
   import { TextService } from "../text";
@@ -15,7 +15,7 @@
   export let disabled: boolean = false;
   export let readonly: boolean = false;
 
-  export let placeholder: string = undefined;
+  export let placeholder: string | undefined = undefined;
   export let required: boolean = true;
 
   export let kind: "text" | "password" = "text";
@@ -78,12 +78,11 @@
       iconDescription="Revert changes"
       kind="ghost"
       icon={IconClear}
-      hasIconOnly={true}
     />
   {/if}
 </main>
 
-<style>
+<style lang="scss">
   main {
     display: flex;
     flex-direction: row;

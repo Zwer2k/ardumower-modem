@@ -4,19 +4,32 @@
 #include "settings.h"
 #include "json.h"
 #include <ArduinoJson.h>
+#if __has_include("ticker.h")
+#include <ticker.h>
+#endif
 
 using namespace ArduMower::Modem::Http;
+
+#if __has_include("ticker.h")
+Ticker deferred;
+#endif
 
 UiAdapter::UiAdapter(Api::Api &api,
                      Settings::Settings &settings,
                      AsyncWebServer &server,
-                     ArduMower::Domain::Robot::StateSource &source)
-    : Common(settings), _api(api), _settings(settings), _server(server), _source(source)
+                     ArduMower::Domain::Robot::StateSource &source,
+                     ArduMower::Domain::Robot::CommandExecutor &cmd)
+    : Common(settings), _api(api), _settings(settings), _server(server), _source(source), _cmd(cmd)
+{
+}
+
+UiAdapter::~UiAdapter()
 {
 }
 
 void UiAdapter::begin()
 {
+  
   _server.on("/api/modem/info", HTTP_GET, std::bind(&UiAdapter::handleApiGetModemInfo, this, std::placeholders::_1));
   _server.on("/api/modem/status", HTTP_GET, std::bind(&UiAdapter::handleApiGetModemStatus, this, std::placeholders::_1));
 
@@ -31,7 +44,15 @@ void UiAdapter::begin()
 
   _server.on("/api/robot/desired_state", HTTP_GET, std::bind(&UiAdapter::handleApiGetRobotDesiredState, this, std::placeholders::_1));
 
+  auto commandHandler = new AsyncCallbackJsonWebHandler("/api/robot/command", std::bind(&UiAdapter::handleApiPostRobotCommand, this, std::placeholders::_1, std::placeholders::_2));
+  commandHandler->setMethod(HTTP_POST);
+  _server.addHandler(commandHandler);
+ 
   _server.onNotFound(std::bind(&UiAdapter::handleRequest, this, std::placeholders::_1));
+}
+
+void UiAdapter::loop()
+{
 }
 
 bool UiAdapter::servePath(AsyncWebServerRequest *request, const String &path)
@@ -53,11 +74,18 @@ bool UiAdapter::servePath(AsyncWebServerRequest *request, const String &path)
       }
     }
 
-    auto *response = request->beginResponse_P(200, asset->mime, asset->data, asset->size);
+    auto *response = request->beginResponse(200, asset->mime, asset->data, asset->size);
     response->addHeader("Connection", "close");
     response->addHeader("Content-Encoding", "gzip");
     response->addHeader("ETag", asset->etag);
     response->addHeader("Last-Modified", asset->time);
+
+    if (strcmp(asset->path, "/index.html") == 0 || strcmp(asset->path, "/_app/version.json") == 0) {
+      response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    } else if (strstr(asset->path, "/_app/immutable/") != nullptr) {
+      response->addHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+
     request->send(response);
     Log(DBG, "UiAdapter::servePath::200(path=%s size=%d)", path.c_str(), asset->size);
     return true;
@@ -90,7 +118,7 @@ void UiAdapter::handleApiGetModemInfo(AsyncWebServerRequest *request)
 {
   // explicitly allowed without auth
   AsyncJsonResponse *response = new AsyncJsonResponse();
-  const JsonObject &root = response->getRoot();
+  JsonObject root = response->getRoot();
   ArduMower::Modem::Settings::Properties.marshal(root);
   response->setLength();
   request->send(response);
@@ -105,12 +133,6 @@ void UiAdapter::handleApiGetModemStatus(AsyncWebServerRequest *request)
   const JsonObject &root = response->getRoot();
   root["uptime"] = millis();
 
-  root["relay_connected"] = _api.relay->isConnected();
-  root["relay_connect_count"] = _api.relay->connectionCount();
-  root["relay_connect_time"] = _api.relay->connectionTime();
-  root["relay_connection_duration"] = _api.relay->connectionDuration();
-  root["relay_rtt"] = _api.relay->pingRTT();
-  
   response->setLength();
   request->send(response);
 }
@@ -159,9 +181,12 @@ void UiAdapter::handleApiPostModemSettings(AsyncWebServerRequest *request, JsonV
   DynamicJsonDocument doc(1024);
   uploaded.marshal(doc.to<JsonObject>());
   serializeJson(doc, *response);
+
   request->send(response);
 
-  delayedRestart();
+  #if __has_include("ticker.h")
+    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #endif
 }
 
 void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
@@ -182,7 +207,9 @@ void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
   serializeJson(doc, *response);
   request->send(response);
 
-  delayedRestart();
+  #if __has_include("ticker.h")
+    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #endif
 }
 
 void UiAdapter::handleApiGetRobotDesiredState(AsyncWebServerRequest *request)
@@ -203,12 +230,61 @@ void UiAdapter::handleApiResetModemBluetoothPairings(AsyncWebServerRequest *requ
   _api.ble->clearPairings();
   request->send(200, "application/json", "{\"result\":\"ok\"}");
 
-  delayedRestart();
+  #if __has_include("ticker.h")
+    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #endif
 }
 
-void UiAdapter::delayedRestart()
+void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVariant &json)
 {
-  delay(100);
+  if (!auth(request))
+    return;
 
-  _api.os.restart();
+  String action = json.as<JsonObject>()["action"] | "";
+  bool ok = false;
+
+  if (action == "start")
+    ok = _cmd.start();
+  else if (action == "stop")
+    ok = _cmd.stop();
+  else if (action == "dock")
+    ok = _cmd.dock();
+  else if (action == "reboot")
+    ok = _cmd.reboot();
+  else if (action == "poweroff")
+    ok = _cmd.powerOff();
+  else if (action == "skipWaypoint")
+    ok = _cmd.skipWaypoint();
+  else if (action == "requestStats")
+    ok = _cmd.requestStats();
+  else if (action == "requestStatus")
+    ok = _cmd.requestStatus();
+  else if (action == "mowerEnabled")
+    ok = _cmd.mowerEnabled(json.as<JsonObject>()["enabled"] | true);
+  else if (action == "sonarEnabled")
+    ok = _cmd.sonarEnabled(json.as<JsonObject>()["enabled"] | true);
+  else if (action == "finishAndRestartEnabled")
+    ok = _cmd.finishAndRestartEnabled(json.as<JsonObject>()["enabled"] | true);
+  else if (action == "changeSpeed")
+    ok = _cmd.changeSpeed(json.as<JsonObject>()["speed"] | 0.2f);
+  else if (action == "setFixTimeout")
+    ok = _cmd.setFixTimeout(json.as<JsonObject>()["timeout"] | 0);
+  else if (action == "customCmd")
+    ok = _cmd.customCmd(json.as<JsonObject>()["cmd"] | "");
+  else {
+    reject(request, 400, "command", "unknown action: " + action);
+    return;
+  }
+
+  AsyncResponseStream *response = request->beginResponseStream("application/json");
+  DynamicJsonDocument doc(256);
+  doc["success"] = ok;
+  doc["action"] = action;
+  serializeJson(doc, *response);
+  request->send(response);
+}
+
+void UiAdapter::delayedRestart(UiAdapter* instancePtr)
+{
+  instancePtr->_api.os.restart();
 }

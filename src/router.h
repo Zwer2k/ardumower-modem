@@ -45,11 +45,13 @@ namespace ArduMower
       String lastCommand;
       responseCb cb;
       uint32_t lastTx, lastRx;
+      uint32_t expectResponseSince;
 
       void loopSend();
       void loopReceive();
       void loopDrain();
       void loopTimeout();
+      void loopStuckRecovery();
       
       bool isRxTimeout();
 
@@ -59,13 +61,14 @@ namespace ArduMower
       Router(Stream &d, timeSource t)
           : down(d), _millis(t),
             downRx("\r\n"), sendCommand(false), expectResponse(false),
-            lastTx(0), lastRx(0) {}
+            lastTx(0), lastRx(0), expectResponseSince(0) {}
       void sniffRx(RxDrain *d);
       void sniffTx(TxDrain *d);
       void begin();
       void loop();
       bool send(String _command, responseCb _cb);
       bool sendWithoutResponse(String line);
+      bool inAction();
     };
 
   }

@@ -6,8 +6,10 @@
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 #include <string.h>
+#ifdef ENABLE_PS4_CONTROLLER
 #include "esp_bt_main.h"
 #include "esp_bt_device.h"
+#endif
 
 using namespace ArduMower::Modem::Settings;
 
@@ -19,7 +21,6 @@ const char * _t_web = "web";
 const char * _t_wifi = "wifi";
 const char * _t_bluetooth = "bluetooth";
 const char * _t_ps4controller = "ps4controller";
-const char * _t_relay = "relay";
 const char * _t_mqtt = "mqtt";
 const char * _t_prometheus = "prometheus";
 
@@ -56,6 +57,7 @@ const char * _t_git_time = "git_time";
 const char * _t_git_tag = "git_tag";
 const char * _t_uptime = "uptime";
 const char * _t_bt_mac = "bt_mac";
+const char * _t_terminal_available = "terminal_available";
 const char * _t_has_sta_psk = "has_sta_psk";
 const char * _t_has_ap_psk = "has_ap_psk";
 const char * _t_has_password = "has_password";
@@ -140,7 +142,7 @@ bool Settings::save()
 
 bool Settings::valid(String &invalid) const
 {
-  return general.valid(invalid) && web.valid(invalid) && wifi.valid(invalid) && relay.valid(invalid) && mqtt.valid(invalid);
+  return general.valid(invalid) && web.valid(invalid) && wifi.valid(invalid) && mqtt.valid(invalid);
 }
 
 void Settings::marshal(const JsonObject &o) const
@@ -150,8 +152,9 @@ void Settings::marshal(const JsonObject &o) const
   web.marshal(o.createNestedObject(_t_web));
   wifi.marshal(o.createNestedObject(_t_wifi));
   bluetooth.marshal(o.createNestedObject(_t_bluetooth));
+#ifdef ENABLE_PS4_CONTROLLER
   ps4controller.marshal(o.createNestedObject(_t_ps4controller));
-  relay.marshal(o.createNestedObject(_t_relay));
+#endif
   mqtt.marshal(o.createNestedObject(_t_mqtt));
   prometheus.marshal(o.createNestedObject(_t_prometheus));
 }
@@ -183,8 +186,9 @@ bool Settings::unmarshal(const JsonObject &o)
   mustContainAndSucceed("Settings", o, _t_web, web.unmarshal(o[_t_web]));
   mustContainAndSucceed("Settings", o, _t_wifi, wifi.unmarshal(o[_t_wifi]));
   mustContainAndSucceed("Settings", o, _t_bluetooth, bluetooth.unmarshal(o[_t_bluetooth]));
+#ifdef ENABLE_PS4_CONTROLLER
   mustContainAndSucceed("Settings", o, _t_ps4controller, ps4controller.unmarshal(o[_t_ps4controller]));
-  mustContainAndSucceed("Settings", o, _t_relay, relay.unmarshal(o[_t_relay]));
+#endif
   mustContainAndSucceed("Settings", o, _t_mqtt, mqtt.unmarshal(o[_t_mqtt]));
   mustContainAndSucceed("Settings", o, _t_prometheus, prometheus.unmarshal(o[_t_prometheus]));
 
@@ -197,11 +201,13 @@ void Settings::stripSecrets(const JsonObject &o) const
   web.stripSecrets(o[_t_web]);
   wifi.stripSecrets(o[_t_wifi]);
   bluetooth.stripSecrets(o[_t_bluetooth]);
+#ifdef ENABLE_PS4_CONTROLLER
   ps4controller.stripSecrets(o[_t_ps4controller]);
-  relay.stripSecrets(o[_t_relay]);
+#endif
   mqtt.stripSecrets(o[_t_mqtt]);
   prometheus.stripSecrets(o[_t_prometheus]);
 }
+
 
 static bool validBluetoothAndDnsName(const String &name)
 {
@@ -411,6 +417,7 @@ void Bluetooth::stripSecrets(const JsonObject &o) const
   }
 }
 
+#ifdef ENABLE_PS4_CONTROLLER
 void PS4Controller::marshal(const JsonObject &o) const
 {
   o[_t_enabled] = enabled;
@@ -431,7 +438,7 @@ void PS4Controller::stripSecrets(const JsonObject &o) const
 {
   stripSecret(o, _t_password, _t_has_password);
 }
-
+#endif
 
 
 static bool validDnsName(const String &name)
@@ -478,45 +485,6 @@ static bool validIpAddress(const String &address)
   return true;
 }
 
-bool Relay::valid(String &invalid) const
-{
-  // if (!enabled)
-    return true;
-
-  // if (!validUrl(url))
-  //   invalid = "relay.url";
-  // else
-  //   return true;
-
-  // return false;
-}
-
-void Relay::marshal(const JsonObject &o) const
-{
-  o[_t_enabled] = enabled;
-  o[_t_url] = url;
-  o[_t_username] = username;
-  o[_t_password] = password;
-  o[_t_ping_interval] = pingInterval;
-}
-
-bool Relay::unmarshal(const JsonObject &o)
-{
-  enabled = o[_t_enabled];
-  url = o[_t_url].as<String>();
-  username = o[_t_username].as<String>();
-  if (containsAndHas(o, _t_password, _t_has_password))
-    password = o[_t_password].as<String>();
-  pingInterval = o[_t_ping_interval];
-
-  return true;
-}
-
-void Relay::stripSecrets(const JsonObject &o) const
-{
-  stripSecret(o, _t_password, _t_has_password);
-}
-
 bool MQTT::valid(String &invalid) const
 {
   if (!enabled)
@@ -555,7 +523,7 @@ void MQTT::marshal(const JsonObject &o) const
   o[_t_password] = password;
 
   o[_t_publish_status] = publishStatus;
-  o[_t_publish_format] = publishFormat;
+  o[_t_publish_format] = (publishFormat == 1 ? _t_json : (publishFormat == 2 ? _t_text : _t_both));
   o[_t_publish_interval] = publishInterval;
 
   o[_t_ha] = ha;
@@ -636,30 +604,42 @@ void PropertiesClass::marshal(const JsonObject &o) const
   o[_t_git_tag] = git_tag;
   o[_t_uptime] = millis();
   o[_t_bt_mac] = getBTMacAddress();
+#ifdef MOWER_TERMINAL
+  o[_t_terminal_available] = true;
+#else
+  o[_t_terminal_available] = false;
+#endif
+
 }
 
 bool PropertiesClass::initBluetooth() const
 {
+#ifdef ENABLE_PS4_CONTROLLER
   if (!btStart()) {
-    Serial.println("Failed to initialize controller");
+    Log(ERR, "Failed to initialize controller");
     return false;
   }
  
   if (esp_bluedroid_init() != ESP_OK) {
-    Serial.println("Failed to initialize bluedroid");
+    Log(ERR, "Failed to initialize bluedroid");
     return false;
   }
  
   if (esp_bluedroid_enable() != ESP_OK) {
-    Serial.println("Failed to enable bluedroid");
+    Log(ERR, "Failed to enable bluedroid");
     return false;
   }
 
   return true;
+#else
+  (void)0; // Bluetooth not enabled in this build
+  return false;
+#endif
 }
 
 String PropertiesClass::getBTMacAddress() const
 { 
+#ifdef ENABLE_PS4_CONTROLLER
   const uint8_t* point = esp_bt_dev_get_address();
   if (point == NULL)
     initBluetooth();
@@ -670,17 +650,24 @@ String PropertiesClass::getBTMacAddress() const
 
   String mac = "";
   for (int i = 0; i < 6; i++) {
- 
     char str[3];
     sprintf(str, "%02X", (int)point[i]);
     mac += str;
- 
     if (i < 5){
       mac += ":";
     }
   }
 
   return mac;
+#else
+  // Return device MAC from efuse as a BLE-friendly fallback
+  uint64_t mac = ESP.getEfuseMac();
+  char buf[18];
+  sprintf(buf, "%02X:%02X:%02X:%02X:%02X:%02X",
+          (int)((mac >> 40) & 0xFF), (int)((mac >> 32) & 0xFF), (int)((mac >> 24) & 0xFF),
+          (int)((mac >> 16) & 0xFF), (int)((mac >> 8) & 0xFF), (int)(mac & 0xFF));
+  return String(buf);
+#endif
 }
 
 

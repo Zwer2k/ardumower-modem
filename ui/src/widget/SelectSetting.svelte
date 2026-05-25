@@ -1,10 +1,12 @@
 <script lang="ts">
   import { Button, Select, SelectItem } from "carbon-components-svelte";
-  import IconClear from "carbon-icons-svelte/lib/CloseOutline16";
+  import IconClear from "carbon-icons-svelte/lib/CloseOutline.svelte";
 import { createEventDispatcher } from "svelte";
 import type { ChangeEventValue } from "../model";
   import type { Option } from "../model/ui";
   import { Busy } from "../stores/busy";
+    import { Invalid } from "../stores/invalid";
+    import { TextService } from "../text";
 
   export let label: string;
   export let key: string;
@@ -15,7 +17,7 @@ import type { ChangeEventValue } from "../model";
 
   let dispatch = createEventDispatcher<{ change: ChangeEventValue }>();
 
-  const change = (event, value) => {
+  const change = (event: Event, value: any) => {
       dispatch('change', { event: event, value: value });
   }
 
@@ -24,6 +26,9 @@ import type { ChangeEventValue } from "../model";
 
   let labelMod = label;
   $: labelMod = dirty ? `${label} (*)` : label;
+
+  $: invalid = $Invalid === key;
+  $: invalidText = !invalid ? undefined : TextService.invalidTextFor(key);
 
   function revert() {
     value = original;
@@ -48,12 +53,11 @@ import type { ChangeEventValue } from "../model";
       iconDescription="Revert changes"
       kind="ghost"
       icon={IconClear}
-      hasIconOnly={true}
     />
   {/if}
 </main>
 
-<style>
+<style lang="scss">
   main {
     display: flex;
     flex-direction: row;

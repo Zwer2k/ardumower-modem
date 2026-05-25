@@ -14,7 +14,7 @@
 <polygon
   fill="green"
   stroke="red"
-  stroke-width="0.1"
+  stroke-width="0.05"
   points={pointsForPolygon(value.points)}
 />
 

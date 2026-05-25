@@ -1,5 +1,4 @@
-#ifndef _PROMETHEUS_ADAPTER_H
-#define _PROMETHEUS_ADAPTER_H
+#pragma once
 
 #include "domain.h"
 #include "prometheus.h"
@@ -63,5 +62,3 @@ namespace ArduMower
     }
   }
 }
-
-#endif

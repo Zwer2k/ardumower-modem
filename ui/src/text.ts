@@ -2,7 +2,7 @@ class TextServiceClass {
 
   private _lang = 'en'
 
-  public invalidTextFor(settingsKey: string): string {
+  public invalidTextFor(settingsKey: string): string | undefined {
     const keyParts = settingsKey.split('.')
 
     const result = crawl(texts.language[this._lang].settings, [...keyParts, 'invalidText'])
@@ -29,9 +29,9 @@ class TextServiceClass {
   }
 }
 
-const crawl = (o: any, path: string[]) => (!o || !path || !path.length) ? o : crawl(o[path[0]], path.slice(1))
+const crawl = (o: any, path: string[]): any => (!o || !path || !path.length) ? o : crawl(o[path[0]], path.slice(1))
 
-const texts = {
+const texts: { language: { [language: string]: any } } = {
   language: {
     en: {
       actions: {
@@ -119,20 +119,6 @@ const texts = {
           ps4MAC: {
             label: "PS4 BT MAC address (When switching on the Controller, the PS4 should be far enough away)"
           }
-        },
-        relay: {
-          enabled: {
-            label: "Connect to your ArduMower through a Relay server"
-          },
-          url: {
-            label: "WebSocket URL of the relay, eg wss://fluffy-unicorn-8422.relay.example.com"
-          },
-          username: {
-            label: "Username"
-          },
-          password: {
-            label: "Password"
-          },
         },
         mqtt: {
           enabled: {

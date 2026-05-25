@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+//#include <Arduino.h>
 #include <NimBLEDevice.h>
 #include "api.h"
 #include "prometheus.h"
@@ -51,7 +51,7 @@ namespace ArduMower
 
       unsigned int writeCount(char *buffer, unsigned int size);
 
-      bool initBluetooth();
+      //bool initBluetooth();
       char *bda2str(const uint8_t* bda, char *str, size_t size);
       
     public:
