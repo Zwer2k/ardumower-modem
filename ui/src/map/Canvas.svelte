@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { zoom } from "d3-zoom";
-  import { select } from "d3-selection";
+  import { select, pointer } from "d3-selection";
 
   import type { MapPresentation } from "./model";
   import { MapStore } from "./service";
@@ -30,13 +30,8 @@
 
   function handleClick(event: MouseEvent) {
     if (!contentGroup || !svg) return;
-    const pt = svg.createSVGPoint();
-    pt.x = event.clientX;
-    pt.y = event.clientY;
-    const ctm = contentGroup.getScreenCTM();
-    if (!ctm) return;
-    const local = pt.matrixTransform(ctm.inverse());
-    dispatch('mapclick', { x: local.x, y: local.y });
+    const [x, y] = pointer(event, contentGroup);
+    dispatch('mapclick', { x, y });
   }
 </script>
 

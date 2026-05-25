@@ -127,6 +127,7 @@
   // ─── Goto ────────────────────────────────────────────────────────────────
 
   let targetSet = false;
+  let targetPos: { x: number; y: number } | null = null;
   let isDriving = false;
   let targetDist = 0;
   let targetBearing = 0;
@@ -160,6 +161,7 @@
     if (isDriving) return;
     const { x, y } = event.detail;
     localGotoService.setTarget(x, y);
+    targetPos = { x, y };
     targetSet = true;
   }
 
@@ -178,12 +180,11 @@
   function clearTarget() {
     localGotoService.clearTarget();
     targetSet = false;
+    targetPos = null;
     targetDist = 0;
     targetBearing = 0;
   }
 
-  // Derived target position
-  $: targetPos = localGotoService.getTarget();
   $: mowerPos = $socketStore.state?.position ?? null;
   $: mowerDisplayPos = mowerPos
     ? { ...mowerPos, delta: localGotoService.getComputedHeading() }
@@ -271,15 +272,20 @@
         {#if targetSet && targetPos}
           <circle
             cx={targetPos.x}
-            cy={-targetPos.y}
+            cy={targetPos.y}
             r="0.18"
-            class="goto-target-ring"
+            fill="none"
+            stroke="#e65100"
+            stroke-width="0.04"
+            opacity="0.6"
           />
           <circle
             cx={targetPos.x}
-            cy={-targetPos.y}
+            cy={targetPos.y}
             r="0.07"
-            class="goto-target-dot"
+            fill="#e65100"
+            stroke="white"
+            stroke-width="0.02"
           />
         {/if}
 
@@ -288,8 +294,12 @@
             x1={mowerPos.x}
             y1={-mowerPos.y}
             x2={targetPos.x}
-            y2={-targetPos.y}
-            class="goto-line"
+            y2={targetPos.y}
+            stroke="#e65100"
+            stroke-width="0.04"
+            stroke-dasharray="0.12, 0.12"
+            opacity="0.7"
+            pointer-events="none"
           />
         {/if}
       {/if}
@@ -355,30 +365,5 @@
     font-style: italic;
   }
 
-  :global(.goto-target-ring) {
-    fill: none;
-    stroke: #e65100;
-    stroke-width: 0.04;
-    opacity: 0.6;
-    animation: goto-pulse 1.5s ease-in-out infinite;
-  }
 
-  :global(.goto-target-dot) {
-    fill: #e65100;
-    stroke: white;
-    stroke-width: 0.02;
-  }
-
-  :global(.goto-line) {
-    stroke: #e65100;
-    stroke-width: 0.04;
-    stroke-dasharray: 0.12, 0.12;
-    opacity: 0.7;
-    pointer-events: none;
-  }
-
-  @keyframes goto-pulse {
-    0%, 100% { transform: scale(1); opacity: 0.6; }
-    50% { transform: scale(1.3); opacity: 0.3; }
-  }
 </style>
