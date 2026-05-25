@@ -308,6 +308,7 @@ namespace ArduMower
         virtual bool sendUbx(const String &hexCmd) = 0;
 
         virtual bool manualDrive(float linear, float angular) = 0;
+        virtual bool navigateTo(float x, float y) = 0;
 
         virtual bool reboot() = 0;
         virtual bool rebootGPS() = 0;

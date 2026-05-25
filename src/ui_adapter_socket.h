@@ -28,6 +28,7 @@ namespace ArduMower
         requestUbx,
         requestLogExport,
         joystickMove,
+        navigateTo,
         requestDataTypeLength
       };
 
@@ -115,6 +116,7 @@ namespace ArduMower
         bool sendUbx(const String &hexCmd);
         void resetRequestTimestamp(ResponseDataType dataType);
         void joystickMove(float linear, float angular);
+        void navigateTo(float x, float y);
 
         bool gpsDetailsActive = false;
         bool sensorSummaryActive = false;

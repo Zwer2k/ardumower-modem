@@ -72,7 +72,6 @@
     let usedCount = $derived(satellites.filter(s => s.prUsed).length);
     let dgpsCount = $derived(satellites.filter(s => s.crCorrUsed).length);
     let lastUpdate = $derived($socketStore.gpsDetails?.timestamp ?? 0);
-    let isStale = $derived(lastUpdate > 0 && (Date.now() - lastUpdate) > 10000);
 
     // Skyplot: prefer UBX NAV-SAT data, fall back to S4-derived positions
     let skyplotSats = $derived.by(() => {

@@ -232,21 +232,8 @@
         (activeCategory === 'all' ? cards : cards.filter(c => c.category === activeCategory))
             .filter(c => showMore || !moreCommandIds.has(c.commandId))
     );
-
-    let categoryCounts = $derived(() => {
-        const counts: Record<string, number> = {};
-        for (const c of cards) {
-            counts[c.category] = (counts[c.category] || 0) + 1;
-        }
-        return counts;
-    });
-
-    let visibleCards = $derived(
-        (activeCategory === 'all' ? cards : cards.filter(c => c.category === activeCategory))
-            .filter(c => showMore || !moreCommandIds.has(c.commandId))
-    );
-    let loadedCount = $derived(visibleCards.filter(c => c.data !== null && !c.loading).length);
-    let totalCount = $derived(visibleCards.length);
+    let loadedCount = $derived(filteredCards.filter(c => c.data !== null && !c.loading).length);
+    let totalCount = $derived(filteredCards.length);
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 

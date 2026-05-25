@@ -18,9 +18,7 @@
   import Dockpoints from "./Dockpoints.svelte";
   import MowerPosition from "./MowerPosition.svelte";
   import { MapStore } from "./service";
-  import { socketStore } from "../stores/socket";
-  import * as localGotoService from "../localGotoService";
-  import { onMount, onDestroy } from "svelte";
+  import { socketStore, socketService } from "../stores/socket";
 
   interface EditItem {
     id: string;
@@ -127,64 +125,60 @@
   // ─── Goto ────────────────────────────────────────────────────────────────
 
   let targetSet = false;
+  let targetPos: { x: number; y: number } | null = null;
   let isDriving = false;
   let targetDist = 0;
   let targetBearing = 0;
 
-  let _unsubSocket: () => void;
+  $: mowerPos = $socketStore.state?.position ?? null;
 
-  onMount(() => {
-    _unsubSocket = socketStore.subscribe(($s) => {
-      if ($s.state?.position) {
-        localGotoService.setPosition($s.state.position);
-      }
-    });
-
-    localGotoService.onUpdate((dist, bearing) => {
-      targetDist = dist;
-      targetBearing = bearing;
-    });
-
-    localGotoService.onArrive(() => {
-      isDriving = false;
-    });
-  });
-
-  onDestroy(() => {
-    localGotoService.stop();
-    _unsubSocket?.();
-  });
+  $: if (mowerPos && targetPos) {
+    const mx = mowerPos.x;
+    const my = -mowerPos.y;
+    const tx = targetPos.x;
+    const ty = targetPos.y;
+    const dx = tx - mx;
+    const dy = ty - my;
+    targetDist = Math.sqrt(dx * dx + dy * dy);
+    targetBearing = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  }
 
   function onMapClick(event: CustomEvent<{ x: number; y: number }>) {
     if (edit) return;
-    if (isDriving) return;
     const { x, y } = event.detail;
-    localGotoService.setTarget(x, y);
+    // y from d3.pointer is in viewBox space, where positive=down.
+    // The robot's pos.y is in world space, where positive=north.
+    // The p2p function negates Y for display: viewBoxY = -worldY.
+    // So targetY in world space = -viewBoxY for the modem (which sends perimeter coords).
+    // But we display in viewBox space, so store viewBox coords.
+    console.log('[map] click', 'viewBox x:', x, 'y:', y, '-> navigateTo(', x, ',', -y, ')');
+    targetPos = { x, y };
     targetSet = true;
-  }
-
-  function startDrive() {
-    if (!targetSet) return;
-    if (localGotoService.start()) {
-      isDriving = true;
-    }
-  }
-
-  function stopDrive() {
-    localGotoService.stop();
     isDriving = false;
-  }
-
-  function clearTarget() {
-    localGotoService.clearTarget();
-    targetSet = false;
     targetDist = 0;
     targetBearing = 0;
   }
 
-  // Derived target position
-  $: targetPos = localGotoService.getTarget();
-  $: mowerPos = $socketStore.state?.position ?? null;
+  function startDrive() {
+    if (!targetSet || !targetPos) return;
+    // modem expects perimeter/world coordinates, so negate Y
+    socketService.sendNavigateTo(targetPos.x, -targetPos.y);
+    isDriving = true;
+  }
+
+  function stopDrive() {
+    socketService.sendJoystickMove(0, 0);
+    isDriving = false;
+  }
+
+  function clearTarget() {
+    socketService.sendJoystickMove(0, 0);
+    isDriving = false;
+    targetSet = false;
+    targetPos = null;
+    targetDist = 0;
+    targetBearing = 0;
+  }
 </script>
 
 <div class="map-dashboard">
@@ -263,20 +257,25 @@
           {edit}
           bind:editItemId
         />
-        <MowerPosition position={$socketStore.state?.position ?? null} />
+        <MowerPosition position={mowerPos} />
 
         {#if targetSet && targetPos}
           <circle
             cx={targetPos.x}
-            cy={-targetPos.y}
+            cy={targetPos.y}
             r="0.18"
-            class="goto-target-ring"
+            fill="none"
+            stroke="#e65100"
+            stroke-width="0.04"
+            opacity="0.6"
           />
           <circle
             cx={targetPos.x}
-            cy={-targetPos.y}
+            cy={targetPos.y}
             r="0.07"
-            class="goto-target-dot"
+            fill="#e65100"
+            stroke="white"
+            stroke-width="0.02"
           />
         {/if}
 
@@ -285,8 +284,12 @@
             x1={mowerPos.x}
             y1={-mowerPos.y}
             x2={targetPos.x}
-            y2={-targetPos.y}
-            class="goto-line"
+            y2={targetPos.y}
+            stroke="#e65100"
+            stroke-width="0.04"
+            stroke-dasharray="0.12, 0.12"
+            opacity="0.7"
+            pointer-events="none"
           />
         {/if}
       {/if}
@@ -352,30 +355,5 @@
     font-style: italic;
   }
 
-  :global(.goto-target-ring) {
-    fill: none;
-    stroke: #e65100;
-    stroke-width: 0.04;
-    opacity: 0.6;
-    animation: goto-pulse 1.5s ease-in-out infinite;
-  }
 
-  :global(.goto-target-dot) {
-    fill: #e65100;
-    stroke: white;
-    stroke-width: 0.02;
-  }
-
-  :global(.goto-line) {
-    stroke: #e65100;
-    stroke-width: 0.04;
-    stroke-dasharray: 0.12, 0.12;
-    opacity: 0.7;
-    pointer-events: none;
-  }
-
-  @keyframes goto-pulse {
-    0%, 100% { transform: scale(1); opacity: 0.6; }
-    50% { transform: scale(1.3); opacity: 0.3; }
-  }
 </style>

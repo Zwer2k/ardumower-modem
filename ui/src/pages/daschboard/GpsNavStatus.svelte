@@ -30,7 +30,7 @@
         }
     }
 
-    let fixColor = $derived(() => {
+    let fixColor = $derived.by(() => {
         if (!navPvt) return 'nofix';
         if (navPvt.fixType === 0) return 'nofix';
         if (navPvt.carrSoln === 2) return 'fixed';
@@ -46,7 +46,7 @@
     </div>
     <div class="navstatus-body">
         {#if navPvt}
-            <div class="navstatus-badge {fixColor()}">
+            <div class="navstatus-badge {fixColor}">
                 {fixTypeName(navPvt.fixType)}
                 {#if navPvt.carrSoln > 0}
                     <span class="navstatus-carr">({carrSolnName(navPvt.carrSoln)})</span>

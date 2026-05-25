@@ -299,6 +299,12 @@ export enum RequestDataType {
   requestUbx,
   requestLogExport,
   joystickMove,
+  navigateTo,
+}
+
+export interface NavigateToData {
+  x: number;
+  y: number;
 }
 
 export interface ModemLogSettings {
@@ -316,5 +322,5 @@ export interface JoystickMoveData {
 
 export interface RequestSocketMessage {
   type: RequestDataType;
-  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData;
+  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData | NavigateToData;
 }

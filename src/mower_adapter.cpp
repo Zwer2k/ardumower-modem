@@ -393,6 +393,16 @@ bool MowerAdapter::manualDrive(float linear, float angular)
   return sendCommand(command);
 }
 
+// navigate to point (autonomous, firmware handles navigation)
+bool MowerAdapter::navigateTo(float x, float y)
+{
+  Log(DBG, "%snavigateTo(%.2f, %.2f)", _LOG_CMD_, x, y);
+  char buffer[50];
+  snprintf(buffer, sizeof(buffer), "AT+R,%.2f,%.2f", x, y);
+  String command(buffer);
+  return sendCommand(command);
+}
+
 // reboot the mower
 bool MowerAdapter::reboot()
 {
