@@ -110,15 +110,20 @@ jobs:
         id: release_notes
         run: |
           tag=${GITHUB_REF#refs/tags/}
-          # find previous tag (most recent v* different from current)
-          prev=$(git tag --sort=-creatordate | grep '^v' | grep -v "^$tag$" | head -n1 || true)
-          if [ -n "$prev" ]; then
-            notes=$(git --no-pager log --pretty=format:'- %h %s' "$prev..$tag")
+          body_file="release_notes/${tag}.md"
+          if [ -f "$body_file" ]; then
+            cat "$body_file" > release_body.txt
           else
-            notes=$(git --no-pager log --pretty=format:'- %h %s' -n 50 "$tag")
+            # find previous tag (most recent v* different from current)
+            prev=$(git tag --sort=-creatordate | grep '^v' | grep -v "^$tag$" | head -n1 || true)
+            if [ -n "$prev" ]; then
+              git --no-pager log --pretty=format:'- %h %s' "$prev..$tag" > release_body.txt
+            else
+              git --no-pager log --pretty=format:'- %h %s' -n 50 "$tag" > release_body.txt
+            fi
           fi
           echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$notes" >> "$GITHUB_OUTPUT"
+          cat release_body.txt >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
