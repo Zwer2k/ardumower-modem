@@ -17,6 +17,8 @@ Alternatively, the **ESP32-S3-WROOM-1 module can be soldered directly onto a cus
 |-----|-------------|-----------|------------------------|-------------|
 | 5   | BOOT0       | Output    | MCU BOOT0 (STM32 only) | OTA flashing: set STM32 to flash mode |
 | 7   | NRST        | Output    | MCU NRST (STM32 only)  | STM32 reset control for OTA |
+| 15  | TERMINAL_RX | Input     | Mower controller UART  | Terminal + OTA flash (Serial1, MOWER_TERMINAL) |
+| 16  | TERMINAL_TX | Output    | Mower controller UART  | Terminal + OTA flash (Serial1, MOWER_TERMINAL) |
 | 17  | ROUTER_TX   | Output    | Mower controller UART RX | Serial data to mower (commands) |
 | 18  | ROUTER_RX   | Input     | Mower controller UART TX | Serial data from mower (status, sensors) |
 | 43  | TX (U0TXD)  | Output    | USB-Serial             | Serial console (USB-to-UART) |
@@ -27,7 +29,7 @@ Alternatively, the **ESP32-S3-WROOM-1 module can be soldered directly onto a cus
 
 ### Mower Controller Communication (Serial2)
 
-Communication with the mower controller (Sunray STM32, Ardumower GrandCentral M4, or any MCU running Sunray-compatible firmware) uses UART on **GPIO17 (TX)** and **GPIO18 (RX)** at 115200 baud.
+Communication with the mower controller (Sunray STM32, Ardumower GrandCentral M4, or any MCU running Sunray-compatible firmware) uses UART on **GPIO17 (TX)** and **GPIO18 (RX)** at 115200 baud. This is the main AT command channel (Router).
 
 These pins are configured in `platformio.ini`:
 ```
@@ -35,9 +37,22 @@ These pins are configured in `platformio.ini`:
 -D ROUTER_RX_PIN=18
 ```
 
+### Terminal + OTA Flash (Serial1, MOWER_TERMINAL)
+
+When compiled with the `MOWER_TERMINAL` flag, **Serial1** serves two purposes — it is shared between the interactive web terminal and the STM32 OTA firmware flasher. The terminal is suspended during OTA flashing to free the serial port.
+
+The pins are **not fixed** — `Serial1.begin()` uses the board's default UART1 pins, but these must be set to different GPIOs than the Router (Serial2) to avoid conflicts.
+
+On ESP32-S3, Serial1 defaults to **GPIO 16 (TX)** and **GPIO 15 (RX)** — these are different from the Router pins (GPIO 17/18), so no conflict occurs. If you need to change them, use:
+```cpp
+Serial1.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
+```
+
 ### OTA Flashing (STM32 Sunray only)
 
-When using an STM32-based Sunray board, two control lines allow flashing the STM32 firmware via the modem web interface:
+When using an STM32-based Sunray board, OTA flashing requires two things:
+1. **Serial1** (same port as Terminal, above) — for the actual firmware data transfer using the STM32 ROM bootloader protocol
+2. Two control lines to put the STM32 into bootloader mode:
 
 | Function | GPIO | Signal |
 |----------|------|--------|
@@ -53,12 +68,12 @@ Defined in `src/stm32ota/stm32ota.h`:
 OTA update sequence:
 1. Set BOOT0 HIGH (flash mode)
 2. Pulse NRST LOW (reset STM32)
-3. STM32 starts in flash mode → transfer firmware
+3. STM32 starts in flash mode → transfer firmware via Serial1
 4. Set BOOT0 LOW (run mode)
 5. Pulse NRST LOW (reset STM32)
 6. STM32 starts with new firmware
 
-**Note:** These two pins are only needed for OTA flashing of STM32-based boards. On an Ardumower GrandCentral M4 (SAMD51), OTA flashing works differently and GPIO 5/7 are not required.
+**Note:** GPIO 5/7 are only needed for OTA flashing of STM32-based boards. On an Ardumower GrandCentral M4 (SAMD51), OTA flashing works differently and GPIO 5/7 are not required.
 The **Reboot** button in the web interface uses the `AT+Y` command over Serial2 (GPIO 17/18) and works with any Sunray-compatible firmware — it does **not** use GPIO 5/7.
 
 ### Serial Console (USB)
