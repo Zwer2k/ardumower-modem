@@ -91,16 +91,9 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          # copy clearly named firmware files
-          cp artifacts/esp32/firmware.bin artifacts/firmware-esp32.bin 2>/dev/null || true
-          cp artifacts/esp32/firmware.elf artifacts/firmware-esp32.elf 2>/dev/null || true
-          cp artifacts/esp32/partitions.bin artifacts/partitions-esp32.bin 2>/dev/null || true
-          cp artifacts/esp32/bootloader.bin artifacts/bootloader-esp32.bin 2>/dev/null || true
-
-          cp artifacts/esp32-s3/firmware.bin artifacts/firmware-esp32-s3.bin 2>/dev/null || true
-          cp artifacts/esp32-s3/firmware.elf artifacts/firmware-esp32-s3.elf 2>/dev/null || true
-          cp artifacts/esp32-s3/partitions.bin artifacts/partitions-esp32-s3.bin 2>/dev/null || true
-          cp artifacts/esp32-s3/bootloader.bin artifacts/bootloader-esp32-s3.bin 2>/dev/null || true
+          # rename files with platform suffix
+          (cd artifacts/esp32 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32.${ext}"; done) 2>/dev/null || true
+          (cd artifacts/esp32-s3 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32-s3.${ext}"; done) 2>/dev/null || true
 
           # create zip archives for clearer grouping
           (cd artifacts && zip -r -q esp32.zip esp32) || true
@@ -133,8 +126,6 @@ jobs:
             artifacts/esp32/*
             artifacts/esp32-s3/*
             artifacts/*.zip
-            artifacts/firmware-esp32*.bin
-            artifacts/firmware-esp32-s3*.bin
           body: ${{ steps.release_notes.outputs.body }}
 
   nightly:
@@ -159,6 +150,11 @@ jobs:
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "short_hash=$(git log -1 --format=%h)" >> "$GITHUB_OUTPUT"
 
+      - name: Rename artifacts with platform suffix
+        run: |
+          (cd artifacts/esp32 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32.${ext}"; done) 2>/dev/null || true
+          (cd artifacts/esp32-s3 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32-s3.${ext}"; done) 2>/dev/null || true
+
       - name: Create/Update Nightly Release
         uses: ncipollo/release-action@v1
         with:
@@ -168,8 +164,8 @@ jobs:
             Nightly build from ${{ steps.version.outputs.date }} (commit ${{ steps.version.outputs.short_hash }}).
 
             **Firmware files:**
-            - `esp32/firmware.bin` – for ESP32 (Wemos D1 mini)
-            - `esp32-s3/firmware.bin` – for ESP32-S3 (16MB OPI PSRAM)
+            - `esp32/firmware-esp32.bin` – for ESP32 (Wemos D1 mini)
+            - `esp32-s3/firmware-esp32-s3.bin` – for ESP32-S3 (16MB OPI PSRAM)
 
             Diese Version wird mit jedem neuen Nightly-Build überschrieben.
           prerelease: true
