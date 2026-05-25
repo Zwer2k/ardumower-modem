@@ -160,7 +160,12 @@
     if (edit) return;
     if (isDriving) return;
     const { x, y } = event.detail;
-    localGotoService.setTarget(x, y);
+    // y from d3.pointer is in viewBox space, where positive=down.
+    // The robot's pos.y is in world space, where positive=north.
+    // The p2p function negates Y for display: viewBoxY = -worldY.
+    // So targetY in world space = -viewBoxY.
+    console.log('[map] click', 'viewBox x:', x, 'y:', y, '-> service setTarget(', x, ',', -y, ')');
+    localGotoService.setTarget(x, -y);
     targetPos = { x, y };
     targetSet = true;
   }
