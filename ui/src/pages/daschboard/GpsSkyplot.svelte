@@ -57,7 +57,7 @@
         { label: 'W', x: CX - MAX_R - 12, y: CY + 4 },
     ];
 
-    let groupedSats = $derived(() => {
+    let groupedSats = $derived.by(() => {
         const groups: Record<number, NavSatInfo[]> = {};
         for (const s of satellites) {
             if (!groups[s.gnssId]) groups[s.gnssId] = [];
@@ -124,7 +124,7 @@
 
         <!-- Legend -->
         <div class="skyplot-legend">
-            {#each Object.entries(groupedSats()) as [gnssId, sats]}
+            {#each Object.entries(groupedSats) as [gnssId, sats]}
                 {@const id = parseInt(gnssId)}
                 {@const color = gnssColor(id)}
                 <div class="legend-item">
@@ -155,9 +155,9 @@
         flex-shrink: 0;
     }
     .skyplot-legend {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+        display: grid;
+        grid-template-columns: repeat(3, auto);
+        gap: 4px 16px;
         padding: 4px;
     }
     .legend-item {
