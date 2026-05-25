@@ -354,6 +354,14 @@ class SocketService {
     this.sendMessage(req);
   }
 
+  sendNavigateTo(x: number, y: number) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.navigateTo,
+      data: { x, y },
+    };
+    this.sendMessage(req);
+  }
+
   disconnect() {
     this.reconnect = false;
     this.clearAllTimers();

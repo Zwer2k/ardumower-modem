@@ -79,6 +79,7 @@ namespace ArduMower
       virtual bool requestGpsDetails();
       virtual bool sendUbx(const String &hexCmd);
       virtual bool manualDrive(float linear, float angular);
+      virtual bool navigateTo(float x, float y);
       virtual bool reboot();
       virtual bool rebootGPS();
       virtual bool powerOff();

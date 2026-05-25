@@ -18,9 +18,7 @@
   import Dockpoints from "./Dockpoints.svelte";
   import MowerPosition from "./MowerPosition.svelte";
   import { MapStore } from "./service";
-  import { socketStore } from "../stores/socket";
-  import * as localGotoService from "../localGotoService";
-  import { onMount, onDestroy } from "svelte";
+  import { socketStore, socketService } from "../stores/socket";
 
   interface EditItem {
     id: string;
@@ -132,68 +130,55 @@
   let targetDist = 0;
   let targetBearing = 0;
 
-  let _unsubSocket: () => void;
+  $: mowerPos = $socketStore.state?.position ?? null;
 
-  onMount(() => {
-    _unsubSocket = socketStore.subscribe(($s) => {
-      if ($s.state?.position) {
-        localGotoService.setPosition($s.state.position);
-      }
-    });
-
-    localGotoService.onUpdate((dist, bearing) => {
-      targetDist = dist;
-      targetBearing = bearing;
-    });
-
-    localGotoService.onArrive(() => {
-      isDriving = false;
-    });
-  });
-
-  onDestroy(() => {
-    localGotoService.stop();
-    _unsubSocket?.();
-  });
+  $: if (mowerPos && targetPos) {
+    const mx = mowerPos.x;
+    const my = -mowerPos.y;
+    const tx = targetPos.x;
+    const ty = targetPos.y;
+    const dx = tx - mx;
+    const dy = ty - my;
+    targetDist = Math.sqrt(dx * dx + dy * dy);
+    targetBearing = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  }
 
   function onMapClick(event: CustomEvent<{ x: number; y: number }>) {
     if (edit) return;
-    if (isDriving) return;
     const { x, y } = event.detail;
     // y from d3.pointer is in viewBox space, where positive=down.
     // The robot's pos.y is in world space, where positive=north.
     // The p2p function negates Y for display: viewBoxY = -worldY.
-    // So targetY in world space = -viewBoxY.
-    console.log('[map] click', 'viewBox x:', x, 'y:', y, '-> service setTarget(', x, ',', -y, ')');
-    localGotoService.setTarget(x, -y);
+    // So targetY in world space = -viewBoxY for the modem (which sends perimeter coords).
+    // But we display in viewBox space, so store viewBox coords.
+    console.log('[map] click', 'viewBox x:', x, 'y:', y, '-> navigateTo(', x, ',', -y, ')');
     targetPos = { x, y };
     targetSet = true;
+    isDriving = false;
+    targetDist = 0;
+    targetBearing = 0;
   }
 
   function startDrive() {
-    if (!targetSet) return;
-    if (localGotoService.start()) {
-      isDriving = true;
-    }
+    if (!targetSet || !targetPos) return;
+    // modem expects perimeter/world coordinates, so negate Y
+    socketService.sendNavigateTo(targetPos.x, -targetPos.y);
+    isDriving = true;
   }
 
   function stopDrive() {
-    localGotoService.stop();
+    socketService.sendJoystickMove(0, 0);
     isDriving = false;
   }
 
   function clearTarget() {
-    localGotoService.clearTarget();
+    socketService.sendJoystickMove(0, 0);
+    isDriving = false;
     targetSet = false;
     targetPos = null;
     targetDist = 0;
     targetBearing = 0;
   }
-
-  $: mowerPos = $socketStore.state?.position ?? null;
-  $: mowerDisplayPos = mowerPos
-    ? { ...mowerPos, delta: localGotoService.getComputedHeading() }
-    : null;
 </script>
 
 <div class="map-dashboard">
@@ -272,7 +257,7 @@
           {edit}
           bind:editItemId
         />
-        <MowerPosition position={mowerDisplayPos} />
+        <MowerPosition position={mowerPos} />
 
         {#if targetSet && targetPos}
           <circle
