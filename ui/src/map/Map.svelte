@@ -185,6 +185,9 @@
   // Derived target position
   $: targetPos = localGotoService.getTarget();
   $: mowerPos = $socketStore.state?.position ?? null;
+  $: mowerDisplayPos = mowerPos
+    ? { ...mowerPos, delta: localGotoService.getComputedHeading() }
+    : null;
 </script>
 
 <div class="map-dashboard">
@@ -263,7 +266,7 @@
           {edit}
           bind:editItemId
         />
-        <MowerPosition position={$socketStore.state?.position ?? null} />
+        <MowerPosition position={mowerDisplayPos} />
 
         {#if targetSet && targetPos}
           <circle
