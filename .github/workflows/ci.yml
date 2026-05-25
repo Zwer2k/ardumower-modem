@@ -91,9 +91,9 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          # rename files with platform suffix
-          (cd artifacts/esp32 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32.${ext}"; done) 2>/dev/null || true
-          (cd artifacts/esp32-s3 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32-s3.${ext}"; done) 2>/dev/null || true
+          # rename files with platform prefix
+          (cd artifacts/esp32 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "esp32-${name}.${ext}"; done) 2>/dev/null || true
+          (cd artifacts/esp32-s3 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "esp32-s3-${name}.${ext}"; done) 2>/dev/null || true
 
           # create zip archives for clearer grouping
           (cd artifacts && zip -r -q esp32.zip esp32) || true
@@ -150,10 +150,10 @@ jobs:
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "short_hash=$(git log -1 --format=%h)" >> "$GITHUB_OUTPUT"
 
-      - name: Rename artifacts with platform suffix
+      - name: Rename artifacts with platform prefix
         run: |
-          (cd artifacts/esp32 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32.${ext}"; done) 2>/dev/null || true
-          (cd artifacts/esp32-s3 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "${name}-esp32-s3.${ext}"; done) 2>/dev/null || true
+          (cd artifacts/esp32 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "esp32-${name}.${ext}"; done) 2>/dev/null || true
+          (cd artifacts/esp32-s3 && for f in *; do ext="${f##*.}"; name="${f%.*}"; mv "$f" "esp32-s3-${name}.${ext}"; done) 2>/dev/null || true
 
       - name: Create/Update Nightly Release
         uses: ncipollo/release-action@v1
@@ -164,8 +164,8 @@ jobs:
             Nightly build from ${{ steps.version.outputs.date }} (commit ${{ steps.version.outputs.short_hash }}).
 
             **Firmware files:**
-            - `esp32/firmware-esp32.bin` – for ESP32 (Wemos D1 mini)
-            - `esp32-s3/firmware-esp32-s3.bin` – for ESP32-S3 (16MB OPI PSRAM)
+            - `esp32/esp32-firmware.bin` – for ESP32 (Wemos D1 mini)
+            - `esp32-s3/esp32-s3-firmware.bin` – for ESP32-S3 (16MB OPI PSRAM)
 
             Diese Version wird mit jedem neuen Nightly-Build überschrieben.
           prerelease: true
