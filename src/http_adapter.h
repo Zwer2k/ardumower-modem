@@ -46,6 +46,8 @@ namespace ArduMower
 
         void reject(int code, String message);
         void onRouterResponse(String res);
+        void trimHttpRequestBody();
+        void recoverRequestBody();
 
       private:
         AsyncWebServerRequest *request;
@@ -54,7 +56,6 @@ namespace ArduMower
         const uint32_t timeReceiveHttpRequest;
         void parseHttpRequestBody();
         void readHttpRequestBody();
-        void trimHttpRequestBody();
         void validateHttpRequestBody();
         bool timeout(const uint32_t now);
       };

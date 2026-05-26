@@ -58,8 +58,21 @@ void Http::CommandRequest::readHttpRequestBody()
 
 void Http::CommandRequest::trimHttpRequestBody()
 {
-  while (httpRequestBody.endsWith("\n") || httpRequestBody.endsWith("\r"))
+  int idx = httpRequestBody.indexOf('\n');
+  if (idx >= 0)
+    httpRequestBody = httpRequestBody.substring(0, idx);
+  while (httpRequestBody.endsWith("\r"))
     httpRequestBody = httpRequestBody.substring(0, httpRequestBody.length() - 1);
+}
+
+void Http::CommandRequest::recoverRequestBody()
+{
+  if (httpRequestBody != "") return;
+  if (!request->_tempObject) return;
+  httpRequestBody = (char*)request->_tempObject;
+  free(request->_tempObject);
+  request->_tempObject = nullptr;
+  trimHttpRequestBody();
 }
 
 void Http::CommandRequest::validateHttpRequestBody()

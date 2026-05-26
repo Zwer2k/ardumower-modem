@@ -156,6 +156,9 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
   case 0:
     // command from http request body has not been sent to the router yet
 
+    // body may have arrived after constructor (large requests)
+    req->recoverRequestBody();
+
     // send http request body as command to modem
     if (_router.send(req->httpRequestBody,
                      [=](String res, int err)
