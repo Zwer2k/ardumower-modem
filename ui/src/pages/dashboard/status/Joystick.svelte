@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
-    import { socketService } from '../../stores/socket';
+    import { socketService } from '../../../stores/socket';
 
     // ─── Props ──────────────────────────────────────────────────────────────
     let { size = 200 }: { size?: number } = $props();

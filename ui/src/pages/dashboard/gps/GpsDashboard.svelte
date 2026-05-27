@@ -3,8 +3,8 @@
     import { afterNavigate } from '$app/navigation';
     import { onMount } from 'svelte';
     import { browser } from '$app/environment';
-    import { socketStore, socketService } from '../../stores/socket';
-    import { gpsStore } from '../../stores/gpsStore';
+    import { socketStore, socketService } from '../../../stores/socket';
+    import { gpsStore } from '../../../stores/gpsStore';
 
     import GpsSkyplot from './GpsSkyplot.svelte';
     import GpsDeviationMap from './GpsDeviationMap.svelte';

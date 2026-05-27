@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { AltitudeSample } from '../../stores/gpsStore';
+    import type { AltitudeSample } from '../../../stores/gpsStore';
 
     interface Props {
         history: AltitudeSample[];

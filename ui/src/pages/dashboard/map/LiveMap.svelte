@@ -3,9 +3,9 @@
     import { page } from '$app/stores';
     import { afterNavigate } from '$app/navigation';
     import { browser } from '$app/environment';
-    import { socketService } from '../../stores/socket';
-    import { gpsStore } from '../../stores/gpsStore';
-    import type { PositionSample } from '../../stores/gpsStore';
+    import { socketService } from '../../../stores/socket';
+    import { gpsStore } from '../../../stores/gpsStore';
+    import type { PositionSample } from '../../../stores/gpsStore';
 
     const TIME_WINDOWS: { label: string; ms: number }[] = [
         { label: '5 min', ms: 5 * 60 * 1000 },

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
-    import { socketService } from '../../stores/socket';
+    import { socketService } from '../../../stores/socket';
 
     // ─── Constants ──────────────────────────────────────────────────────────
     const MAX_FORCE = 0.5;

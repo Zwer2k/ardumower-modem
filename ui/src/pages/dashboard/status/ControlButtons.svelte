@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { DesiredState } from "../../model";
-    import { RobotCommandService } from "../../service";
+    import type { DesiredState } from "../../../model";
+    import { RobotCommandService } from "../../../service";
     import PlayFilled from "carbon-icons-svelte/lib/PlayFilled.svelte";
     import StopFilled from "carbon-icons-svelte/lib/StopFilled.svelte";
     import Home from "carbon-icons-svelte/lib/Home.svelte";

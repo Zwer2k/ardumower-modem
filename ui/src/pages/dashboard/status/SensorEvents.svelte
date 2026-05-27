@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SensorSummary } from "../../model";
+  import type { SensorSummary } from "../../../model";
 
   export let summary: SensorSummary | null = null;
 

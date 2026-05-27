@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { DesiredState, State, Stats, ValueDescriptions } from "../../model";
-    import { SensorDescriptions } from "../../model";
+    import type { DesiredState, State, Stats, ValueDescriptions } from "../../../model";
+    import { SensorDescriptions } from "../../../model";
     export let state: State | null = null;
     export let stats: Stats | null = null;
     export let desiredState: DesiredState | null = null;

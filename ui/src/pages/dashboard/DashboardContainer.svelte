@@ -3,12 +3,12 @@
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
     import { socketService, socketStore } from '../../stores/socket';
-    import StatusDashboard from './StatusDashboard.svelte';
-    import LogDashboard from './LogDashboard.svelte';
-    import TerminalDashboard from './TerminalDashboard.svelte';
-    import GpsDashboard from './GpsDashboard.svelte';
-    import LiveMap from './LiveMap.svelte';
-    import TestsDashboard from './TestsDashboard.svelte';
+    import StatusDashboard from './status/StatusDashboard.svelte';
+    import LogDashboard from './log/LogDashboard.svelte';
+    import TerminalDashboard from './terminal/TerminalDashboard.svelte';
+    import GpsDashboard from './gps/GpsDashboard.svelte';
+    import LiveMap from './map/LiveMap.svelte';
+    import TestsDashboard from './tests/TestsDashboard.svelte';
     import Map from '../../map/Map.svelte';
 
     let currentDashboard = $state('status');

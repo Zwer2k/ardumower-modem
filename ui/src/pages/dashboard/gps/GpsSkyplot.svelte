@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { NavSatInfo } from '../../stores/gpsStore';
+    import type { NavSatInfo } from '../../../stores/gpsStore';
 
     interface Props {
         satellites: NavSatInfo[];

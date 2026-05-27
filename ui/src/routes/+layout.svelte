@@ -30,7 +30,7 @@
     let toast = $state<ToastData | null>(null);
     $effect(() => { toast = $toastStore });
     import HelpDialog from "../widget/HelpDialog.svelte";
-    import RemoteControlPopover from "../pages/daschboard/RemoteControlPopover.svelte";
+    import RemoteControlPopover from "../pages/dashboard/status/RemoteControlPopover.svelte";
     import HeaderOverflowMenu from "../widget/HeaderOverflowMenu.svelte";
 
     let { children } = $props();

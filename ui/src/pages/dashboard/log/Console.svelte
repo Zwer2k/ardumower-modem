@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Dropdown, Toggle } from "carbon-components-svelte";
-    import VirtualList from "../../widget/VirtualList.svelte";
-    import type { LogLevelDescT, LogLine } from "../../model";
+    import VirtualList from "../../../widget/VirtualList.svelte";
+    import type { LogLevelDescT, LogLine } from "../../../model";
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
 
     export let logLevels: LogLevelDescT;

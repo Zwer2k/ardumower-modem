@@ -2,8 +2,8 @@
   
 
 <script lang="ts">
-    import type { ConsoleLine } from '../../model';
-    import VirtualList from '../../widget/VirtualList.svelte';
+    import type { ConsoleLine } from '../../../model';
+    import VirtualList from '../../../widget/VirtualList.svelte';
       import { Toggle } from 'carbon-components-svelte';
     
     let  { 

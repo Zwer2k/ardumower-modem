@@ -1,10 +1,10 @@
 <script lang="ts">
     import Terminal from "./Terminal.svelte";
     import { onMount } from 'svelte';
-    import { socketStore, socketService } from '../../stores/socket';
-    import { getModemInfo } from '../../firmware/service';
+    import { socketStore, socketService } from '../../../stores/socket';
+    import { getModemInfo } from '../../../firmware/service';
     import { browser } from '$app/environment';
-    import type { ApiModemInfoResponse } from '../../firmware/service';
+    import type { ApiModemInfoResponse } from '../../../firmware/service';
 
     let showTerminal = false;
     let modemInfo: ApiModemInfoResponse | null = null;

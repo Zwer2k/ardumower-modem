@@ -1,7 +1,7 @@
 <script lang="ts">
     import StateCard from "./StateCard.svelte";
     import SensorEvents from "./SensorEvents.svelte";
-    import { socketStore, socketService } from '../../stores/socket';
+    import { socketStore, socketService } from '../../../stores/socket';
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
 

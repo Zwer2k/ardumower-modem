@@ -1,8 +1,8 @@
 <script lang="ts">
     import Console from "./Console.svelte";
     import { onMount } from 'svelte';
-    import { socketStore, socketService } from '../../stores/socket';
-    import { LogLevelDesc } from "../../model";
+    import { socketStore, socketService } from '../../../stores/socket';
+    import { LogLevelDesc } from "../../../model";
     import { browser } from '$app/environment';
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
 

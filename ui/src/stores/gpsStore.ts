@@ -4,7 +4,7 @@ import { socketStore } from "./socket";
 import {
   parseUbxFrames,
   getParserForFrame,
-} from "../pages/daschboard/ubxCommands";
+} from "../pages/dashboard/gps/ubxCommands";
 import type { GpsDetails, GpsSatellite } from "../model";
 
 // ─── Types ──────────────────────────────────────────────────────────────────

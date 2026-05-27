@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { socketStore, socketService } from '../../stores/socket';
+    import { socketStore, socketService } from '../../../stores/socket';
     import {
         ubxCommands,
         parseUbxFrames,
@@ -10,7 +10,7 @@
         gnssName,
         type UbxFrameResult,
     } from './ubxCommands';
-    import type { GpsDetails, GpsSatellite } from '../../model';
+    import type { GpsDetails, GpsSatellite } from '../../../model';
 
     // ─── Types ──────────────────────────────────────────────────────────────
 

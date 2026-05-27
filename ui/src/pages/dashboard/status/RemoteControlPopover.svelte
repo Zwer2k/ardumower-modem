@@ -1,6 +1,6 @@
 <script lang="ts">
     import { browser } from '$app/environment';
-    import { socketStore } from '../../stores/socket';
+    import { socketStore } from '../../../stores/socket';
     import Joystick from './Joystick.svelte';
     import GamepadControl from './GamepadControl.svelte';
     import ControlButtons from './ControlButtons.svelte';

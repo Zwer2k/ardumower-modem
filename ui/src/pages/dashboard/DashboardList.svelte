@@ -1,13 +1,13 @@
 <script lang="ts">
-    import StateCard from "./StateCard.svelte";
+    import StateCard from "./status/StateCard.svelte";
     import { onMount, onDestroy } from 'svelte';
     import { browser } from '$app/environment';
     import type { ModemLog, ModemLogSettings, DesiredState, LogLine, RequestSocketMessage, State, ValueDescriptions, ConsoleLine, ConsoleResponseData, ConsoleRequestData } from "../../model";
     import { LogLevelDesc, RequestDataType, ResponseDataType } from "../../model";
-    import Console from "./Console.svelte";
+    import Console from "./log/Console.svelte";
     import { Accordion, AccordionItem } from "carbon-components-svelte";
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
-    import Terminal from "./Terminal.svelte";
+    import Terminal from "./terminal/Terminal.svelte";
     import { getModemInfo } from '../../firmware/service';
     import type { ApiModemInfoResponse } from '../../firmware/service';
     let showTerminal = false;

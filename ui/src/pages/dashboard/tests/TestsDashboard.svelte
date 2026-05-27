@@ -1,6 +1,6 @@
 <script lang="ts">
     import MotorPlot from "./MotorPlot.svelte";
-    import { socketStore } from '../../stores/socket';
+    import { socketStore } from '../../../stores/socket';
     import { browser } from '$app/environment';
 </script>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
-    import { motorPlotStore, socketService, clearMotorPlotStore } from '../../stores/socket';
+    import { motorPlotStore, socketService, clearMotorPlotStore } from '../../../stores/socket';
 
     // ─── Constants ──────────────────────────────────────────────────────────
     const MAX_POINTS = 600;

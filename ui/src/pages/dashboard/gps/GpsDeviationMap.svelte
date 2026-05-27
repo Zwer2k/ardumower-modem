@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { PositionSample } from '../../stores/gpsStore';
+    import type { PositionSample } from '../../../stores/gpsStore';
 
     interface Props {
         positionHistory: PositionSample[];

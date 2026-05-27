@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { NavPvtInfo, NavDopInfo, GpsDetails } from '../../stores/gpsStore';
+    import type { NavPvtInfo, NavDopInfo, GpsDetails } from '../../../stores/gpsStore';
 
     interface Props {
         navPvt: NavPvtInfo | null;
