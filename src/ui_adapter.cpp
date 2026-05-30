@@ -143,7 +143,7 @@ void UiAdapter::handleApiGetModemSettings(AsyncWebServerRequest *request)
     return;
 
   AsyncResponseStream *response = request->beginResponseStream("application/json");
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(2048);
   const JsonObject &o = doc.to<JsonObject>();
   _settings.marshal(o);
   _settings.stripSecrets(o);
@@ -177,15 +177,22 @@ void UiAdapter::handleApiPostModemSettings(AsyncWebServerRequest *request, JsonV
     return;
   }
 
+  _settings = uploaded;
+
   AsyncResponseStream *response = request->beginResponseStream("application/json");
-  DynamicJsonDocument doc(1024);
-  uploaded.marshal(doc.to<JsonObject>());
+  DynamicJsonDocument doc(2048);
+  const JsonObject &root = doc.to<JsonObject>();
+  uploaded.marshal(root);
+  uploaded.stripSecrets(root);
   serializeJson(doc, *response);
 
   request->send(response);
 
   #if __has_include("ticker.h")
     deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #else
+    delay(500);
+    _api.os.restart();
   #endif
 }
 
@@ -201,14 +208,19 @@ void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
     return;
   }
 
+  _settings = replace;
+
   AsyncResponseStream *response = request->beginResponseStream("application/json");
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(2048);
   replace.marshal(doc.to<JsonObject>());
   serializeJson(doc, *response);
   request->send(response);
 
   #if __has_include("ticker.h")
     deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #else
+    delay(500);
+    _api.os.restart();
   #endif
 }
 
@@ -232,6 +244,9 @@ void UiAdapter::handleApiResetModemBluetoothPairings(AsyncWebServerRequest *requ
 
   #if __has_include("ticker.h")
     deferred.once_ms(500, &UiAdapter::delayedRestart, this);
+  #else
+    delay(500);
+    _api.os.restart();
   #endif
 }
 

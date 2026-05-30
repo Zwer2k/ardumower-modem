@@ -80,7 +80,7 @@ Cli modemCli(router);
 // ArduMower protocol interpreter, keeps state
 MowerAdapter mowerAdapter(settings, router);
 // HTTP endpoint for app
-HttpAdapter httpAdapter(router, webServer.server());
+HttpAdapter httpAdapter(router, webServer.server(), mowerAdapter);
 // serves the web frontend
 Http::UiAdapter ui(api, settings, webServer.server(), mowerAdapter, mowerAdapter);
 // handle socket connection with web client
@@ -142,17 +142,18 @@ void setup() {
   looptime.add("terminal", std::bind(&Terminal::loop, &terminal));
 #endif
   looptime.add("wifi", [&](){wifiAdapter.loop();});
-  looptime.add("http", std::bind(&HttpAdapter::loop, &httpAdapter));
+  looptime.add("http", [&](){ if (!Ota::MowerUpdater::isFlashing()) httpAdapter.loop(); });
   // looptime.add("ota_arduino", std::bind(&Ota::ArduinoOta::loop, &ota));
   looptime.add("ota_http", std::bind(&Ota::HttpServer::loop, &otaHttpServer));
   looptime.add("ota_mower", std::bind(&Ota::MowerUpdater::loop, &mowerUpdater));
+  mowerUpdater.addIdleCallback(std::bind(&Router::loop, &router));
   looptime.add("router", std::bind(&Router::loop, &router));
-  looptime.add("ble", std::bind(&BleAdapter::loop, &bleAdapter));
-  looptime.add("ui", std::bind(&Http::UiAdapter::loop, &ui));
-  looptime.add("socket_handler", std::bind(&Http::UiSocketHandler::loop, &socketHandler));
-  looptime.add("mqtt", [&](){mqttAdapter.loop(millis());});
+  looptime.add("ble", [&](){ if (!Ota::MowerUpdater::isFlashing()) bleAdapter.loop(); });
+  looptime.add("ui", [&](){ if (!Ota::MowerUpdater::isFlashing()) ui.loop(); });
+  looptime.add("socket_handler", [&](){ if (!Ota::MowerUpdater::isFlashing()) socketHandler.loop(); });
+  looptime.add("mqtt", [&](){ if (!Ota::MowerUpdater::isFlashing()) mqttAdapter.loop(millis()); });
 #ifdef ENABLE_PS4_CONTROLLER
-  looptime.add("ps4_controller", std::bind(&PS4controller::Adapter::loop, &ps4ControllerAdapter));
+  looptime.add("ps4_controller", [&](){ if (!Ota::MowerUpdater::isFlashing()) ps4ControllerAdapter.loop(); });
 #endif
   
 #ifdef ESP_MODEM_SIM

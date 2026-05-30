@@ -7,6 +7,7 @@
   $: x = position?.x ?? 0;
   $: y = position != null ? -position.y : 0;
   $: delta = position?.delta ?? 0;
+  $: headingDeg = 90 - delta * 180 / Math.PI;
   $: hasPos = position != null && (x !== 0 || y !== 0);
   $: accuracy = position?.accuracy ?? 0;
 
@@ -69,7 +70,7 @@
 
     <!-- Direction arrow -->
     <polyline
-      points={arrowPoints(x, y, delta)}
+      points={arrowPoints(x, y, headingDeg)}
       fill="none"
       stroke="#005f73"
       stroke-width="0.06"

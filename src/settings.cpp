@@ -94,12 +94,16 @@ void Settings::begin()
   file = SPIFFS.open(filename.c_str());
 #endif
 
-  DynamicJsonDocument doc(1120);
+  DynamicJsonDocument doc(2048);
   auto err = deserializeJson(doc, file);
 
   if (err != DeserializationError::Ok)
   {
     Log(ERR, "Settings::begin::deserializeJson-error(%s)", err.c_str());
+  }
+  else if (doc.overflowed())
+  {
+    Log(ERR, "Settings::begin::json-overflow");
   }
   else if (!unmarshal(doc.as<JsonObject>()))
   {
@@ -121,8 +125,14 @@ bool Settings::save()
     return false;
   }
 
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(2048);
   marshal(doc.to<JsonObject>());
+
+  if (doc.overflowed())
+  {
+    Log(ERR, "Settings::save::json-overflow");
+    return false;
+  }
 
   File file = SPIFFS.open(_filename.c_str(), FILE_WRITE);
   if (!file)

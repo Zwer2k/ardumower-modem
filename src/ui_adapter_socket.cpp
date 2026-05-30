@@ -23,6 +23,9 @@ UiSocketItem::UiSocketItem(
   _socketHandler->sendData(ResponseDataType::desiredState, this, true);
   _socketHandler->sendData(ResponseDataType::map, this, true);
 
+  // Request fresh stats from Teensy and send cached data
+  _socketHandler->requestStats();
+
   // Send cached UBX data to new client if available
   if (_source.ubxResponse().timestamp > 0) {
     _socketHandler->sendData(ResponseDataType::ubxResponse, this, true);
@@ -337,6 +340,11 @@ void UiSocketHandler::stateRequestLoop()
     _cmd.requestStatus();
     lastDataRequestTimestamp[ResponseDataType::mowerState] = millis();
   } 
+}
+
+void UiSocketHandler::requestStats()
+{
+  _cmd.requestStats();
 }
 
 void UiSocketHandler::sensorRequestLoop()

@@ -5,6 +5,19 @@
 
 using namespace ArduMower::Modem::Ota;
 
+bool MowerUpdater::_isFlashing = false;
+
+void MowerUpdater::addIdleCallback(IdleCallback cb)
+{
+  _idleCallbacks.push_back(cb);
+}
+
+void MowerUpdater::runIdleCallbacks()
+{
+  for (auto &cb : _idleCallbacks)
+    cb();
+}
+
 void StatusMessage::marshal(const ArduinoJson::JsonObject &o) const
 {
   o["progress"] = progress;
@@ -144,6 +157,7 @@ String MowerUpdater::handleFlash()
 
   // RAII-style cleanup helper
   auto cleanup = [this]() {
+    _isFlashing = false;
     if (fsUploadFile) {
       fsUploadFile.close();
     }
@@ -165,6 +179,7 @@ String MowerUpdater::handleFlash()
         (unsigned)bini, (unsigned)lastbuf);
 
     updateStatus(0);
+    _isFlashing = true;
 
     if (!firmwareWriter.switchToFlashMode()) {
       cleanup();
@@ -197,12 +212,14 @@ String MowerUpdater::handleFlash()
         Log(ERR, "Failed to send write command at address 0x%x", currentAddress);
         return "error-write-command";
       }
+      runIdleCallbacks();
       yield();
 
       if (!firmwareWriter.sendAddress(currentAddress, 1000)) {
         Log(ERR, "Failed to send address 0x%x", currentAddress);
         return "error-write-address";
       }
+      runIdleCallbacks();
       yield();
 
       if (!firmwareWriter.sendDataBlock(data, size, 2000)) {
@@ -232,6 +249,7 @@ String MowerUpdater::handleFlash()
           cleanup();
           return "error-file-read";
         }
+        runIdleCallbacks();
         yield();
 
         String error = writeBlock(binread, BLOCK_SIZE);
@@ -240,6 +258,7 @@ String MowerUpdater::handleFlash()
           return error;
         }
         
+        runIdleCallbacks();
         yield();
         Log(DBG, "Block %u written in %lu ms", (unsigned)i, millis() - iterationStartTime);
     }
@@ -266,6 +285,7 @@ String MowerUpdater::handleFlash()
     updateStatus(100);
   } // End of file handling scope
 
+  _isFlashing = false;
   firmwareWriter.switchToRunMode();
   Log(INFO, "MowerUpdater::handleFlash update completed successfully");
   return "";

@@ -1,6 +1,6 @@
 #include "http_adapter.h"
+#include "mower_adapter.h"
 #include "prometheus.h"
-#include "checksum.h"
 #include <Arduino.h>
 #include "stm32ota/stm32ota.h"
 #if __has_include("ticker.h")
@@ -19,8 +19,8 @@ using namespace ArduMower::Modem;
       
 void respondWithCors(AsyncWebServerRequest *req, int status, String contentType, String responseBody);
       
-HttpAdapter::HttpAdapter(Router &router, AsyncWebServer &server)
-    : _router(router), _server(server), requestId(0)
+HttpAdapter::HttpAdapter(Router &router, AsyncWebServer &server, MowerAdapter &mower)
+    : _router(router), _server(server), _mower(mower), requestId(0)
 {
 }
 
@@ -216,13 +216,10 @@ void HttpAdapter::apiMowerReboot(AsyncWebServerRequest *req)
 // Reboot GPS receiver via mower command AT+Y2
 void HttpAdapter::apiMowerRebootGps(AsyncWebServerRequest *req)
 {
-  Checksum chk;
-  String cmd("AT+Y2");
-  chk.update(cmd);
-  char buffer[32];
-  snprintf(buffer, sizeof(buffer), "AT+Y2,0x%02x\r", chk.value());
-  _router.sendWithoutResponse(buffer);
-  req->send(200, "text/plain", "gps reboot triggered");
+  if (_mower.rebootGPS())
+    req->send(200, "text/plain", "gps reboot triggered");
+  else
+    req->send(503, "text/plain", "router busy - try again");
 }
 
 void respondWithCors(AsyncWebServerRequest *req, int status, String contentType, String responseBody)

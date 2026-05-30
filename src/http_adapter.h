@@ -13,6 +13,7 @@ namespace ArduMower
 {
   namespace Modem
   {
+    class MowerAdapter;
 
     namespace Http
     {
@@ -66,6 +67,7 @@ namespace ArduMower
     private:
       Router &_router;
       AsyncWebServer &_server;
+      MowerAdapter &_mower;
       Http::Metrics *_metrics;
       std::list<Http::CommandRequest *> _queue;
       SemaphoreHandle_t _lock;
@@ -87,7 +89,7 @@ namespace ArduMower
       void handleRouterResponse(const uint32_t id, String response);
 
     public:
-      HttpAdapter(Router &router, AsyncWebServer &server);
+      HttpAdapter(Router &router, AsyncWebServer &server, MowerAdapter &mower);
       ~HttpAdapter();
 
       void begin();

@@ -117,6 +117,7 @@ namespace ArduMower
         void resetRequestTimestamp(ResponseDataType dataType);
         void joystickMove(float linear, float angular);
         void navigateTo(float x, float y);
+        void requestStats();
 
         bool gpsDetailsActive = false;
         bool sensorSummaryActive = false;

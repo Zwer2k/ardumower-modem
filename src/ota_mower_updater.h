@@ -4,6 +4,7 @@
 #include "terminal.h"
 #endif
 #include "stm32ota/stm32ota.h"
+#include <list>
 #include <FS.h>
 #include <ArduinoJson.h>
 
@@ -25,6 +26,7 @@ namespace ArduMower
 
       using UpdateComplete = std::function<void(String updateResult)>;
       using StatusHandler = std::function<void(byte progress)>;
+      using IdleCallback = std::function<void(void)>;
 
       class MowerUpdater
       {
@@ -38,7 +40,9 @@ namespace ArduMower
         void startUpdate(String filename, UpdateComplete updateComplete);
         String handleFlash();
         void addStatusHandler(StatusHandler handler);
+        void addIdleCallback(IdleCallback cb);
         void loop();
+        static bool isFlashing() { return _isFlashing; }
 
       private:
         #ifdef MOWER_TERMINAL
@@ -53,9 +57,12 @@ namespace ArduMower
         bool _fileUploaded = false;
         UpdateComplete _updateComplete;
         StatusHandler _statusHandler;
+        std::list<IdleCallback> _idleCallbacks;
 
         byte _progress = 255;
+        static bool _isFlashing;
 
+        void runIdleCallbacks();
         void updateStatus(byte progress);
         void setSerialPortReady(bool serialPortReady);
         void printBootloaderInfo();

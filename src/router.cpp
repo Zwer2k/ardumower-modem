@@ -73,6 +73,7 @@ bool Router::sendWithoutResponse(String line)
   command = line + "\r\n";
   cb = [](String r, int err) {};
   sendCommand = true;
+  expectResponseSince = _millis();
 
   return true;
 }
@@ -94,7 +95,7 @@ void Router::loopSend()
       snprintf(buf, sizeof(buf), "%02X", (unsigned char)command[i]);
       hex += buf;
     }
-    Log(COMM, "SERIAL>> hex (%d): %s", command.length(), hex.c_str());
+    //Log(COMM, "SERIAL>> hex (%d): %s", command.length(), hex.c_str());
   }
 
   auto sent = down.print(command.c_str());

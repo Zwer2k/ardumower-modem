@@ -16,7 +16,7 @@
             <div class="label">Satelite</div>
             <div>
                 {valueDescriptions.posSolution[state.position?.solution ?? 0]}/{(state.position?.age ?? 0).toFixed(1)}s/{state.position?.accuracy ?? 0}m
-                #{state.position?.visible_satellites ?? 0}/{state.position?.visible_satellites_dgps ?? 0}
+                #{state.position?.visible_satellites_dgps ?? 0}/{state.position?.visible_satellites ?? 0}
             </div>
             <div class="label">State</div><div>{valueDescriptions.job[state.job ?? 0]}</div>
             <div class="label">Sensor</div><div>{SensorDescriptions[state.sensor ?? 0] ?? "unknown"}</div>
