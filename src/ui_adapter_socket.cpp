@@ -3,6 +3,7 @@
 #include "ui_adapter_socket.h"
 #include "json.h"
 #include "log.h"
+#include "logToUi.h"
 #include "terminal.h"
 
 #define _LOG_ "UiSocket::"
@@ -22,6 +23,10 @@ UiSocketItem::UiSocketItem(
   _socketHandler->sendData(ResponseDataType::mowerState, this, true);
   _socketHandler->sendData(ResponseDataType::desiredState, this, true);
   _socketHandler->sendData(ResponseDataType::map, this, true);
+  _socketHandler->sendBufferedLogTo(this);
+#ifdef MOWER_TERMINAL
+  _socketHandler->sendBufferedTerminalTo(this);
+#endif
 
   // Send cached UBX data to new client if available
   if (_source.ubxResponse().timestamp > 0) {
@@ -502,10 +507,6 @@ void UiSocketHandler::processMapChunkSend() {
       if (map.perimeter.size() > 0 && mapChunkSendState.idx < map.perimeter.size()) {
         chunkSent = sendMapChunk(MapPointType::Perimeter, map.perimeter, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
-          // Fehler beim Senden: Sendevorgang von vorne beginnen
-          mapChunkSendState.phase = 0;
-          mapChunkSendState.exclusionIdx = 0;
-          mapChunkSendState.idx = 0;
           break;
         }
         mapChunkSendState.idx += blockSize;
@@ -519,9 +520,6 @@ void UiSocketHandler::processMapChunkSend() {
         if (excl.size() > 0 && mapChunkSendState.idx < excl.size()) {
           chunkSent = sendMapChunk(MapPointType::Exclusion, excl, mapChunkSendState.timestamp, mapChunkSendState.sendTo, (int)mapChunkSendState.exclusionIdx, mapChunkSendState.idx, blockSize);
           if (!chunkSent) {
-            mapChunkSendState.phase = 0;
-            mapChunkSendState.exclusionIdx = 0;
-            mapChunkSendState.idx = 0;
             break;
           }
           mapChunkSendState.idx += blockSize;
@@ -535,9 +533,6 @@ void UiSocketHandler::processMapChunkSend() {
       if (map.dockpoints.size() > 0 && mapChunkSendState.idx < map.dockpoints.size()) {
         chunkSent = sendMapChunk(MapPointType::Dockpoints, map.dockpoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
-          mapChunkSendState.phase = 0;
-          mapChunkSendState.exclusionIdx = 0;
-          mapChunkSendState.idx = 0;
           break;
         }
         mapChunkSendState.idx += blockSize;
@@ -549,9 +544,6 @@ void UiSocketHandler::processMapChunkSend() {
       if (map.waypoints.size() > 0 && mapChunkSendState.idx < map.waypoints.size()) {
         chunkSent = sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
-          mapChunkSendState.phase = 0;
-          mapChunkSendState.exclusionIdx = 0;
-          mapChunkSendState.idx = 0;
           break;
         }
         mapChunkSendState.idx += blockSize;
@@ -623,14 +615,12 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
     if (!sendTo->sendText(stateStr)) {
       Log(ERR, "%s sendData failed", _LOG_);
       _ws->cleanupClients();
-      mapChunkSendState.active = false;
       return false;
     }
   } else {
     if (!sendTextAllWithRetry(_ws, stateStr)) {
       Log(ERR, "%s sendData failed", _LOG_);
       _ws->cleanupClients();
-      mapChunkSendState.active = false;
       return false;
     }
   }
@@ -668,6 +658,43 @@ void UiSocketHandler::navigateTo(float x, float y) {
   _cmd.navigateTo(x, y);
   Log(DBG, "%s navigateTo(%.2f, %.2f)", _LOG_, x, y);
 }
+
+void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item)
+{
+  uint16_t offset = 0;
+  const uint16_t chunkSize = 20;
+  while (true) {
+    DynamicJsonDocument doc(4096);
+    doc["type"] = ResponseDataType::modemLog;
+    uint16_t sent = logToUi.marshalBatch(doc.createNestedObject("data"), offset, chunkSize);
+    if (sent == 0) break;
+    String stateStr;
+    serializeJson(doc, stateStr);
+    stateStr = sanitizeUtf8(stateStr);
+    item->sendText(stateStr);
+    offset += sent;
+  }
+  oldDataTimestamp[ResponseDataType::modemLog] = logToUi.timestamp;
+}
+
+#ifdef MOWER_TERMINAL
+void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item)
+{
+  uint16_t offset = 0;
+  const uint16_t chunkSize = 20;
+  while (true) {
+    DynamicJsonDocument doc(4096);
+    doc["type"] = ResponseDataType::mowerConsole;
+    uint16_t sent = _terminal.marshalBatch(doc.createNestedObject("data"), offset, chunkSize);
+    if (sent == 0) break;
+    String stateStr;
+    serializeJson(doc, stateStr);
+    stateStr = sanitizeUtf8(stateStr);
+    item->sendText(stateStr);
+    offset += sent;
+  }
+}
+#endif
 
 static String sanitizeUtf8(const String& input) {
   String output;
@@ -799,9 +826,28 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     client->text(dataStr.c_str());
 
     client->ping();
+    if (itemMap.find(client->id()) != itemMap.end()) {
+      delete itemMap[client->id()];
+      itemMap.erase(client->id());
+    }
     itemMap[client->id()] = new UiSocketItem(this, client, _source);
 
     _ws->cleanupClients(); // cleanup disconnected clients
+  } else if(type == WS_EVT_ERROR){
+    Log(ERR, "%s ws[%s][%u] error(%u): %s\n", _LOG_, server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+    if (itemMap.find(client->id()) != itemMap.end()) {
+      delete itemMap[client->id()];
+      itemMap.erase(client->id());
+    }
+    // Clean up ref counts if this was the last client
+    if (itemMap.empty()) {
+      gpsDetailsRefCount = 0;
+      sensorSummaryRefCount = 0;
+      gpsDetailsActive = false;
+      sensorSummaryActive = false;
+      ubxResponseActive = false;
+      Log(INFO, "%s last client removed on error, resetting all ref counts", _LOG_);
+    }
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
     Log(INFO, "%s ws[%s][%u] disconnect\n", _LOG_, server->url(), client->id());

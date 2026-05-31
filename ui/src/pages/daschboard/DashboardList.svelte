@@ -17,8 +17,8 @@
     let state: State | null = null;
     let desiredState: DesiredState | null = null; 
     let modemLogOpen = false;
-    let modemLog: LogLine[];
-    let consoleLines: ConsoleLine[];
+    let modemLog: LogLine[] = [];
+    let consoleLines: ConsoleLine[] = [];
     let consoleCmd: string;
     let modemDbgLevel: number;
 
@@ -29,6 +29,8 @@
     let maxReconnectAttempts = 10;
     let connectionTimeout: NodeJS.Timeout | null = null;
     let heartbeatInterval: NodeJS.Timeout | null = null;
+    let livenessInterval: NodeJS.Timeout | null = null;
+    let lastMessageTime: number = 0;
     let isPageVisible = true;
 
     let modemDbgLevels: DropdownItem[] = [
@@ -48,8 +50,8 @@
             return;
         }
         
-        if (socket != null && socket.readyState === WebSocket.CONNECTING) {
-            console.log("WebSocket already connecting, skipping...");
+        if (socket != null && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.CLOSING)) {
+            console.log("WebSocket already connecting/closing, skipping...");
             return;
         }
         
@@ -97,6 +99,7 @@
                 
                 // Start heartbeat
                 startHeartbeat();
+                startLivenessCheck();
             });
 
             socket.addEventListener('close', (event) => {
@@ -127,6 +130,7 @@
             });
 
             socket.addEventListener("message", (message: any) => {
+                lastMessageTime = Date.now();
                 //console.log("message: ", message.data)
                 try {
                     let jsonData = JSON.parse(message.data);
@@ -147,10 +151,16 @@
                             console.log("desiredState", desiredState)
                             break
                         case ResponseDataType.modemLog:
-                            modemLog = (jsonData.data as ModemLog).log;
+                            modemLog = [...modemLog, ...(jsonData.data as ModemLog).log];
+                            if (modemLog.length > 1000) {
+                                modemLog = modemLog.slice(-1000);
+                            }
                             break
                         case ResponseDataType.mowerConsole:
-                            consoleLines = (jsonData.data as ConsoleResponseData).lines;
+                            consoleLines = [...consoleLines, ...(jsonData.data as ConsoleResponseData).lines];
+                            if (consoleLines.length > 1000) {
+                                consoleLines = consoleLines.slice(-1000);
+                            }
                             break
                         default:
                             console.log("unknown data type");
@@ -186,6 +196,31 @@
             clearInterval(heartbeatInterval);
             heartbeatInterval = null;
         }
+        if (livenessInterval != null) {
+            clearInterval(livenessInterval);
+            livenessInterval = null;
+        }
+    }
+
+    function startLivenessCheck() {
+        lastMessageTime = Date.now();
+        if (livenessInterval) {
+            clearInterval(livenessInterval);
+            livenessInterval = null;
+        }
+        livenessInterval = setInterval(() => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                if (livenessInterval) {
+                    clearInterval(livenessInterval);
+                    livenessInterval = null;
+                }
+                return;
+            }
+            if (Date.now() - lastMessageTime > 45000) {
+                // Keine Nachricht in 45 Sekunden - Verbindung wahrscheinlich tot
+                try { socket.close(1000, "Liveness timeout"); } catch (_) {}
+            }
+        }, 15000);
     }
 
     function startHeartbeat() {

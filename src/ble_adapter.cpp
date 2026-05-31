@@ -19,7 +19,7 @@ BleAdapter::BleAdapter(Settings::Settings &s, Router &r)
                             std::placeholders::_2))),
       chr(NULL), status(BLE_STATUS_IDLE), expectNotify(0),
       bleReader("\n"), receivedFromBle(""), sendToBle(""),
-      sendToMower("")
+      sendToMowerQueue()
 {
 }
 
@@ -218,7 +218,7 @@ void BleAdapter::loopBleRx()
     if (line != "")
     {
       count++;
-      sendToMower = line;
+      sendToMowerQueue.push_back(line);
       status = BLE_STATUS_TXROUTER;
       return;
     }
@@ -256,13 +256,21 @@ void BleAdapter::loopBleTx()
 
 void BleAdapter::loopRouterTx()
 {
-  if (!router.send(sendToMower, [&](String res, int err)
+  if (sendToMowerQueue.empty())
+  {
+    status = BLE_STATUS_CONNECTED;
+    return;
+  }
+
+  String cmd = sendToMowerQueue.front();
+  if (!router.send(cmd, [&](String res, int err)
                    {
                      sendToBle = res + "\r\n";
                      status = BLE_STATUS_TXBLE;
                    }))
     return;
 
+  sendToMowerQueue.pop_front();
   status = BLE_STATUS_RXROUTER;
 }
 
@@ -288,7 +296,7 @@ void BleAdapter::reset()
 {
   receivedFromBle = "";
   sendToBle = "";
-  sendToMower = "";
+  sendToMowerQueue.clear();
   bleReader.reset();
   expectNotify = 0;
 }

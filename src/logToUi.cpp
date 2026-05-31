@@ -92,6 +92,28 @@ void LogToUi::marshal(const JsonObject &o)
     Serial.printf("(%d/%d)\r\n", sent, count); 
 }
 
+uint16_t LogToUi::marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t maxLines)
+{
+    uint16_t count = modemLog->currentSize();
+    if (count == 0 || startIdx >= count) return 0;
+
+    JsonArray logJson = o.createNestedArray("log");
+
+    LogLine line;
+    uint16_t sent = 0;
+    for (uint16_t i = startIdx; i < count && sent < maxLines; i++) {
+        if (modemLog->peekAt(i, line)) {
+            JsonObject jsonLine = logJson.createNestedObject();
+            jsonLine["nr"] = line.nr;
+            jsonLine["level"] = line.level;
+            jsonLine["text"] = line.text;
+            jsonLine["freeHeap"] = line.freeHeap;
+            sent++;
+        }
+    }
+    return sent;
+}
+
 void LogToUi::exportAll(String &csv)
 {
     csv = "nr,level,freeHeap,text\r\n";

@@ -17,10 +17,12 @@ Terminal::Terminal(Stream &serial)
   _terminalRouter = new Router(serial);
   _terminalRouter->sniffRx(this);
   _terminalRouter->sniffTx(this);
+  _buffer = new Ringbuffer<String, TERMINAL_RINGBUFFER_SIZE>();
 }
 
 Terminal::~Terminal() {
   delete _terminalRouter;
+  delete _buffer;
 }
 
 void Terminal::begin()
@@ -77,6 +79,7 @@ void Terminal::resume()
 
 void Terminal::drainRx(String line, bool &stop)
 {
+  _buffer->push(&line, true);
   if (_rxHandler != NULL) {
     _rxHandler(line);
   }
@@ -84,8 +87,33 @@ void Terminal::drainRx(String line, bool &stop)
 
 void Terminal::drainTx(String line, bool &stop)
 {
+  _buffer->push(&line, true);
   if (_txHandler != NULL) {
     _txHandler(line);
   }
+}
+
+uint16_t Terminal::marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t maxLines)
+{
+  uint16_t count = _buffer->currentSize();
+  if (startIdx >= count) return 0;
+  JsonArray logJson = o.createNestedArray("lines");
+  String line;
+  uint16_t sent = 0;
+  for (uint16_t i = startIdx; i < count && sent < maxLines; i++) {
+    if (_buffer->peekAt(i, line)) {
+      JsonObject jsonLine = logJson.createNestedObject();
+      jsonLine["nr"] = 0;
+      jsonLine["isSend"] = false;
+      jsonLine["text"] = line;
+      sent++;
+    }
+  }
+  return sent;
+}
+
+uint16_t Terminal::bufferSize()
+{
+  return _buffer->currentSize();
 }
 #endif

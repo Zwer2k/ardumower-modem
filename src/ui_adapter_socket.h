@@ -117,6 +117,10 @@ namespace ArduMower
         void resetRequestTimestamp(ResponseDataType dataType);
         void joystickMove(float linear, float angular);
         void navigateTo(float x, float y);
+        void sendBufferedLogTo(UiSocketItem* item);
+#ifdef MOWER_TERMINAL
+        void sendBufferedTerminalTo(UiSocketItem* item);
+#endif
 
         bool gpsDetailsActive = false;
         bool sensorSummaryActive = false;

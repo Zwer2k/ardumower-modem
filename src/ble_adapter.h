@@ -7,6 +7,7 @@
 #include "reader.h"
 #include "router.h"
 #include "settings.h"
+#include <list>
 
 #define BLE_MTU 20
 #define SERVICE_UUID "0000FFE0-0000-1000-8000-00805F9B34FB"
@@ -41,7 +42,7 @@ namespace ArduMower
       Reader bleReader;
       String receivedFromBle;
       String sendToBle;
-      String sendToMower;
+      std::list<String> sendToMowerQueue;
 
       void reset();
       void loopBleRx();

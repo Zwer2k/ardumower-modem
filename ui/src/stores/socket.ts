@@ -69,6 +69,8 @@ class SocketService {
   private maxReconnectAttempts = 10;
   private connectionTimeout: NodeJS.Timeout | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private livenessInterval: NodeJS.Timeout | null = null;
+  private lastMessageTime: number = 0;
   private isPageVisible = true;
   private pendingMessages: RequestSocketMessage[] = [];
 
@@ -89,7 +91,8 @@ class SocketService {
     socketStore.update((state) => {
       if (
         state.socket != null &&
-        state.socket.readyState === WebSocket.CONNECTING
+        (state.socket.readyState === WebSocket.CONNECTING ||
+         state.socket.readyState === WebSocket.CLOSING)
       ) {
         return state;
       }
@@ -121,6 +124,17 @@ class SocketService {
         }, 5000);
 
         socket.addEventListener("open", () => {
+          // Ignoriere Events von veralteten Sockets
+          let isCurrent = false;
+          socketStore.update((s) => {
+            isCurrent = s.socket === socket;
+            return s;
+          });
+          if (!isCurrent) {
+            try { socket.close(); } catch (_) {}
+            return;
+          }
+
           this.reconnectAttempts = 0;
 
           if (this.connectionTimeout) {
@@ -129,6 +143,7 @@ class SocketService {
           }
 
           this.startHeartbeat(socket);
+          this.startLivenessCheck(socket);
 
           socketStore.update((s) => ({ ...s, connected: true }));
 
@@ -145,7 +160,13 @@ class SocketService {
         socket.addEventListener("close", (event) => {
           this.clearAllTimers();
 
-          socketStore.update((s) => ({ ...s, socket: null, connected: false }));
+          socketStore.update((s) => {
+            // Nur überschreiben, wenn dieser Socket noch der aktuelle ist
+            if (s.socket === socket) {
+              return { ...s, socket: null, connected: false };
+            }
+            return s;
+          });
 
           if (
             this.reconnect &&
@@ -167,12 +188,23 @@ class SocketService {
 
         socket.addEventListener("error", (error) => {
           this.clearAllTimers();
+          if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+          }
+          socketStore.update((s) => {
+            if (s.socket === socket) {
+              return { ...s, socket: null, connected: false };
+            }
+            return s;
+          });
           if (socket) {
-            socket.close();
+            try { socket.close(); } catch (_) {}
           }
         });
 
         socket.addEventListener("message", (message: any) => {
+          this.lastMessageTime = Date.now();
           try {
             let jsonData = JSON.parse(message.data);
             socketStore.update((state) => {
@@ -193,12 +225,24 @@ class SocketService {
                   newState.desiredState = jsonData.data as DesiredState;
                   break;
                 case ResponseDataType.modemLog:
-                  newState.modemLog = (jsonData.data as ModemLog).log;
+                  newState.modemLog = [
+                    ...newState.modemLog,
+                    ...(jsonData.data as ModemLog).log,
+                  ];
+                  if (newState.modemLog.length > 1000) {
+                    newState.modemLog = newState.modemLog.slice(-1000);
+                  }
                   break;
                 case ResponseDataType.mowerConsole:
                   const incomingLines = (jsonData.data as ConsoleResponseData)
                     .lines;
-                  newState.consoleLines = incomingLines;
+                  newState.consoleLines = [
+                    ...newState.consoleLines,
+                    ...incomingLines,
+                  ];
+                  if (newState.consoleLines.length > 1000) {
+                    newState.consoleLines = newState.consoleLines.slice(-1000);
+                  }
                   // MotorPlot-Daten separat sammeln (nicht von Terminal clearen)
                   motorPlotStore.update((existing) => [
                     ...existing,
@@ -393,6 +437,31 @@ class SocketService {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    if (this.livenessInterval != null) {
+      clearInterval(this.livenessInterval);
+      this.livenessInterval = null;
+    }
+  }
+
+  private startLivenessCheck(socket: WebSocket) {
+    this.lastMessageTime = Date.now();
+    if (this.livenessInterval) {
+      clearInterval(this.livenessInterval);
+      this.livenessInterval = null;
+    }
+    this.livenessInterval = setInterval(() => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        if (this.livenessInterval) {
+          clearInterval(this.livenessInterval);
+          this.livenessInterval = null;
+        }
+        return;
+      }
+      if (Date.now() - this.lastMessageTime > 45000) {
+        // Keine Nachricht in 45 Sekunden - Verbindung wahrscheinlich tot (z.B. ESP-Neustart)
+        try { socket.close(1000, "Liveness timeout"); } catch (_) {}
+      }
+    }, 15000);
   }
 
   private startHeartbeat(socket: WebSocket) {

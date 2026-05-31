@@ -22,9 +22,9 @@ void Router::loop()
 
 void Router::loopStuckRecovery()
 {
-  // Auch wenn sendCommand true ist (sendWithoutResponse hängt),
-  // müssen wir den Router zurücksetzen
-  if (!expectResponse && !sendCommand) return;
+  // Nur Befehle mit erwarteter Antwort (router.send) brauchen Recovery.
+  // sendWithoutResponse ist fire-and-forget und setzt expectResponse nicht.
+  if (!expectResponse) return;
 
   // expectResponseSince wird genau einmal pro Befehl gesetzt und nicht
   // durch neue Befehle oder eingehende Zeichen überschrieben.
