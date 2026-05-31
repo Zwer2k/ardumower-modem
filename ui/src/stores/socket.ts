@@ -406,6 +406,14 @@ class SocketService {
     this.sendMessage(req);
   }
 
+  sendMap(mapData: import("../model").MapSetData) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.setMap,
+      data: mapData,
+    };
+    this.sendMessage(req);
+  }
+
   disconnect() {
     this.reconnect = false;
     this.clearAllTimers();

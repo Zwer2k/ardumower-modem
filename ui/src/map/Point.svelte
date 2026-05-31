@@ -1,5 +1,9 @@
 <script lang="ts">
+  import { getContext, createEventDispatcher } from "svelte";
+  import { pointer } from "d3-selection";
   import type { Point } from "./model";
+
+  const dispatch = createEventDispatcher();
 
   export let value: Point;
   export let mapItemId: string = ""
@@ -11,14 +15,56 @@
   export let fill = "transparent";
   export let fillActive = "transparent";
   export let fillPassive = "transparent";
-  export let strokeWidth = 0.05;
-  export let r = 0.25;
+  export let strokeWidth = 0.035;
+  export let r = 0.18;
 
-  $: stroke = editItemId === null ? strokeChoose : mapItemId === editItemId ? strokeActive : strokePassive
-  $: fill = editItemId === null ? fillActive : mapItemId === editItemId ? fillActive : fillPassive
+  interface DragContext {
+    svg: SVGSVGElement;
+    contentGroup: SVGGElement;
+  }
+
+  const dragContext = getContext<DragContext>("map-drag");
+
+  let hovered = false;
+
+  $: stroke =
+    mapItemId === editItemId
+      ? strokeActive
+      : hovered
+        ? "blue"
+        : editItemId === null
+          ? strokeChoose
+          : strokePassive;
+  $: fill = editItemId === null ? fillActive : mapItemId === editItemId ? fillActive : fillPassive;
 
   function click() {
     editItemId = mapItemId
+  }
+
+  let isDragging = false;
+
+  function onMouseDown(event: MouseEvent) {
+    if (!dragContext) return;
+    event.stopPropagation();
+    editItemId = mapItemId;
+    isDragging = true;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !dragContext) return;
+      const [x, y] = pointer(e, dragContext.contentGroup);
+      value.x = x;
+      value.y = y;
+      dispatch("move");
+    };
+
+    const handleMouseUp = () => {
+      isDragging = false;
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
   }
 </script>
 
@@ -31,6 +77,10 @@
   stroke-width={strokeWidth}
   role="none"
   on:click={click}
+  on:mousedown={onMouseDown}
+  on:mouseenter={() => (hovered = true)}
+  on:mouseleave={() => (hovered = false)}
+  style="cursor: move;"
 >
   <title>test</title>
 </circle>

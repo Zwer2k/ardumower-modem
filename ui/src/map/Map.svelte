@@ -2,13 +2,17 @@
   import {
     Button,
     ButtonSet,
-    Checkbox,
     ComboBox,
     Slider,
     Row,
     Column,
     Grid,
   } from "carbon-components-svelte";
+  import IconEdit from "carbon-icons-svelte/lib/Edit.svelte";
+  import IconCopy from "carbon-icons-svelte/lib/Copy.svelte";
+  import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
+  import IconCut from "carbon-icons-svelte/lib/Cut.svelte";
+  import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import Canvas from "./Canvas.svelte";
   import Exclusion from "./Exclusion.svelte";
   import { pointsToEdges } from "./geometry";
@@ -26,6 +30,7 @@
   }
 
   let edit = false;
+  let wasEditing = false;
   let selectedId: string | null = null;
   let editItemId: string | null = null;
   let editItems: EditItem[] = [];
@@ -107,6 +112,53 @@
     }
   }
 
+  function onSplitClick() {
+    if (!editEdge || !editItemId) return;
+
+    const edgeMatch = editItemId.match(/^(.*)-edge-([0-9]+)$/);
+    if (!edgeMatch) return;
+
+    const prefix = edgeMatch[1];
+    const edgeIndex = parseInt(edgeMatch[2]);
+
+    function insertMidpoint(pts: Point[], idx: number) {
+      const begin = pts[idx];
+      const end = pts[(idx + 1) % pts.length];
+      const newPoint = { x: (begin.x + end.x) / 2, y: (begin.y + end.y) / 2 };
+      pts.splice(idx + 1, 0, newPoint);
+    }
+
+    if (prefix.includes("-perimeter")) {
+      const pts = $MapStore.map.perimeter.points;
+      if (edgeIndex >= pts.length) return;
+      insertMidpoint(pts, edgeIndex);
+      $MapStore.map.perimeter = $MapStore.map.perimeter;
+    } else if (prefix.includes("-exclusion-")) {
+      const exclMatch = prefix.match(/exclusion-([0-9]+)/);
+      if (!exclMatch) return;
+      const exclIndex = parseInt(exclMatch[1]);
+      const pts = $MapStore.map.exclusions[exclIndex].points;
+      if (edgeIndex >= pts.length) return;
+      insertMidpoint(pts, edgeIndex);
+      $MapStore.map.exclusions[exclIndex] = $MapStore.map.exclusions[exclIndex];
+    } else if (prefix.includes("-dockpoints")) {
+      const pts = $MapStore.map.dockpoints.points;
+      if (edgeIndex >= pts.length) return;
+      insertMidpoint(pts, edgeIndex);
+      $MapStore.map.dockpoints = $MapStore.map.dockpoints;
+    } else if (prefix.includes("-waypoints")) {
+      const pts = $MapStore.map.waypoints.points;
+      if (edgeIndex >= pts.length) return;
+      insertMidpoint(pts, edgeIndex);
+      $MapStore.map.waypoints = $MapStore.map.waypoints;
+    }
+
+    const newPointId = prefix + "-point-" + (edgeIndex + 1);
+    editItemId = newPointId;
+    selectedId = newPointId;
+    updateButtonAvailability();
+  }
+
   function omg(item: null | string) {
     if (item == uiEditId) return;
 
@@ -121,6 +173,20 @@
   }
 
   $: omg(editItemId);
+
+  // ─── Edit-Modus verlassen → Map an Backend senden ────────────────────────
+  $: if (!edit && wasEditing && $MapStore && $MapStore.map) {
+    wasEditing = false;
+    const m = $MapStore.map;
+    socketService.sendMap({
+      perimeter: m.perimeter.points,
+      exclusions: m.exclusions.map((e) => e.points),
+      dockpoints: m.dockpoints.points,
+      waypoints: m.waypoints.points,
+    });
+  } else if (edit) {
+    wasEditing = true;
+  }
 
   // ─── Goto ────────────────────────────────────────────────────────────────
 
@@ -185,7 +251,13 @@
   <Grid class="map-toolbar">
     <Row>
       <Column sm={1} md={1} lg={1}>
-        <Checkbox bind:checked={edit} labelText="Editor" />
+        <Button
+          kind={edit ? "primary" : "secondary"}
+          size="small"
+          icon={IconEdit}
+          iconDescription="Editor"
+          on:click={() => (edit = !edit)}
+        />
       </Column>
       <Column>
         <ComboBox
@@ -198,18 +270,39 @@
           {shouldFilterItem}
         />
       </Column>
-      <Column>
-        <Button kind="tertiary" size="small" disabled={!editPoint}
-          >Duplicate</Button
-        >
-        <Button kind="tertiary" size="small" disabled={!editEdge}>Split</Button>
-        <Button kind="tertiary" size="small" disabled={!editEdge}>Cut</Button>
-        <Button
-          kind="danger"
-          size="small"
-          disabled={!edit || selectedId === null}
-          on:click={onDeleteClick}>Delete</Button
-        >
+      <Column style="flex-shrink: 0;">
+        <div class="action-btns">
+          <Button
+            kind="tertiary"
+            size="small"
+            disabled={!editPoint}
+            icon={IconCopy}
+            iconDescription="Duplicate"
+          />
+          <Button
+            kind="tertiary"
+            size="small"
+            disabled={!editEdge}
+            icon={IconSplit}
+            iconDescription="Split"
+            on:click={onSplitClick}
+          />
+          <Button
+            kind="tertiary"
+            size="small"
+            disabled={!editEdge}
+            icon={IconCut}
+            iconDescription="Cut"
+          />
+          <Button
+            kind="danger"
+            size="small"
+            disabled={!edit || selectedId === null}
+            on:click={onDeleteClick}
+            icon={IconTrashCan}
+            iconDescription="Delete"
+          />
+        </div>
       </Column>
       <Column>
         {#if targetSet}
@@ -355,5 +448,22 @@
     font-style: italic;
   }
 
+  :global(.map-toolbar .bx--row) {
+    flex-wrap: nowrap;
+  }
+  :global(.map-toolbar .bx--list-box) {
+    height: 32px;
+    max-height: 32px;
+  }
+  :global(.map-toolbar .bx--list-box__field) {
+    height: 32px;
+  }
+  :global(.map-toolbar .bx--list-box__menu) {
+    top: 32px;
+  }
 
+  .action-btns {
+    display: flex;
+    flex-wrap: nowrap;
+  }
 </style>

@@ -26,7 +26,8 @@
       mapItemId={dockpointsId + "-point-" + index}
       bind:editItemId
       strokeChoose="orange"
-      r={0.15}
+      r={0.11}
+      on:move={() => value = value}
     />
   {/each}
   {#each pointsToEdges(value.points) as edge, index}

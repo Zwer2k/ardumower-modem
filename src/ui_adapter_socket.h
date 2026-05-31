@@ -29,6 +29,7 @@ namespace ArduMower
         requestLogExport,
         joystickMove,
         navigateTo,
+        setMap,
         requestDataTypeLength
       };
 
@@ -119,6 +120,7 @@ namespace ArduMower
         void navigateTo(float x, float y);
         void requestStats();
         void sendBufferedLogTo(UiSocketItem* item);
+        void setMap(const ArduMower::Domain::Robot::MowerMap &map);
 #ifdef MOWER_TERMINAL
         void sendBufferedTerminalTo(UiSocketItem* item);
 #endif

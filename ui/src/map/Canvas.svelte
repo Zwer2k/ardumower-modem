@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, setContext } from "svelte";
   import { zoom } from "d3-zoom";
   import { select, pointer } from "d3-selection";
 
@@ -16,6 +16,11 @@
   let svg: SVGSVGElement;
   let g: SVGGElement;
   let contentGroup: SVGGElement;
+
+  setContext("map-drag", {
+    get svg() { return svg; },
+    get contentGroup() { return contentGroup; }
+  });
 
   onMount(() => {
     if (svg && g) {

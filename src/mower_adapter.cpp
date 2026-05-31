@@ -16,6 +16,23 @@ void processCSVResponse(String res, std::function<void(int, String)> fn);
 MowerAdapter::MowerAdapter(Settings::Settings &_settings, Router &_router)
     : settings(_settings), router(_router), sendIsInitialized(false) {}
 
+void MowerAdapter::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
+  // Warte kurz, bis kein Lesevorgang auf _map läuft (max 100ms)
+  int waitCount = 0;
+  while (_map.isReading() && waitCount < 10) {
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    waitCount++;
+  }
+  if (_map.isReading()) {
+    Log(WARN, "%ssetMap: Map-Lesevorgang läuft noch, ignoriere", _LOG_);
+    return;
+  }
+  _map = map;
+  _map.timestamp = millis();
+  Log(INFO, "%ssetMap: perimeter=%d exclusions=%d dockpoints=%d waypoints=%d",
+      _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size());
+}
+
 void MowerAdapter::begin()
 {
   enc.setOn(settings.general.encryption);

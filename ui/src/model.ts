@@ -300,6 +300,7 @@ export enum RequestDataType {
   requestLogExport,
   joystickMove,
   navigateTo,
+  setMap,
 }
 
 export interface NavigateToData {
@@ -320,7 +321,14 @@ export interface JoystickMoveData {
   angular: number;
 }
 
+export interface MapSetData {
+  perimeter: { x: number; y: number }[];
+  exclusions: { x: number; y: number }[][];
+  dockpoints: { x: number; y: number }[];
+  waypoints: { x: number; y: number }[];
+}
+
 export interface RequestSocketMessage {
   type: RequestDataType;
-  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData | NavigateToData;
+  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData | NavigateToData | MapSetData;
 }

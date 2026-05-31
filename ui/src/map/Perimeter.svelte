@@ -14,7 +14,7 @@
 <polygon
   fill="green"
   stroke="red"
-  stroke-width="0.05"
+  stroke-width="0.025"
   points={pointsForPolygon(value.points)}
 />
 
@@ -24,6 +24,7 @@
       value={point}
       mapItemId={perimiterId + "-point-" + index}
       bind:editItemId
+      on:move={() => value = value}
     />
   {/each}
   {#each pointsToEdges(value.points) as edge, index}
@@ -31,6 +32,7 @@
       value={edge}
       mapItemId={perimiterId + "-edge-" + index}
       bind:editItemId
+      strokeWidth={0.05}
     />
   {/each}
 {/if}

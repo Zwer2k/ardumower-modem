@@ -86,6 +86,7 @@ namespace ArduMower
       virtual bool customCmd(String cmd);
       virtual void drainRx(String line, bool &stop) override;
       virtual void drainTx(String line, bool &stop) override;
+      virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map);
     };
   }
 }

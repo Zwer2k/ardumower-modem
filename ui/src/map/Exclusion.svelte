@@ -23,6 +23,7 @@
       value={point}
       mapItemId={exclusionId + "-point-" + index}
       bind:editItemId
+      on:move={() => value = value}
     />
   {/each}
   {#each pointsToEdges(value.points) as edge, index}

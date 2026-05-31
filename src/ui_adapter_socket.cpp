@@ -126,6 +126,34 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     }
     break;
 
+  case RequestDataType::setMap:
+    {
+      using namespace ArduMower::Domain::Robot;
+      MowerMap map;
+      JsonArray perimeter = jsonData["perimeter"];
+      for (JsonObject p : perimeter) {
+        map.perimeter.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+      }
+      JsonArray exclusions = jsonData["exclusions"];
+      for (JsonArray ex : exclusions) {
+        std::vector<MapPoint> excl;
+        for (JsonObject p : ex) {
+          excl.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+        }
+        map.exclusions.push_back(excl);
+      }
+      JsonArray dockpoints = jsonData["dockpoints"];
+      for (JsonObject p : dockpoints) {
+        map.dockpoints.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+      }
+      JsonArray waypoints = jsonData["waypoints"];
+      for (JsonObject p : waypoints) {
+        map.waypoints.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+      }
+      _socketHandler->setMap(map);
+    }
+    break;
+
   default:
     break;
   }
@@ -665,6 +693,10 @@ void UiSocketHandler::joystickMove(float linear, float angular) {
 void UiSocketHandler::navigateTo(float x, float y) {
   _cmd.navigateTo(x, y);
   Log(DBG, "%s navigateTo(%.2f, %.2f)", _LOG_, x, y);
+}
+
+void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
+  _source.setMap(map);
 }
 
 void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item)

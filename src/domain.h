@@ -283,6 +283,7 @@ namespace ArduMower
         virtual UbxResponse *ubxResponseP() = 0;
 
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
+        virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map) = 0;
       };
 
       class CommandExecutor
