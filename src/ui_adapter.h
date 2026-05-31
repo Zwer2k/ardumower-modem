@@ -7,10 +7,6 @@
 #include "domain.h"
 #include "http_common.h"
 #include "settings.h"
-#if __has_include("ticker.h")
-#include <ticker.h>
-extern Ticker deferred;
-#endif
 
 namespace ArduMower
 {
@@ -39,6 +35,7 @@ namespace ArduMower
         ArduMower::Domain::Robot::StateSource &_source;
         ArduMower::Domain::Robot::CommandExecutor &_cmd;
         AsyncCallbackJsonWebHandler *_settingsHandler;
+        uint32_t _restartAt = 0;
 
         void handleRequest(AsyncWebServerRequest *request);
         bool servePath(AsyncWebServerRequest *request, const String &path);
@@ -51,7 +48,6 @@ namespace ArduMower
         void handleApiResetModemBluetoothPairings(AsyncWebServerRequest *request);
         void handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVariant &json);
 
-        static void delayedRestart(UiAdapter* instancePtr);
       };
     }
   }

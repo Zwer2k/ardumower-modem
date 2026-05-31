@@ -65,10 +65,23 @@
 
     $: { dbgLevel = dbgLevels[logLevelIndex].id; }
 
-    function getExportUrl(): string {
-        const proto = window.location.protocol;
-        const host = window.location.host;
-        return `${proto}//${host}/api/log/export`;
+    function downloadLog() {
+        const header = "nr,level,freeHeap,text\r\n";
+        let csv = header;
+        for (const line of items) {
+            let text = line.text.replace(/"/g, '""').replace(/\r\n/g, " ").replace(/\r/g, " ").replace(/\n/g, " ");
+            csv += `${line.nr},${line.level},${line.freeHeap},"${text}"\r\n`;
+        }
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const now = new Date().toISOString().replace(/[:.]/g, "-");
+        a.href = url;
+        a.download = `ardumower-log-${now}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
 </script>
@@ -86,9 +99,9 @@
             labelA={""}
             labelB={""}
             bind:toggled={autoscroll}/>
-        <a class="export-link" href={getExportUrl()} target="_blank">
-            Export CSV
-        </a>
+        <button class="export-link" on:click={downloadLog}>
+            Download log
+        </button>
     </div>
     <div class="log-list">
         <VirtualList {items}
@@ -204,6 +217,7 @@
         height: 32px;
         padding: 0 12px;
         margin-left: 10px;
+        font-family: inherit;
         font-size: .875rem;
         font-weight: 400;
         line-height: 1.125rem;

@@ -24,6 +24,7 @@ class LogToUi {
         bool hasData();
         void marshal(const JsonObject &o);
         void exportAll(String &csv);
+        uint16_t marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t maxLines);
         uint32_t timestamp = 0;
 
     private:

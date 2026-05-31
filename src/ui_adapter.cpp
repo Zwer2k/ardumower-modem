@@ -4,15 +4,8 @@
 #include "settings.h"
 #include "json.h"
 #include <ArduinoJson.h>
-#if __has_include("ticker.h")
-#include <ticker.h>
-#endif
 
 using namespace ArduMower::Modem::Http;
-
-#if __has_include("ticker.h")
-Ticker deferred;
-#endif
 
 UiAdapter::UiAdapter(Api::Api &api,
                      Settings::Settings &settings,
@@ -53,6 +46,11 @@ void UiAdapter::begin()
 
 void UiAdapter::loop()
 {
+  if (_restartAt != 0 && millis() >= _restartAt)
+  {
+    _restartAt = 0;
+    ESP.restart();
+  }
 }
 
 bool UiAdapter::servePath(AsyncWebServerRequest *request, const String &path)
@@ -177,23 +175,14 @@ void UiAdapter::handleApiPostModemSettings(AsyncWebServerRequest *request, JsonV
     return;
   }
 
-  _settings = uploaded;
+  DynamicJsonDocument doc(1024);
+  uploaded.marshal(doc.to<JsonObject>());
+  String body;
+  serializeJson(doc, body);
 
-  AsyncResponseStream *response = request->beginResponseStream("application/json");
-  DynamicJsonDocument doc(2048);
-  const JsonObject &root = doc.to<JsonObject>();
-  uploaded.marshal(root);
-  uploaded.stripSecrets(root);
-  serializeJson(doc, *response);
+  request->send(200, "application/json", body);
 
-  request->send(response);
-
-  #if __has_include("ticker.h")
-    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
-  #else
-    delay(500);
-    _api.os.restart();
-  #endif
+  _restartAt = millis() + 1000;
 }
 
 void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
@@ -208,20 +197,13 @@ void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
     return;
   }
 
-  _settings = replace;
-
-  AsyncResponseStream *response = request->beginResponseStream("application/json");
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(1024);
   replace.marshal(doc.to<JsonObject>());
-  serializeJson(doc, *response);
-  request->send(response);
+  String body;
+  serializeJson(doc, body);
+  request->send(200, "application/json", body);
 
-  #if __has_include("ticker.h")
-    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
-  #else
-    delay(500);
-    _api.os.restart();
-  #endif
+  _restartAt = millis() + 1000;
 }
 
 void UiAdapter::handleApiGetRobotDesiredState(AsyncWebServerRequest *request)
@@ -242,12 +224,7 @@ void UiAdapter::handleApiResetModemBluetoothPairings(AsyncWebServerRequest *requ
   _api.ble->clearPairings();
   request->send(200, "application/json", "{\"result\":\"ok\"}");
 
-  #if __has_include("ticker.h")
-    deferred.once_ms(500, &UiAdapter::delayedRestart, this);
-  #else
-    delay(500);
-    _api.os.restart();
-  #endif
+  _restartAt = millis() + 1000;
 }
 
 void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVariant &json)
@@ -299,7 +276,3 @@ void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVa
   request->send(response);
 }
 
-void UiAdapter::delayedRestart(UiAdapter* instancePtr)
-{
-  instancePtr->_api.os.restart();
-}
