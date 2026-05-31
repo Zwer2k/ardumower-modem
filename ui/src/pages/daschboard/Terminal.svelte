@@ -87,6 +87,19 @@
       }
     }
 
+    function downloadLog(): void {
+      const lines = output.map(l => l.text).join('\n');
+      const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ardumower-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     export function setFous(el: HTMLElement){
         el.focus()
     }
@@ -125,6 +138,9 @@
           labelB={""}
           bind:toggled={autoscroll}
         />
+        <button class="download-btn" onclick={downloadLog} title="Download log as text file">
+          Download Log
+        </button>
       </div>
     </div>
       </div>
@@ -231,6 +247,23 @@
 
     .console-line .text {
   line-break: anywhere;
+}
+
+.download-btn {
+  background: #2a2a2a;
+  color: #ccc;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.download-btn:hover {
+  background: #3a3a3a;
+  color: #fff;
+  border-color: #666;
 }
 
 /* Carbon Toggle vertical alignment fix */
