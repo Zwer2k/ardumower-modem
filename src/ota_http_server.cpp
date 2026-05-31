@@ -309,26 +309,17 @@ Http::MowerUploadSession::MowerUploadSession(HttpServer *server, String filename
 
 void Http::MowerUploadSession::respond(AsyncWebServerRequest *request)
 {
-
   auto res = new AsyncJsonResponse();
   auto o = res->getRoot();
 
-  auto success = result == Result::SUCCESS || result == Result::FLASH_FILE;
+  bool success = (result == Result::SUCCESS || result == Result::FLASH_FILE);
 
-  // TODO unify with error handling from http_common.h
   o["success"] = success;
   o["result"] = resultToString(result);
-
-  if (success)
-    o["md5"] = Update.md5String();
 
   Log(INFO, "Ota::Http::MowerUploadSession::respond(%d / %s)", (int)result, resultToString(result));
   res->setLength();
   request->send(res);
-  if (success)
-    _server->requestRestart();
-  else
-    Update.abort();
 }
 
 void Http::MowerUploadSession::handle(size_t index, uint8_t *data, size_t len, bool final)
