@@ -191,23 +191,38 @@ String MowerUpdater::handleFlash()
     uint32_t totalBytes = fsUploadFile.size();
     uint32_t bytesWritten = 0;
 
-    // Helper function to write a block
+    // Helper function to write a block with retries
     auto writeBlock = [&](uint8_t* data, size_t size) -> String {
-      if (!firmwareWriter.sendCommand(STM32WR, 2000)) {
-        Log(ERR, "Failed to send write command at address 0x%x", currentAddress);
-        return "error-write-command";
-      }
-      yield();
+      static const int MAX_RETRIES = 3;
+      for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        if (attempt > 0) {
+          Log(WARN, "Retry block at 0x%x (attempt %d/%d)", currentAddress, attempt + 1, MAX_RETRIES);
+          delay(50);
+          yield();
+        }
 
-      if (!firmwareWriter.sendAddress(currentAddress, 1000)) {
-        Log(ERR, "Failed to send address 0x%x", currentAddress);
-        return "error-write-address";
-      }
-      yield();
+        if (!firmwareWriter.sendCommand(STM32WR, 2000)) {
+          if (attempt < MAX_RETRIES - 1) continue;
+          Log(ERR, "Failed to send write command at address 0x%x", currentAddress);
+          return "error-write-command";
+        }
+        yield();
 
-      if (!firmwareWriter.sendDataBlock(data, size, 2000)) {
-        Log(ERR, "Failed to send data block at address 0x%x", currentAddress);
-        return "error-write-data";
+        if (!firmwareWriter.sendAddress(currentAddress, 1000)) {
+          if (attempt < MAX_RETRIES - 1) continue;
+          Log(ERR, "Failed to send address 0x%x", currentAddress);
+          return "error-write-address";
+        }
+        yield();
+
+        if (!firmwareWriter.sendDataBlock(data, size, 2000)) {
+          if (attempt < MAX_RETRIES - 1) continue;
+          Log(ERR, "Failed to send data block at address 0x%x", currentAddress);
+          return "error-write-data";
+        }
+
+        // All steps succeeded
+        break;
       }
 
       currentAddress += size;
