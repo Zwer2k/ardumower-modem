@@ -40,6 +40,8 @@
 
   // ─── Draw mode ───────────────────────────────────────────────────────────
   let drawActive = false;
+  let drawArea: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints' | null = null;
+  let drawExclusionIndex: number | undefined = undefined;
   let drawCandidates: Array<{
     area: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints';
     exclusionIndex?: number;
@@ -87,7 +89,6 @@
     const idxB = copy.indexOf(b);
     if (idxA === -1 || idxB === -1) return copy;
 
-    // Wrap-around: a ist letzter, b ist erster (oder umgekehrt)
     if (idxA === copy.length - 1 && idxB === 0) {
       copy.push(pt);
     } else if (idxB === copy.length - 1 && idxA === 0) {
@@ -290,31 +291,58 @@
     return best;
   }
 
-  function currentFloatingCandidates() {
-    return drawCandidates.filter(c => c.begin === floatingPoint || c.end === floatingPoint);
+  function currentFloatingCandidates(ref: Point) {
+    return drawCandidates.filter(c => c.begin === ref || c.end === ref);
+  }
+
+  function moveFloatingPoint(x: number, y: number) {
+    if (!floatingPoint) return;
+    const oldPt = floatingPoint;
+    const newPt = { x, y };
+
+    // 1. Im Array ersetzen
+    const current = currentFloatingCandidates(oldPt)[0];
+    if (current) {
+      const pts = [...getPoints(current.area, current.exclusionIndex)];
+      const idx = pts.indexOf(oldPt);
+      if (idx !== -1) pts[idx] = newPt;
+      setPoints(pts, current.area, current.exclusionIndex);
+    }
+
+    // 2. drawCandidates aktualisieren
+    drawCandidates = drawCandidates.map(c => ({
+      area: c.area,
+      exclusionIndex: c.exclusionIndex,
+      begin: c.begin === oldPt ? newPt : c.begin,
+      end: c.end === oldPt ? newPt : c.end,
+    }));
+
+    // 3. floatingPoint aktualisieren
+    floatingPoint = newPt;
   }
 
   function switchToCandidate(candidate: typeof drawCandidates[0]) {
     if (!floatingPoint) return;
+    const oldPt = floatingPoint;
 
     // 1. floatingPoint aus seinem aktuellen Array entfernen
-    const current = currentFloatingCandidates()[0];
+    const current = currentFloatingCandidates(oldPt)[0];
     if (current) {
-      const srcPts = removePoint(getPoints(current.area, current.exclusionIndex), floatingPoint);
+      const srcPts = removePoint(getPoints(current.area, current.exclusionIndex), oldPt);
       setPoints(srcPts, current.area, current.exclusionIndex);
     }
 
     // 2. floatingPoint in die neue Kante einfügen
     const { area, exclusionIndex, begin, end } = candidate;
-    const tgtPts = insertBetween(getPoints(area, exclusionIndex), begin, end, floatingPoint);
+    const tgtPts = insertBetween(getPoints(area, exclusionIndex), begin, end, oldPt);
     setPoints(tgtPts, area, exclusionIndex);
 
     // 3. drawCandidates aktualisieren
-    const oldOnes = currentFloatingCandidates();
+    const oldOnes = currentFloatingCandidates(oldPt);
     drawCandidates = [
       ...drawCandidates.filter(c => c !== candidate && !oldOnes.includes(c)),
-      { area, exclusionIndex, begin, end: floatingPoint },
-      { area, exclusionIndex, begin: floatingPoint, end }
+      { area, exclusionIndex, begin: candidate.begin, end: oldPt },
+      { area, exclusionIndex, begin: oldPt, end: candidate.end }
     ];
   }
 
@@ -328,8 +356,7 @@
     const { area, exclusionIndex, begin, end } = best;
     const oldFloating = floatingPoint;
 
-    // 1. floatingPoint fixieren (ist schon an x,y durch onMouseMove)
-    // 2. Neuer floatingPoint in die Mitte der besten Kante
+    // Neuer floatingPoint in die Mitte der besten Kante
     const newFloating = {
       x: (begin.x + end.x) / 2,
       y: (begin.y + end.y) / 2,
@@ -346,28 +373,107 @@
     floatingPoint = newFloating;
   }
 
+  function orient(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number {
+    return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+  }
+
+  function segmentsIntersect(a1: Point, a2: Point, b1: Point, b2: Point): boolean {
+    const EPS = 1e-9;
+    const o1 = orient(a1.x, a1.y, a2.x, a2.y, b1.x, b1.y);
+    const o2 = orient(a1.x, a1.y, a2.x, a2.y, b2.x, b2.y);
+    const o3 = orient(b1.x, b1.y, b2.x, b2.y, a1.x, a1.y);
+    const o4 = orient(b1.x, b1.y, b2.x, b2.y, a2.x, a2.y);
+
+    // Kollinearer Fall ignorieren
+    if (Math.abs(o1) < EPS && Math.abs(o2) < EPS && Math.abs(o3) < EPS && Math.abs(o4) < EPS) {
+      return false;
+    }
+
+    const straddle1 = (o1 > EPS && o2 < -EPS) || (o1 < -EPS && o2 > EPS);
+    const straddle2 = (o3 > EPS && o4 < -EPS) || (o3 < -EPS && o4 > EPS);
+
+    return straddle1 && straddle2;
+  }
+
+  function edgesFromPoints(pts: Point[], closed: boolean): Array<{begin: Point, end: Point}> {
+    const edges = [];
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      if (!closed && j === 0) break;
+      edges.push({ begin: pts[i], end: pts[j] });
+    }
+    return edges;
+  }
+
+  function findCrossedCandidate(x: number, y: number): typeof drawCandidates[0] | null {
+    if (!floatingPoint) return null;
+
+    const current = currentFloatingCandidates(floatingPoint);
+    if (!current.length) return null;
+
+    // Temporär die Mausposition setzen
+    const oldPt = floatingPoint;
+    const probe = { x, y };
+    floatingPoint = probe;
+
+    // Aktualisiere drawCandidates mit dem Probe-Punkt
+    drawCandidates = drawCandidates.map(c => ({
+      area: c.area,
+      exclusionIndex: c.exclusionIndex,
+      begin: c.begin === oldPt ? probe : c.begin,
+      end: c.end === oldPt ? probe : c.end,
+    }));
+
+    const { area, exclusionIndex } = current[0];
+    const pts = getPoints(area, exclusionIndex);
+    const isClosed = area === 'perimeter' || area === 'exclusion';
+    const allEdges = edgesFromPoints(pts, isClosed);
+
+    let crossed: typeof drawCandidates[0] | null = null;
+
+    for (const c of current) {
+      const neighbor = c.begin === probe ? c.end : c.begin;
+      for (const other of allEdges) {
+        // Eigene Kante ignorieren
+        if (other.begin === neighbor || other.end === neighbor) continue;
+        if (other.begin === probe || other.end === probe) continue;
+
+        if (segmentsIntersect(probe, neighbor, other.begin, other.end)) {
+          // Prüfe ob in drawCandidates, sonst neu erstellen
+          const inCandidates = drawCandidates.find(dc =>
+            (dc.begin === other.begin && dc.end === other.end) ||
+            (dc.begin === other.end && dc.end === other.begin)
+          );
+          crossed = inCandidates || { area, exclusionIndex, begin: other.begin, end: other.end };
+          break;
+        }
+      }
+      if (crossed) break;
+    }
+
+    // Wiederherstellen
+    floatingPoint = oldPt;
+    drawCandidates = drawCandidates.map(c => ({
+      area: c.area,
+      exclusionIndex: c.exclusionIndex,
+      begin: c.begin === probe ? oldPt : c.begin,
+      end: c.end === probe ? oldPt : c.end,
+    }));
+
+    return crossed;
+  }
+
   function onMouseMove(event: CustomEvent<{ x: number; y: number }>) {
     if (!drawActive || !floatingPoint) return;
     const { x, y } = event.detail;
 
-    floatingPoint.x = x;
-    floatingPoint.y = y;
-
-    const best = findBestCandidate(x, y);
-    if (!best) return;
-
-    const onCurrent = currentFloatingCandidates().some(c => c === best);
-
-    if (!onCurrent) {
-      switchToCandidate(best);
+    const crossed = findCrossedCandidate(x, y);
+    if (crossed) {
+      switchToCandidate(crossed);
     }
 
-    // Array kopieren, um Svelte-Reactivity zu triggern
-    const current = currentFloatingCandidates()[0];
-    if (current) {
-      const pts = [...getPoints(current.area, current.exclusionIndex)];
-      setPoints(pts, current.area, current.exclusionIndex);
-    }
+    moveFloatingPoint(x, y);
   }
 
   function omg(item: null | string) {
