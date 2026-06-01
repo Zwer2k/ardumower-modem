@@ -13,6 +13,7 @@
   import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
   import IconCut from "carbon-icons-svelte/lib/Cut.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
+  import { onMount } from "svelte";
   import Canvas from "./Canvas.svelte";
   import Exclusion from "./Exclusion.svelte";
   import { pointsToEdges } from "./geometry";
@@ -222,11 +223,35 @@
     updateButtonAvailability();
   }
 
+  function stopDraw() {
+    if (!drawActive) return;
+    if (floatingPoint && drawArea) {
+      const pts = removePoint(getPoints(drawArea, drawExclusionIndex), floatingPoint);
+      setPoints(pts, drawArea, drawExclusionIndex);
+    }
+    drawActive = false;
+    drawArea = null;
+    drawExclusionIndex = undefined;
+    drawCandidates = [];
+    floatingPoint = null;
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    if (event.key === "Escape" && drawActive) {
+      stopDraw();
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  });
+
   function onDrawClick() {
     if (drawActive) {
-      drawActive = false;
-      drawCandidates = [];
-      floatingPoint = null;
+      stopDraw();
       return;
     }
 
@@ -267,6 +292,8 @@
     setPoints(newPts, area, exclusionIndex);
 
     drawActive = true;
+    drawArea = area;
+    drawExclusionIndex = exclusionIndex;
     floatingPoint = midPoint;
     drawCandidates = [
       { area, exclusionIndex, begin, end: midPoint },
@@ -296,20 +323,19 @@
   }
 
   function moveFloatingPoint(x: number, y: number) {
-    if (!floatingPoint) return;
+    if (!floatingPoint || !drawArea) return;
     const oldPt = floatingPoint;
     const newPt = { x, y };
 
-    // 1. Im Array ersetzen
-    const current = currentFloatingCandidates(oldPt)[0];
-    if (current) {
-      const pts = [...getPoints(current.area, current.exclusionIndex)];
-      const idx = pts.indexOf(oldPt);
-      if (idx !== -1) pts[idx] = newPt;
-      setPoints(pts, current.area, current.exclusionIndex);
+    // Im Array ersetzen (verwende drawArea, nicht drawCandidates)
+    const pts = [...getPoints(drawArea, drawExclusionIndex)];
+    const idx = pts.indexOf(oldPt);
+    if (idx !== -1) {
+      pts[idx] = newPt;
+      setPoints(pts, drawArea, drawExclusionIndex);
     }
 
-    // 2. drawCandidates aktualisieren
+    // drawCandidates aktualisieren
     drawCandidates = drawCandidates.map(c => ({
       area: c.area,
       exclusionIndex: c.exclusionIndex,
@@ -317,28 +343,27 @@
       end: c.end === oldPt ? newPt : c.end,
     }));
 
-    // 3. floatingPoint aktualisieren
     floatingPoint = newPt;
   }
 
   function switchToCandidate(candidate: typeof drawCandidates[0]) {
-    if (!floatingPoint) return;
+    if (!floatingPoint || !drawArea) return;
     const oldPt = floatingPoint;
 
-    // 1. floatingPoint aus seinem aktuellen Array entfernen
-    const current = currentFloatingCandidates(oldPt)[0];
-    if (current) {
-      const srcPts = removePoint(getPoints(current.area, current.exclusionIndex), oldPt);
-      setPoints(srcPts, current.area, current.exclusionIndex);
-    }
+    // 1. floatingPoint aus dem alten Array entfernen
+    const srcPts = removePoint(getPoints(drawArea, drawExclusionIndex), oldPt);
+    setPoints(srcPts, drawArea, drawExclusionIndex);
 
     // 2. floatingPoint in die neue Kante einfügen
     const { area, exclusionIndex, begin, end } = candidate;
     const tgtPts = insertBetween(getPoints(area, exclusionIndex), begin, end, oldPt);
     setPoints(tgtPts, area, exclusionIndex);
 
-    // 3. drawCandidates aktualisieren
-    const oldOnes = currentFloatingCandidates(oldPt);
+    // 3. State aktualisieren
+    drawArea = area;
+    drawExclusionIndex = exclusionIndex;
+
+    const oldOnes = drawCandidates.filter(c => c.begin === oldPt || c.end === oldPt);
     drawCandidates = [
       ...drawCandidates.filter(c => c !== candidate && !oldOnes.includes(c)),
       { area, exclusionIndex, begin: candidate.begin, end: oldPt },
@@ -365,6 +390,8 @@
     const pts = insertBetween(getPoints(area, exclusionIndex), begin, end, newFloating);
     setPoints(pts, area, exclusionIndex);
 
+    drawArea = area;
+    drawExclusionIndex = exclusionIndex;
     drawCandidates = [
       ...drawCandidates.filter(c => c !== best && c.begin !== oldFloating && c.end !== oldFloating),
       { area, exclusionIndex, begin, end: newFloating },
@@ -407,59 +434,38 @@
   }
 
   function findCrossedCandidate(x: number, y: number): typeof drawCandidates[0] | null {
-    if (!floatingPoint) return null;
+    if (!floatingPoint || !drawArea) return null;
 
-    const current = currentFloatingCandidates(floatingPoint);
-    if (!current.length) return null;
-
-    // Temporär die Mausposition setzen
     const oldPt = floatingPoint;
-    const probe = { x, y };
-    floatingPoint = probe;
-
-    // Aktualisiere drawCandidates mit dem Probe-Punkt
-    drawCandidates = drawCandidates.map(c => ({
-      area: c.area,
-      exclusionIndex: c.exclusionIndex,
-      begin: c.begin === oldPt ? probe : c.begin,
-      end: c.end === oldPt ? probe : c.end,
-    }));
-
-    const { area, exclusionIndex } = current[0];
-    const pts = getPoints(area, exclusionIndex);
-    const isClosed = area === 'perimeter' || area === 'exclusion';
+    const pts = getPoints(drawArea, drawExclusionIndex);
+    const isClosed = drawArea === 'perimeter' || drawArea === 'exclusion';
     const allEdges = edgesFromPoints(pts, isClosed);
+
+    // Aktuelle Nachbarn finden
+    const currentNeighbors = drawCandidates
+      .filter(c => c.begin === oldPt || c.end === oldPt)
+      .map(c => c.begin === oldPt ? c.end : c.begin);
 
     let crossed: typeof drawCandidates[0] | null = null;
 
-    for (const c of current) {
-      const neighbor = c.begin === probe ? c.end : c.begin;
+    for (const neighbor of currentNeighbors) {
       for (const other of allEdges) {
-        // Eigene Kante ignorieren
+        // Eigene Kante ausschließen
         if (other.begin === neighbor || other.end === neighbor) continue;
-        if (other.begin === probe || other.end === probe) continue;
+        // Kanten mit oldPt als Endpunkt ausschließen
+        if (other.begin === oldPt || other.end === oldPt) continue;
 
-        if (segmentsIntersect(probe, neighbor, other.begin, other.end)) {
-          // Prüfe ob in drawCandidates, sonst neu erstellen
+        if (segmentsIntersect({ x, y }, neighbor, other.begin, other.end)) {
           const inCandidates = drawCandidates.find(dc =>
             (dc.begin === other.begin && dc.end === other.end) ||
             (dc.begin === other.end && dc.end === other.begin)
           );
-          crossed = inCandidates || { area, exclusionIndex, begin: other.begin, end: other.end };
+          crossed = inCandidates || { area: drawArea, exclusionIndex: drawExclusionIndex, begin: other.begin, end: other.end };
           break;
         }
       }
       if (crossed) break;
     }
-
-    // Wiederherstellen
-    floatingPoint = oldPt;
-    drawCandidates = drawCandidates.map(c => ({
-      area: c.area,
-      exclusionIndex: c.exclusionIndex,
-      begin: c.begin === probe ? oldPt : c.begin,
-      end: c.end === probe ? oldPt : c.end,
-    }));
 
     return crossed;
   }
@@ -578,11 +584,7 @@
           icon={IconEdit}
           iconDescription="Editor"
           on:click={() => {
-            if (drawActive) {
-              drawActive = false;
-              drawCandidates = [];
-              floatingPoint = null;
-            }
+            stopDraw();
             edit = !edit;
           }}
         />
