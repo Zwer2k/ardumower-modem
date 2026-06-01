@@ -9,7 +9,7 @@
     Grid,
   } from "carbon-components-svelte";
   import IconEdit from "carbon-icons-svelte/lib/Edit.svelte";
-  import IconCopy from "carbon-icons-svelte/lib/Copy.svelte";
+  import IconPen from "carbon-icons-svelte/lib/Pen.svelte";
   import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
   import IconCut from "carbon-icons-svelte/lib/Cut.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
@@ -37,6 +37,68 @@
 
   let editPoint = false;
   let editEdge = false;
+
+  // ─── Draw mode ───────────────────────────────────────────────────────────
+  let drawActive = false;
+  let drawCandidates: Array<{
+    area: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints';
+    exclusionIndex?: number;
+    begin: Point;
+    end: Point;
+  }> = [];
+  let floatingPoint: Point | null = null;
+
+  function getPoints(area: string, exclusionIndex?: number): Point[] {
+    if (area === 'perimeter') return $MapStore.map.perimeter.points;
+    if (area === 'exclusion') return $MapStore.map.exclusions[exclusionIndex!].points;
+    if (area === 'dockpoints') return $MapStore.map.dockpoints.points;
+    return $MapStore.map.waypoints.points;
+  }
+
+  function setPoints(points: Point[], area: string, exclusionIndex?: number) {
+    if (area === 'perimeter') {
+      $MapStore.map.perimeter.points = points;
+      $MapStore.map.perimeter = $MapStore.map.perimeter;
+    } else if (area === 'exclusion') {
+      $MapStore.map.exclusions[exclusionIndex!].points = points;
+      $MapStore.map.exclusions[exclusionIndex!] = $MapStore.map.exclusions[exclusionIndex!];
+    } else if (area === 'dockpoints') {
+      $MapStore.map.dockpoints.points = points;
+      $MapStore.map.dockpoints = $MapStore.map.dockpoints;
+    } else {
+      $MapStore.map.waypoints.points = points;
+      $MapStore.map.waypoints = $MapStore.map.waypoints;
+    }
+  }
+
+  function removePoint(pts: Point[], pt: Point): Point[] {
+    const idx = pts.indexOf(pt);
+    if (idx !== -1) {
+      const copy = [...pts];
+      copy.splice(idx, 1);
+      return copy;
+    }
+    return [...pts];
+  }
+
+  function insertBetween(pts: Point[], a: Point, b: Point, pt: Point): Point[] {
+    const copy = [...pts];
+    const idxA = copy.indexOf(a);
+    const idxB = copy.indexOf(b);
+    if (idxA === -1 || idxB === -1) return copy;
+
+    // Wrap-around: a ist letzter, b ist erster (oder umgekehrt)
+    if (idxA === copy.length - 1 && idxB === 0) {
+      copy.push(pt);
+    } else if (idxB === copy.length - 1 && idxA === 0) {
+      copy.push(pt);
+    } else if (idxB > idxA) {
+      copy.splice(idxA + 1, 0, pt);
+    } else {
+      copy.splice(idxB + 1, 0, pt);
+    }
+    return copy;
+  }
 
   const pointsToEditItem =
     (idPrefix: string, textPrefix: string) => (p: Point, index: number) => ({
@@ -159,6 +221,155 @@
     updateButtonAvailability();
   }
 
+  function onDrawClick() {
+    if (drawActive) {
+      drawActive = false;
+      drawCandidates = [];
+      floatingPoint = null;
+      return;
+    }
+
+    if (!editEdge || !editItemId) return;
+
+    const edgeMatch = editItemId.match(/^(.*)-edge-([0-9]+)$/);
+    if (!edgeMatch) return;
+
+    const prefix = edgeMatch[1];
+    const edgeIndex = parseInt(edgeMatch[2]);
+
+    let area: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints';
+    let exclusionIndex: number | undefined;
+
+    if (prefix.includes("-perimeter")) area = 'perimeter';
+    else if (prefix.includes("-exclusion-")) {
+      const exclMatch = prefix.match(/exclusion-([0-9]+)/);
+      if (!exclMatch) return;
+      exclusionIndex = parseInt(exclMatch[1]);
+      area = 'exclusion';
+    } else if (prefix.includes("-dockpoints")) area = 'dockpoints';
+    else if (prefix.includes("-waypoints")) area = 'waypoints';
+    else return;
+
+    const pts = getPoints(area, exclusionIndex);
+    const n = pts.length;
+    if (edgeIndex >= n) return;
+
+    const endIdx = (edgeIndex + 1) % n;
+    if (endIdx === 0 && area !== 'perimeter' && area !== 'exclusion') return;
+
+    const begin = pts[edgeIndex];
+    const end = pts[endIdx];
+    const midPoint = { x: (begin.x + end.x) / 2, y: (begin.y + end.y) / 2 };
+
+    const newPts = [...pts];
+    newPts.splice(edgeIndex + 1, 0, midPoint);
+    setPoints(newPts, area, exclusionIndex);
+
+    drawActive = true;
+    floatingPoint = midPoint;
+    drawCandidates = [
+      { area, exclusionIndex, begin, end: midPoint },
+      { area, exclusionIndex, begin: midPoint, end }
+    ];
+
+    const newPointId = prefix + "-point-" + (edgeIndex + 1);
+    editItemId = newPointId;
+    selectedId = newPointId;
+    updateButtonAvailability();
+  }
+
+  function findBestCandidate(x: number, y: number) {
+    let best: typeof drawCandidates[0] | null = null;
+    let bestDist = Infinity;
+    for (const c of drawCandidates) {
+      const mx = (c.begin.x + c.end.x) / 2;
+      const my = (c.begin.y + c.end.y) / 2;
+      const d = Math.hypot(x - mx, y - my);
+      if (d < bestDist) { bestDist = d; best = c; }
+    }
+    return best;
+  }
+
+  function currentFloatingCandidates() {
+    return drawCandidates.filter(c => c.begin === floatingPoint || c.end === floatingPoint);
+  }
+
+  function switchToCandidate(candidate: typeof drawCandidates[0]) {
+    if (!floatingPoint) return;
+
+    // 1. floatingPoint aus seinem aktuellen Array entfernen
+    const current = currentFloatingCandidates()[0];
+    if (current) {
+      const srcPts = removePoint(getPoints(current.area, current.exclusionIndex), floatingPoint);
+      setPoints(srcPts, current.area, current.exclusionIndex);
+    }
+
+    // 2. floatingPoint in die neue Kante einfügen
+    const { area, exclusionIndex, begin, end } = candidate;
+    const tgtPts = insertBetween(getPoints(area, exclusionIndex), begin, end, floatingPoint);
+    setPoints(tgtPts, area, exclusionIndex);
+
+    // 3. drawCandidates aktualisieren
+    const oldOnes = currentFloatingCandidates();
+    drawCandidates = [
+      ...drawCandidates.filter(c => c !== candidate && !oldOnes.includes(c)),
+      { area, exclusionIndex, begin, end: floatingPoint },
+      { area, exclusionIndex, begin: floatingPoint, end }
+    ];
+  }
+
+  function onDrawMapClick(event: CustomEvent<{ x: number; y: number }>) {
+    if (!drawActive || !floatingPoint || drawCandidates.length === 0) return;
+    const { x, y } = event.detail;
+
+    const best = findBestCandidate(x, y);
+    if (!best) return;
+
+    const { area, exclusionIndex, begin, end } = best;
+    const oldFloating = floatingPoint;
+
+    // 1. floatingPoint fixieren (ist schon an x,y durch onMouseMove)
+    // 2. Neuer floatingPoint in die Mitte der besten Kante
+    const newFloating = {
+      x: (begin.x + end.x) / 2,
+      y: (begin.y + end.y) / 2,
+    };
+
+    const pts = insertBetween(getPoints(area, exclusionIndex), begin, end, newFloating);
+    setPoints(pts, area, exclusionIndex);
+
+    drawCandidates = [
+      ...drawCandidates.filter(c => c !== best && c.begin !== oldFloating && c.end !== oldFloating),
+      { area, exclusionIndex, begin, end: newFloating },
+      { area, exclusionIndex, begin: newFloating, end }
+    ];
+    floatingPoint = newFloating;
+  }
+
+  function onMouseMove(event: CustomEvent<{ x: number; y: number }>) {
+    if (!drawActive || !floatingPoint) return;
+    const { x, y } = event.detail;
+
+    floatingPoint.x = x;
+    floatingPoint.y = y;
+
+    const best = findBestCandidate(x, y);
+    if (!best) return;
+
+    const onCurrent = currentFloatingCandidates().some(c => c === best);
+
+    if (!onCurrent) {
+      switchToCandidate(best);
+    }
+
+    // Array kopieren, um Svelte-Reactivity zu triggern
+    const current = currentFloatingCandidates()[0];
+    if (current) {
+      const pts = [...getPoints(current.area, current.exclusionIndex)];
+      setPoints(pts, current.area, current.exclusionIndex);
+    }
+  }
+
   function omg(item: null | string) {
     if (item == uiEditId) return;
 
@@ -210,6 +421,10 @@
   }
 
   function onMapClick(event: CustomEvent<{ x: number; y: number }>) {
+    if (drawActive) {
+      onDrawMapClick(event);
+      return;
+    }
     if (edit) return;
     const { x, y } = event.detail;
     // y from d3.pointer is in viewBox space, where positive=down.
@@ -256,7 +471,14 @@
           size="small"
           icon={IconEdit}
           iconDescription="Editor"
-          on:click={() => (edit = !edit)}
+          on:click={() => {
+            if (drawActive) {
+              drawActive = false;
+              drawCandidates = [];
+              floatingPoint = null;
+            }
+            edit = !edit;
+          }}
         />
       </Column>
       <Column>
@@ -273,11 +495,12 @@
       <Column style="flex-shrink: 0;">
         <div class="action-btns">
           <Button
-            kind="tertiary"
+            kind={drawActive ? "primary" : "tertiary"}
             size="small"
-            disabled={!editPoint}
-            icon={IconCopy}
-            iconDescription="Duplicate"
+            disabled={!editEdge}
+            icon={IconPen}
+            iconDescription="Draw"
+            on:click={onDrawClick}
           />
           <Button
             kind="tertiary"
@@ -322,7 +545,7 @@
     </Row>
   </Grid>
   <div class="map-canvas-wrapper">
-    <Canvas on:mapclick={onMapClick}>
+    <Canvas on:mapclick={onMapClick} on:mousemove={onMouseMove}>
       {#if $MapStore && $MapStore.map}
         <Perimeter
           value={$MapStore.map.perimeter}
@@ -351,6 +574,23 @@
           bind:editItemId
         />
         <MowerPosition position={mowerPos} />
+
+        {#if drawActive && floatingPoint}
+          {#each drawCandidates.filter(c => c.begin === floatingPoint || c.end === floatingPoint) as c}
+            {@const other = c.begin === floatingPoint ? c.end : c.begin}
+            <line
+              x1={floatingPoint.x}
+              y1={floatingPoint.y}
+              x2={other.x}
+              y2={other.y}
+              stroke="#e65100"
+              stroke-width="0.04"
+              stroke-dasharray="0.08, 0.08"
+              opacity="0.7"
+              pointer-events="none"
+            />
+          {/each}
+        {/if}
 
         {#if targetSet && targetPos}
           <circle

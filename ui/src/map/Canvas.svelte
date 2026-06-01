@@ -38,6 +38,12 @@
     const [x, y] = pointer(event, contentGroup);
     dispatch('mapclick', { x, y });
   }
+
+  function handleMouseMove(event: MouseEvent) {
+    if (!contentGroup || !svg) return;
+    const [x, y] = pointer(event, contentGroup);
+    dispatch('mousemove', { x, y });
+  }
 </script>
 
 <main>
@@ -49,6 +55,7 @@
     width="100%"
     height="100%"
     onclick={handleClick}
+    onmousemove={handleMouseMove}
   >
     <g bind:this={g}>
       <g bind:this={contentGroup} transform={transform($MapStore.presentation)}>
