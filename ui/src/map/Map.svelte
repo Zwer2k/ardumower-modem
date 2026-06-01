@@ -605,7 +605,7 @@
           <Button
             kind={drawActive ? "primary" : "tertiary"}
             size="small"
-            disabled={!editEdge}
+            disabled={!drawActive && !editEdge}
             icon={IconPen}
             iconDescription="Draw"
             on:click={onDrawClick}
@@ -628,7 +628,7 @@
           <Button
             kind="danger"
             size="small"
-            disabled={!edit || selectedId === null}
+            disabled={!edit || !editPoint}
             on:click={onDeleteClick}
             icon={IconTrashCan}
             iconDescription="Delete"
