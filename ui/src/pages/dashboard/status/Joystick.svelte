@@ -251,6 +251,7 @@
 </script>
 
 <div class="joystick-wrap">
+    <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
     <canvas
         bind:this={canvas}
         width={size}
@@ -261,7 +262,7 @@
         onpointermove={onPointerMove}
         onpointerup={onPointerUp}
         onpointercancel={onPointerCancel}
-        role="application"
+        role="img"
         aria-label="Joystick remote control"
     ></canvas>
     <div class="joystick-readout">

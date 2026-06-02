@@ -7,7 +7,7 @@
     import IconJoystick from "carbon-icons-svelte/lib/GameConsole.svelte";
 
     let open = $state(false);
-    let wrapperRef: HTMLDivElement | null = null;
+    let wrapperRef: HTMLDivElement | null = $state(null);
 
     function toggle() {
         open = !open;

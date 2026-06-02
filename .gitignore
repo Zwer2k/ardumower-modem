@@ -19,3 +19,5 @@ dependencies.lock
 *ci_script_executed.txt
 src/git_version.cpp
 src/asset_bundle.h
+src/git_version.cpp
+src/git_version.cpp

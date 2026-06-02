@@ -12,7 +12,7 @@
 
     let { desiredState = null }: { desiredState?: DesiredState | null } = $props();
 
-    let commandLog: { time: string; action: string; success: boolean; error?: string }[] = [];
+    let commandLog: { time: string; action: string; success: boolean; error?: string }[] = $state([]);
 
     function formatTime(): string {
         const now = new Date();
@@ -43,9 +43,11 @@
         }
     }
 
-    // ─── Slider values ──────────────────────────────────────────────────────
-    let speedVal = $state(desiredState?.speed ?? 0.2);
-    let fixTimeoutVal = $state(desiredState?.fix_timeout ?? 120);
+    // ─── Slider values (initialize from props once, then independent) ──────
+    let speedVal = $state(0.2);
+    let fixTimeoutVal = $state(120);
+    // svelte-ignore state_referenced_locally
+    if (desiredState) { speedVal = desiredState.speed ?? speedVal; fixTimeoutVal = desiredState.fix_timeout ?? fixTimeoutVal; }
     let mowHeightVal = $state(55);     // mm, typical range 30-85
     let wayPercVal = $state(100);      // %, typical range 0-200
 

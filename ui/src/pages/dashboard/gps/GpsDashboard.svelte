@@ -299,12 +299,6 @@
         border-bottom: 1px solid #eee;
     }
 
-    h4 {
-        margin: 0 0 8px 0;
-        font-size: 0.95em;
-        color: #333;
-    }
-
     .cn0-bars {
         display: flex;
         flex-direction: column;
@@ -489,58 +483,11 @@
         margin-bottom: 10px;
     }
 
-    .ubx-categories button {
-        padding: 4px 10px;
-        border: 1px solid #ccc;
-        background: #f4f4f4;
-        border-radius: 3px;
-        cursor: pointer;
-        font-size: 0.8em;
-    }
-
-    .ubx-categories button.active {
-        background: #006064;
-        color: white;
-        border-color: #006064;
-    }
-
     .ubx-command-row {
         display: flex;
         gap: 8px;
         align-items: center;
         margin-bottom: 6px;
-    }
-
-    .ubx-command-row select {
-        flex: 1;
-        padding: 6px 8px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 0.9em;
-    }
-
-    .ubx-command-row input {
-        flex: 1;
-        padding: 6px 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-family: monospace;
-        font-size: 0.9em;
-    }
-
-    .ubx-command-row button.send-btn {
-        padding: 6px 16px;
-        background: #006064;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.9em;
-    }
-
-    .ubx-command-row button.send-btn:disabled {
-        background: #aaa;
-        cursor: not-allowed;
     }
 
     .cmd-desc {
@@ -557,12 +504,6 @@
         margin-bottom: 10px;
     }
 
-    .parsed-response h5 {
-        margin: 0 0 6px 0;
-        font-size: 0.85em;
-        color: #333;
-    }
-
     .parsed-table-wrapper {
         overflow-x: auto;
     }
@@ -571,19 +512,6 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 0.8em;
-    }
-
-    .parsed-table th {
-        text-align: left;
-        padding: 4px 6px;
-        border-bottom: 1px solid #ddd;
-        background: #f4f4f4;
-        font-weight: 600;
-    }
-
-    .parsed-table td {
-        padding: 3px 6px;
-        border-bottom: 1px solid #eee;
     }
 
     .parsed-kv {
@@ -619,12 +547,6 @@
         overflow-y: auto;
     }
 
-    .ubx-history h5 {
-        margin: 0;
-        font-size: 0.85em;
-        color: #333;
-    }
-
     .ubx-entry {
         background: white;
         border: 1px solid #eee;
@@ -658,10 +580,6 @@
         font-weight: 400;
         cursor: pointer;
     }
-    .frames-toggle input {
-        cursor: pointer;
-    }
-
     .frame-card {
         background: white;
         border: 1px solid #ddd;
@@ -734,16 +652,6 @@
         color: #333;
         line-height: 1.4;
         overflow-x: auto;
-    }
-
-    .parsed-kv.compact {
-        padding: 6px 10px;
-        gap: 2px;
-    }
-
-    .parsed-kv.compact .kv-row {
-        padding: 2px 4px;
-        font-size: 0.8em;
     }
 
     .raw-section {
@@ -895,12 +803,6 @@
         font-size: 0.85em;
         font-family: monospace;
     }
-    .rtk-coord span {
-        font-weight: bold;
-        color: #006064;
-        width: 16px;
-        text-align: center;
-    }
     .rtk-details {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -991,10 +893,6 @@
         border-radius: 3px;
         font-size: 0.8em;
     }
-    .dgps-item span {
-        color: #888;
-    }
-
     /* ─── Status Card (NAV-STATUS) ─── */
     .status-card {
         padding: 10px;

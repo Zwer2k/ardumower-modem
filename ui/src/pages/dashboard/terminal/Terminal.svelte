@@ -164,9 +164,6 @@
       background-color: #1a1a1a;
       color: #eee;
       white-space: pre-wrap;
-      .autoscroll-toggle {
-        padding-top: 0 !important;
-      }
       position: relative;
 
       .list-holder {
@@ -183,9 +180,6 @@
       border-top: 1px solid #333;
       background-color: #1a1a1a;
     }
-    .terminal-input-center {
-      display: none;
-    }
     .autoscroll-label {
       color: #eee;
       font-size: 0.95em;
@@ -193,12 +187,6 @@
       display: flex;
       align-items: center;
       height: 100%;
-    }
-    .terminal-input-center {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
     }
     .terminal-input-actions {
       display: flex;
@@ -208,10 +196,6 @@
       margin-top: 0 !important;
       height: 40px;
       min-height: 40px;
-    }
-    .autoscroll-toggle {
-      margin-top: 0 !important;
-      align-self: center;
     }
     .autoscroll-label {
       color: #eee;

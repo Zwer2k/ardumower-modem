@@ -147,6 +147,7 @@ namespace ArduMower
         uint32_t lastVersionRequestTimestamp = 0;
         uint32_t oldDataTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastDataRequestTimestamp[ResponseDataType::responseDataTypeLength];
+        uint32_t lastSentTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastclientPing = 0;
         uint32_t _lastSentUbxTimestamp = 0;
         

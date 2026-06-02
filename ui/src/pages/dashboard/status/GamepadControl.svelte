@@ -314,28 +314,4 @@
         word-break: break-word;
     }
 
-    .gp-btn {
-        margin-top: 8px;
-        padding: 5px 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 0.8em;
-        cursor: pointer;
-        transition: background 0.15s;
-        white-space: nowrap;
-
-        &.connect {
-            background: #e8f5e9;
-            border-color: #4caf50;
-            color: #2e7d32;
-            &:hover { background: #c8e6c9; }
-        }
-
-        &.disconnect {
-            background: #ffebee;
-            border-color: #ef5350;
-            color: #c62828;
-            &:hover { background: #ffcdd2; }
-        }
-    }
 </style>

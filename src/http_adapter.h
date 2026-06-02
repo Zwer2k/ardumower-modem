@@ -72,6 +72,7 @@ namespace ArduMower
       std::list<Http::CommandRequest *> _queue;
       SemaphoreHandle_t _lock;
       uint32_t requestId;
+      uint32_t _restartAt = 0;
     
       void handleCommandRequest(AsyncWebServerRequest *request);
       void handleCommandRequestBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);

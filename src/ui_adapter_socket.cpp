@@ -211,6 +211,7 @@ UiSocketHandler::UiSocketHandler(
   for (int i=0; i < ResponseDataType::responseDataTypeLength; i++) {
     oldDataTimestamp[i] = 0;
     lastDataRequestTimestamp[i] = defaultStateUpdateInterval;
+    lastSentTimestamp[i] = 0;
   }
 
   _terminal.addRxHandler(std::bind(&UiSocketHandler::sendTerminalLine, this, std::placeholders::_1));
@@ -236,6 +237,7 @@ UiSocketHandler::UiSocketHandler(
   for (int i=0; i < ResponseDataType::responseDataTypeLength; i++) {
     oldDataTimestamp[i] = 0;
     lastDataRequestTimestamp[i] = defaultStateUpdateInterval;
+    lastSentTimestamp[i] = 0;
   }
 
   _mowerUpdater.addStatusHandler(std::bind(&UiSocketHandler::uploadStatusHandler, this, std::placeholders::_1));
@@ -516,7 +518,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 // Starte asynchronen Map-Chunk-Versand
 void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   auto map = _source.mowerMap();
-  if ((map.timestamp == 0) || (!force && (map.timestamp == oldDataTimestamp[ResponseDataType::map])) || mapChunkSendState.active) {
+  if (mapChunkSendState.active || (!force && (map.timestamp == 0 || map.timestamp == oldDataTimestamp[ResponseDataType::map]))) {
     return;
   }
   // Snapshot einmalig speichern - verhindert Race Condition waehrend Chunk-Versand
@@ -757,15 +759,37 @@ static String sanitizeUtf8(const String& input) {
 template<typename T>
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force)
 {
-  if ((data.timestamp == 0) || (!force && (data.timestamp == oldDataTimestamp[dataType]))) {
-    return;  
+  if (!force && (data.timestamp == 0 || data.timestamp == oldDataTimestamp[dataType])) {
+    return;
   }
-    
+
+  // Rate limit sends per data type (skip if sent too recently)
+  if (!force) {
+    uint32_t now = millis();
+    uint32_t minInterval = 0;
+    switch (dataType) {
+      case ResponseDataType::mowerState:     minInterval = 1000;  break;
+      case ResponseDataType::mowerStats:     minInterval = 5000;  break;
+      case ResponseDataType::desiredState:   minInterval = 2000;  break;
+      case ResponseDataType::sensorSummary:  minInterval = 1000;  break;
+      default:                               minInterval = 0;     break;
+    }
+    if (minInterval > 0 && (now - lastSentTimestamp[dataType]) < minInterval)
+      return;
+    lastSentTimestamp[dataType] = now;
+  }
+
   oldDataTimestamp[dataType] = data.timestamp;
   // Don't reset request timestamp for types with their own polling loop,
   // otherwise they would re-request immediately after sending data
-  if (dataType != ResponseDataType::gpsDetails && dataType != ResponseDataType::sensorSummary) {
-    lastDataRequestTimestamp[dataType] = 0;
+  switch (dataType) {
+    case ResponseDataType::mowerState:
+    case ResponseDataType::gpsDetails:
+    case ResponseDataType::sensorSummary:
+      break;
+    default:
+      lastDataRequestTimestamp[dataType] = 0;
+      break;
   }
 
   const size_t docSize = (dataType == ResponseDataType::gpsDetails || dataType == ResponseDataType::ubxResponse) ? 8192 : 4096;

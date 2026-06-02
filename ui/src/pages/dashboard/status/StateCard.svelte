@@ -76,13 +76,4 @@
         margin-right: 10px;
     }
 
-    .result-bar {
-        margin-top: 0.5em;
-        padding: 0.3em 0.5em;
-        background: #e0f7fa;
-        border-radius: 3px;
-        font-size: 0.85em;
-        color: #006064;
-    }
-
 </style>
