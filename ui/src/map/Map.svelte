@@ -13,6 +13,7 @@
   import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
   import IconCut from "carbon-icons-svelte/lib/Cut.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
+  import IconUpload from "carbon-icons-svelte/lib/Upload.svelte";
   import { onMount } from "svelte";
   import Canvas from "./Canvas.svelte";
   import Exclusion from "./Exclusion.svelte";
@@ -589,52 +590,66 @@
           }}
         />
       </Column>
-      <Column>
-        <ComboBox
-          disabled={!edit}
-          placeholder="Select item to edit"
-          items={editItems}
-          bind:selectedId
-          on:select={selectEditItem}
-          on:clear={clearEditItem}
-          {shouldFilterItem}
-        />
-      </Column>
-      <Column style="flex-shrink: 0;">
-        <div class="action-btns">
-          <Button
-            kind={drawActive ? "primary" : "tertiary"}
-            size="small"
-            disabled={!drawActive && !editEdge}
-            icon={IconPen}
-            iconDescription="Draw"
-            on:click={onDrawClick}
+      {#if edit}
+        <Column>
+          <ComboBox
+            disabled={!edit}
+            placeholder="Select item to edit"
+            items={editItems}
+            bind:selectedId
+            on:select={selectEditItem}
+            on:clear={clearEditItem}
+            {shouldFilterItem}
           />
+        </Column>
+        <Column style="flex-shrink: 0;">
+          <div class="action-btns">
+            <Button
+              kind={drawActive ? "primary" : "tertiary"}
+              size="small"
+              disabled={!drawActive && !editEdge}
+              icon={IconPen}
+              iconDescription="Draw"
+              on:click={onDrawClick}
+            />
+            <Button
+              kind="tertiary"
+              size="small"
+              disabled={!editEdge}
+              icon={IconSplit}
+              iconDescription="Split"
+              on:click={onSplitClick}
+            />
+            <Button
+              kind="tertiary"
+              size="small"
+              disabled={!editEdge}
+              icon={IconCut}
+              iconDescription="Cut"
+            />
+            <Button
+              kind="danger"
+              size="small"
+              disabled={!edit || !editPoint}
+              on:click={onDeleteClick}
+              icon={IconTrashCan}
+              iconDescription="Delete"
+            />
+          </div>
+        </Column>
+      {:else}
+        <Column>
           <Button
-            kind="tertiary"
+            kind="secondary"
             size="small"
-            disabled={!editEdge}
-            icon={IconSplit}
-            iconDescription="Split"
-            on:click={onSplitClick}
-          />
-          <Button
-            kind="tertiary"
-            size="small"
-            disabled={!editEdge}
-            icon={IconCut}
-            iconDescription="Cut"
-          />
-          <Button
-            kind="danger"
-            size="small"
-            disabled={!edit || !editPoint}
-            on:click={onDeleteClick}
-            icon={IconTrashCan}
-            iconDescription="Delete"
-          />
-        </div>
-      </Column>
+            icon={IconUpload}
+            iconDescription="Upload map to mower"
+            on:click={() => { socketService.sendUploadMap(); }}
+          >
+            Upload
+          </Button>
+        </Column>
+      {/if}
       <Column>
         {#if targetSet}
           <span class="goto-badge">

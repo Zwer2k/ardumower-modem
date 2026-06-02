@@ -247,10 +247,15 @@ void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVa
     ok = _cmd.powerOff();
   else if (action == "skipWaypoint")
     ok = _cmd.skipWaypoint();
-  else if (action == "requestStats")
-    ok = _cmd.requestStats();
-  else if (action == "requestStatus")
-    ok = _cmd.requestStatus();
+  else if (action == "requestStatus") {
+    if (_source.state().timestamp == 0)
+      _cmd.requestStatus(); // cache empty → forward to Teensy
+    ok = true;
+  } else if (action == "requestStats") {
+    if (_source.stats().timestamp == 0)
+      _cmd.requestStats(); // cache empty → forward to Teensy
+    ok = true;
+  }
   else if (action == "mowerEnabled")
     ok = _cmd.mowerEnabled(json.as<JsonObject>()["enabled"] | true);
   else if (action == "sonarEnabled")
@@ -268,11 +273,31 @@ void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVa
     return;
   }
 
-  AsyncResponseStream *response = request->beginResponseStream("application/json");
-  DynamicJsonDocument doc(256);
-  doc["success"] = ok;
-  doc["action"] = action;
-  serializeJson(doc, *response);
-  request->send(response);
+  if (action == "requestStatus") {
+    auto state = _source.state();
+    DynamicJsonDocument doc(4096);
+    doc["success"] = true;
+    doc["action"] = action;
+    state.marshal(doc.createNestedObject("data"));
+    String body;
+    serializeJson(doc, body);
+    request->send(200, "application/json", body);
+  } else if (action == "requestStats") {
+    auto stats = _source.stats();
+    DynamicJsonDocument doc(4096);
+    doc["success"] = true;
+    doc["action"] = action;
+    stats.marshal(doc.createNestedObject("data"));
+    String body;
+    serializeJson(doc, body);
+    request->send(200, "application/json", body);
+  } else {
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    DynamicJsonDocument doc(256);
+    doc["success"] = ok;
+    doc["action"] = action;
+    serializeJson(doc, *response);
+    request->send(response);
+  }
 }
 

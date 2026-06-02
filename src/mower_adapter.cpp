@@ -347,6 +347,9 @@ bool MowerAdapter::requestVersion()
 
 bool MowerAdapter::requestStatus()
 {
+  uint32_t now = millis();
+  if (_lastStateRequest != 0 && now - _lastStateRequest < 1000) return true;
+  _lastStateRequest = now ? now : 1;
   Log(DBG, "%srequestStatus", _LOG_);
   if (!assertSendIsInitialized())
     return false;
@@ -355,6 +358,9 @@ bool MowerAdapter::requestStatus()
 
 bool MowerAdapter::requestStats()
 {
+  uint32_t now = millis();
+  if (_lastStatsRequest != 0 && now - _lastStatsRequest < 1000) return true;
+  _lastStatsRequest = now ? now : 1;
   Log(DBG, "%srequestStats", _LOG_);
   if (!assertSendIsInitialized())
     return false;
@@ -957,6 +963,87 @@ String MowerAdapter::bytesToHexString(const String& byteString) {
   return hexString;
 }
 
+bool MowerAdapter::uploadMapToMower()
+{
+  int idx = 0;
+
+  auto sendPoints = [&](const std::vector<ArduMower::Domain::Robot::MapPoint> &pts, int &startIdx) -> bool {
+    for (size_t i = 0; i < pts.size(); i += 20) {
+      String cmd = "AT+W," + String(startIdx + i);
+      for (size_t j = i; j < pts.size() && j < i + 20; j++)
+        cmd += "," + String(pts[j].X, 6) + "," + String(pts[j].Y, 6);
+      String response;
+      int retries = 3;
+      bool ok = false;
+      for (int r = 0; r < retries; r++) {
+        delay(10);
+        response = "";
+        if (!sendCommandWithResponse(cmd, response, true, 5000)) {
+          Log(WARN, "%s AT+W chunk %d send failed (try %d/%d)", _LOG_, (int)(i / 20), r + 1, retries);
+          continue;
+        }
+        response.trim();
+        if (response.startsWith("W")) { ok = true; break; }
+        Log(WARN, "%s AT+W chunk %d unexpected: '%s' (try %d/%d)", _LOG_, (int)(i / 20), response.c_str(), r + 1, retries);
+      }
+      if (!ok) {
+        Log(ERR, "%s AT+W chunk %d failed after %d retries", _LOG_, (int)(i / 20), retries);
+        return false;
+      }
+    }
+    startIdx += pts.size();
+    return true;
+  };
+
+  if (!sendPoints(_map.perimeter, idx)) return false;
+  for (const auto &excl : _map.exclusions)
+    if (!sendPoints(excl, idx)) return false;
+  if (!sendPoints(_map.dockpoints, idx)) return false;
+  if (!sendPoints(_map.waypoints, idx)) return false;
+
+  // Calculate total exclusion points across all polygons
+  size_t totalExclPoints = 0;
+  for (const auto &excl : _map.exclusions)
+    totalExclPoints += excl.size();
+
+  // Send AT+N with counts: perimeter, total-exclusion-points, dock, mow-waypoints, free-space
+  // Must come before AT+X so exclusionPointsCount is set (prevents premature buffer free)
+  {
+    String cmd = "AT+N," + String(_map.perimeter.size()) + "," + String(totalExclPoints) + ","
+                + String(_map.dockpoints.size()) + "," + String(_map.waypoints.size()) + ",0";
+    String response;
+    if (!sendCommandWithResponse(cmd, response, true, 5000)) {
+      Log(ERR, "%s AT+N failed", _LOG_);
+      return false;
+    }
+    response.trim();
+    if (!response.startsWith("N")) {
+      Log(WARN, "%s AT+N unexpected response: %s", _LOG_, response.c_str());
+    }
+  }
+
+  // Send AT+X for exclusion polygon sizes (extracts exclusion points from flat buffer)
+  for (size_t ex = 0; ex < _map.exclusions.size(); ex++) {
+    String cmd = "AT+X," + String(ex) + "," + String(_map.exclusions[ex].size());
+    String response;
+    if (!sendCommandWithResponse(cmd, response, true, 5000)) {
+      Log(ERR, "%s AT+X[%u] failed", _LOG_, ex);
+      return false;
+    }
+    response.trim();
+    if (!response.startsWith("X")) {
+      Log(WARN, "%s AT+X[%u] unexpected response: %s", _LOG_, ex, response.c_str());
+    }
+  }
+
+  // Wait a moment for Teensy to finalize
+  delay(50);
+
+  Log(INFO, "%s Map upload complete (%d perimeter, %d totalExclPoints, %d dockpoints, %d waypoints)",
+      _LOG_, _map.perimeter.size(), totalExclPoints, _map.dockpoints.size(), _map.waypoints.size());
+  return true;
+}
+
 bool MowerAdapter::sendCommand(String command, bool encrypt)
 {
   Checksum chk;
@@ -973,6 +1060,43 @@ bool MowerAdapter::sendCommand(String command, bool encrypt)
   free(buffer);
 
   return result;
+}
+
+bool MowerAdapter::sendCommandWithResponse(String command, String &response, bool encrypt, int timeoutMs)
+{
+  Checksum chk;
+  chk.update(command);
+
+  char *buffer;
+  asprintf(&buffer, "%s,0x%02x", command.c_str(), chk.value());
+  Log(COMM, "> %s", buffer);
+
+  if (encrypt)
+    enc.encrypt(buffer, strlen(buffer));
+
+  bool done = false;
+  bool ok = router.send(buffer, [&](String resp, XferError error) {
+    response = resp;
+    done = true;
+    ok = (error == XferError::SUCCESS);
+  });
+  free(buffer);
+
+  if (!ok) return false;
+
+  uint32_t start = millis();
+  while (!done && (int)(millis() - start) < timeoutMs) {
+    router.loop();
+    delay(1);
+    yield();
+  }
+
+  if (!done) {
+    Log(WARN, "%ssendCommandWithResponse timeout for: %s", _LOG_, command.c_str());
+    return false;
+  }
+
+  return ok;
 }
 
 void processCSVResponse(String res, std::function<void(int, String)> fn)

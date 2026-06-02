@@ -301,6 +301,7 @@ export enum RequestDataType {
   joystickMove,
   navigateTo,
   setMap,
+  uploadMap,
 }
 
 export interface NavigateToData {
@@ -330,5 +331,5 @@ export interface MapSetData {
 
 export interface RequestSocketMessage {
   type: RequestDataType;
-  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData | NavigateToData | MapSetData;
+  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData | NavigateToData | MapSetData | Record<string, never>;
 }

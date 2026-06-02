@@ -414,6 +414,14 @@ class SocketService {
     this.sendMessage(req);
   }
 
+  sendUploadMap() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.uploadMap,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
   disconnect() {
     this.reconnect = false;
     this.clearAllTimers();

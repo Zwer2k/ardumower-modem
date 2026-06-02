@@ -30,6 +30,7 @@ namespace ArduMower
         joystickMove,
         navigateTo,
         setMap,
+        uploadMap,
         requestDataTypeLength
       };
 
@@ -118,6 +119,7 @@ namespace ArduMower
         void resetRequestTimestamp(ResponseDataType dataType);
         void joystickMove(float linear, float angular);
         void navigateTo(float x, float y);
+        void uploadMapToMower();
         void requestStats();
         void sendBufferedLogTo(UiSocketItem* item);
         void setMap(const ArduMower::Domain::Robot::MowerMap &map);

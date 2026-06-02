@@ -10,7 +10,7 @@
 
 uint32_t clientPingInterval = 10000;
 uint32_t defaultVersionRequestInterval = 10000;
-uint32_t defaultStateUpdateInterval = 10000;
+uint32_t defaultStateUpdateInterval = 5000;
 
 using namespace ArduMower::Modem::Http;
 
@@ -126,30 +126,45 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     }
     break;
 
+  case RequestDataType::uploadMap:
+    _socketHandler->uploadMapToMower();
+    break;
+
   case RequestDataType::setMap:
     {
       using namespace ArduMower::Domain::Robot;
       MowerMap map;
+      Log(DBG, "%s setMap: parsing perimeter, exclusions, dockpoints, waypoints", _LOG_);
+      auto readDouble = [](JsonObject p, const char* key1, const char* key2) -> double {
+        if (p.containsKey(key1)) return p[key1];
+        if (p.containsKey(key2)) return p[key2];
+        return 0.0;
+      };
+      auto readPoint = [readDouble](JsonObject p) -> MapPoint {
+        return MapPoint{readDouble(p, "X", "x"), -readDouble(p, "Y", "y")};
+      };
       JsonArray perimeter = jsonData["perimeter"];
       for (JsonObject p : perimeter) {
-        map.perimeter.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+        map.perimeter.push_back(readPoint(p));
       }
       JsonArray exclusions = jsonData["exclusions"];
       for (JsonArray ex : exclusions) {
         std::vector<MapPoint> excl;
         for (JsonObject p : ex) {
-          excl.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+          excl.push_back(readPoint(p));
         }
         map.exclusions.push_back(excl);
       }
       JsonArray dockpoints = jsonData["dockpoints"];
       for (JsonObject p : dockpoints) {
-        map.dockpoints.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+        map.dockpoints.push_back(readPoint(p));
       }
       JsonArray waypoints = jsonData["waypoints"];
       for (JsonObject p : waypoints) {
-        map.waypoints.push_back(MapPoint{(double)p["x"], -(double)p["y"]});
+        map.waypoints.push_back(readPoint(p));
       }
+      Log(DBG, "%s setMap: parsed perimeter=%d exclusions=%d dockpoints=%d waypoints=%d", _LOG_,
+          map.perimeter.size(), map.exclusions.size(), map.dockpoints.size(), map.waypoints.size());
       _socketHandler->setMap(map);
     }
     break;
@@ -697,6 +712,11 @@ void UiSocketHandler::navigateTo(float x, float y) {
   Log(DBG, "%s navigateTo(%.2f, %.2f)", _LOG_, x, y);
 }
 
+void UiSocketHandler::uploadMapToMower() {
+  _cmd.uploadMapToMower();
+  Log(DBG, "%s uploadMapToMower", _LOG_);
+}
+
 void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
   _source.setMap(map);
 }
@@ -1006,8 +1026,13 @@ void UiSocketHandler::handleData(uint32_t clientId, char *data)
 
   if (itemMap.find(clientId) != itemMap.end())
   {
-    DynamicJsonDocument jsonData(doc["data"].size());
-    jsonData = doc["data"];
+    const size_t dataSize = doc["data"].memoryUsage();
+    Log(DBG, "%s handleData type=%d dataSize=%u rawLen=%u", _LOG_, (int)doc["type"], (unsigned)dataSize, (unsigned)strlen(data));
+    DynamicJsonDocument jsonData(dataSize + 256);
+    if (!jsonData.set(doc["data"])) {
+      Log(ERR, "%s handleData: jsonData.set() failed (capacity=%u)", _LOG_, (unsigned)jsonData.capacity());
+      return;
+    }
     itemMap[clientId]->handleData(doc["type"], jsonData);
   } 
   else 

@@ -315,6 +315,7 @@ namespace ArduMower
         virtual bool rebootGPS() = 0;
         virtual bool powerOff() = 0;
 
+        virtual bool uploadMapToMower() = 0;
         virtual bool customCmd(String cmd) = 0;
       };
     }

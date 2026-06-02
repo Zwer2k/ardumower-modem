@@ -25,6 +25,8 @@ namespace ArduMower
       ArduMower::Domain::Robot::GpsDetails _gpsDetails;
       ArduMower::Domain::Robot::UbxResponse _ubxResponse;
       ArduMower::Domain::Robot::MowerMap _map;
+      uint32_t _lastStateRequest = 0;
+      uint32_t _lastStatsRequest = 0;
       // Temporärer Buffer für alle empfangenen Wegpunkte (alle Typen)
       std::vector<ArduMower::Domain::Robot::MapPoint> tempWaypointsBuffer;
 
@@ -41,6 +43,7 @@ namespace ArduMower
       void parseATNCommand(String line);
 
       bool sendCommand(String command, bool encrypt = true);
+      bool sendCommandWithResponse(String command, String &response, bool encrypt = true, int timeoutMs = 3000);
       bool assertSendIsInitialized();
       int containsNonUTF8(const String& input);
       String bytesToHexString(const String& byteString);
@@ -83,6 +86,7 @@ namespace ArduMower
       virtual bool reboot();
       virtual bool rebootGPS();
       virtual bool powerOff();
+      virtual bool uploadMapToMower();
       virtual bool customCmd(String cmd);
       virtual void drainRx(String line, bool &stop) override;
       virtual void drainTx(String line, bool &stop) override;
