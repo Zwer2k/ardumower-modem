@@ -182,6 +182,7 @@ void MqttAdapter::publishStats(const uint32_t now)
     }
 
     Log(INFO, "%spublishStats::backoff::refresh-requested(%d)", _LOG_, now - stats.timestamp);
+    next_time = now + mqttStatsInterval;
     return;
   }
 
@@ -248,6 +249,13 @@ bool MqttAdapter::handleConnection(const uint32_t now)
 {
   static uint32_t last_connected = 0;
   static uint32_t first_disconnected = 0;
+  static bool was_wifi_connected = true;
+
+  const bool wifi_connected = WiFi.isConnected();
+  const bool wifi_just_reconnected = wifi_connected && !was_wifi_connected;
+  was_wifi_connected = wifi_connected;
+
+  // MQTT already connected
   if (client.loop())
   {
     last_connected = now;
@@ -255,28 +263,156 @@ bool MqttAdapter::handleConnection(const uint32_t now)
     return true;
   }
 
+  if (!wifi_connected)
+  {
+    if (_connectFd >= 0) { close(_connectFd); _connectFd = -1; }
+    return false;
+  }
+
+  // Non-blocking TCP connect in progress: poll with select(0)
+  if (_connectFd >= 0)
+  {
+    fd_set fdset;
+    FD_ZERO(&fdset);
+    FD_SET(_connectFd, &fdset);
+    struct timeval tv = {0, 0};
+
+    int res = select(_connectFd + 1, nullptr, &fdset, nullptr, &tv);
+
+    if (res > 0 && FD_ISSET(_connectFd, &fdset))
+    {
+      int error = 0;
+      socklen_t len = sizeof(error);
+      getsockopt(_connectFd, SOL_SOCKET, SO_ERROR, &error, &len);
+
+      if (error == 0)
+      {
+        int fd = _connectFd;
+        _connectFd = -1;
+
+        WiFiClient connected(fd);
+        net = connected;
+
+        client.setWill(topic("/online").c_str(), "false");
+
+        if (!client.connect(settings.general.name.c_str(), settings.mqtt.username.c_str(), settings.mqtt.password.c_str(), true))
+        {
+          Log(ERR, "%scan not connect (MQTT)", _LOG_);
+          return false;
+        }
+
+        backoff.reset();
+        return onMqttConnected();
+      }
+
+      close(_connectFd);
+      _connectFd = -1;
+    }
+    else if (res == 0)
+    {
+      if (now - _connectStart > _connectTimeout)
+      {
+        close(_connectFd);
+        _connectFd = -1;
+        Log(ERR, "%sconnect timeout", _LOG_);
+      }
+      return false;
+    }
+    else
+    {
+      close(_connectFd);
+      _connectFd = -1;
+    }
+  }
+
+  if (wifi_just_reconnected)
+  {
+    backoff.reset();
+    first_disconnected = 0;
+  }
+
   if (first_disconnected < last_connected)
   {
     first_disconnected = now;
   }
 
-  if (now - first_disconnected < 1000)
+  if (!wifi_just_reconnected && now - first_disconnected < 1000)
     return false;
 
   static uint32_t next_time = 0;
+  if (wifi_just_reconnected)
+    next_time = 0;
   if (now < next_time)
     return false;
   next_time = now + backoff.next();
 
   Log(INFO, "%sconnect", _LOG_);
 
-  client.setWill(topic("/online").c_str(), "false");
+  net.stop();
 
-  if (!client.connect(settings.general.name.c_str(), settings.mqtt.username.c_str(), settings.mqtt.password.c_str())) {
-    Log(ERR, "%scan not connect", _LOG_);
+  ArduMower::Util::URL url(settings.mqtt.server);
+  int port = url.port();
+  if (port == -1) port = 1883;
+
+  IPAddress addr;
+  if (!addr.fromString(url.hostname().c_str()))
+  {
+    if (!WiFi.hostByName(url.hostname().c_str(), addr))
+    {
+      Log(ERR, "%scan not resolve host", _LOG_);
+      return false;
+    }
+  }
+
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (fd < 0)
+  {
+    Log(ERR, "%scannot create socket", _LOG_);
     return false;
   }
 
+  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+
+  struct sockaddr_in sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_addr.s_addr = (uint32_t)addr;
+  sa.sin_port = htons(port);
+
+  int cr = connect(fd, (struct sockaddr*)&sa, sizeof(sa));
+  if (cr < 0 && errno != EINPROGRESS)
+  {
+    Log(ERR, "%sconnect errno=%d", _LOG_, errno);
+    close(fd);
+    return false;
+  }
+
+  if (cr == 0)
+  {
+    WiFiClient connected(fd);
+    net = connected;
+
+    client.setWill(topic("/online").c_str(), "false");
+
+    if (!client.connect(settings.general.name.c_str(), settings.mqtt.username.c_str(), settings.mqtt.password.c_str(), true))
+    {
+      Log(ERR, "%scan not connect (MQTT)", _LOG_);
+      return false;
+    }
+
+    backoff.reset();
+    return onMqttConnected();
+  }
+
+  _connectFd = fd;
+  _connectStart = now;
+  _connectTimeout = 3000;
+  return false;
+
+}
+
+bool MqttAdapter::onMqttConnected()
+{
   if (!client.subscribe(topic("/command").c_str())) {
     Log(ERR, "%scan not subscribe /command", _LOG_);
     return false;
@@ -299,10 +435,6 @@ bool MqttAdapter::handleConnection(const uint32_t now)
     if (!client.publish(disco.topic().c_str(), disco.toJson(topic("")).c_str()))
       return false;
   }
-
-  // ############## Init IOBroker Variables ##############
-  // if (!iob.createIOBrokerDataPoints())
-  //   return false;
 
   if (!iob.subscribeTopics())
     return false;

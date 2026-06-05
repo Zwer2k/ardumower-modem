@@ -90,22 +90,22 @@ void MowerAdapter::parseArduMowerResponse(String line)
   if (payload.startsWith("U,"))
     parseUbxResponse(payload);
   else if (payload.startsWith("S4,"))
-    parseGpsDetailsResponse(payload);
+    { _cachedRawGpsDetails = line; parseGpsDetailsResponse(payload); }
   else if (payload.startsWith("S3,"))
-    parseSensorSummaryResponse(payload);
+    { _cachedRawSensorSummary = line; parseSensorSummaryResponse(payload); }
   else if (payload.startsWith("S,"))
-    parseStateResponse(payload);
+    { _cachedRawState = line; parseStateResponse(payload); }
   else if (payload.startsWith("V,"))
     parseVersionResponse(payload);
   else if (payload.startsWith("T,"))
-    parseStatisticsResponse(payload);
+    { _cachedRawStats = line; parseStatisticsResponse(payload); }
   else
     Log(DBG, "%sparseArduMowerResponse::payload-unknown(%s)", _LOG_, payload.c_str());
 }
 
 void MowerAdapter::parseArduMowerCommand(String line)
 {
-  Log(DBG, "%sparseArduMowerCommand %s", _LOG_, line.substring(0, 4).c_str());
+  //Log(DBG, "%sparseArduMowerCommand %s", _LOG_, line.substring(0, 4).c_str());
   if (!line.startsWith("AT+"))
   {
     char *buffer = strdup(line.c_str());
@@ -348,7 +348,7 @@ bool MowerAdapter::requestVersion()
 bool MowerAdapter::requestStatus()
 {
   uint32_t now = millis();
-  if (_lastStateRequest != 0 && now - _lastStateRequest < 1000) return true;
+  if (_lastStateRequest != 0 && now - _lastStateRequest < 5000) return true;
   _lastStateRequest = now ? now : 1;
   Log(DBG, "%srequestStatus", _LOG_);
   if (!assertSendIsInitialized())
@@ -359,7 +359,7 @@ bool MowerAdapter::requestStatus()
 bool MowerAdapter::requestStats()
 {
   uint32_t now = millis();
-  if (_lastStatsRequest != 0 && now - _lastStatsRequest < 1000) return true;
+  if (_lastStatsRequest != 0 && now - _lastStatsRequest < 5000) return true;
   _lastStatsRequest = now ? now : 1;
   Log(DBG, "%srequestStats", _LOG_);
   if (!assertSendIsInitialized())
@@ -369,7 +369,7 @@ bool MowerAdapter::requestStats()
 
 bool MowerAdapter::requestSensorSummary()
 {
-  Log(DBG, "%srequestSensorSummary", _LOG_);
+  //Log(DBG, "%srequestSensorSummary", _LOG_);
   if (!assertSendIsInitialized())
     return false;
   return sendCommand("AT+S3", true);
@@ -554,7 +554,7 @@ void MowerAdapter::parseStatisticsResponse(String line)
 
 void MowerAdapter::parseSensorSummaryResponse(String line)
 {
-  Log(DBG, "%sparseSensorSummaryResponse", _LOG_);
+  //Log(DBG, "%sparseSensorSummaryResponse", _LOG_);
   const auto now = millis();
 
   processCSVResponse(line, [&](int index, String val)
@@ -904,7 +904,12 @@ bool MowerAdapter::assertSendIsInitialized()
 {
   if (sendIsInitialized) {
     if (_state.timestamp > 0 && (millis() - _state.timestamp) > 30000) {
-      Log(WARN, "%sstate stale for 30s, STM32 may have rebooted - requesting version", _LOG_);
+      static uint32_t lastStaleWarn = 0;
+      uint32_t now = millis();
+      if (now - lastStaleWarn >= 10000) {
+        lastStaleWarn = now;
+        Log(WARN, "%sstate stale for 30s, STM32 may have rebooted - requesting version", _LOG_);
+      }
       sendIsInitialized = false;
     } else {
       return true;
@@ -1042,6 +1047,12 @@ bool MowerAdapter::uploadMapToMower()
   Log(INFO, "%s Map upload complete (%d perimeter, %d totalExclPoints, %d dockpoints, %d waypoints)",
       _LOG_, _map.perimeter.size(), totalExclPoints, _map.dockpoints.size(), _map.waypoints.size());
   return true;
+}
+
+void MowerAdapter::loop()
+{
+  requestStatus();
+  requestStats();
 }
 
 bool MowerAdapter::sendCommand(String command, bool encrypt)

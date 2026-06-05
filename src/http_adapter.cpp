@@ -155,11 +155,54 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
     // body may have arrived after constructor (large requests)
     req->recoverRequestBody();
 
-    // send http request body as command to modem
-    if (_router.send(req->httpRequestBody,
-                     [=](String res, int err)
-                     { handleRouterResponse(id, res); }))
-      req->state = 1;
+    // read-only Kommandos aus dem Cache bedienen (Modem schickt selbst AT+S alle 5s via loop())
+    {
+      String body = req->httpRequestBody;
+
+      if (body.startsWith("AT+S3,")) {
+        String cached = _mower.cachedRawSensorSummary();
+        if (cached.length() > 0) {
+          Log(DBG, "%sprocessRequest::cache-hit(AT+S3)", _LOG_);
+          req->onRouterResponse(cached);
+          return;
+        }
+      } else if (body.startsWith("AT+S4,")) {
+        String cached = _mower.cachedRawGpsDetails();
+        if (cached.length() > 0) {
+          Log(DBG, "%sprocessRequest::cache-hit(AT+S4)", _LOG_);
+          req->onRouterResponse(cached);
+          return;
+        }
+      } else if (body.startsWith("AT+S,") && !body.startsWith("AT+S2,")) {
+        String cached = _mower.cachedRawState();
+        if (cached.length() > 0) {
+          Log(DBG, "%sprocessRequest::cache-hit(AT+S)", _LOG_);
+          req->onRouterResponse(cached);
+          return;
+        }
+      } else if (body.startsWith("AT+T,")) {
+        String cached = _mower.cachedRawStats();
+        if (cached.length() > 0) {
+          Log(DBG, "%sprocessRequest::cache-hit(AT+T)", _LOG_);
+          req->onRouterResponse(cached);
+          return;
+        }
+      }
+    }
+
+    // Cache miss or not a cacheable command → forward to modem
+    {
+      String body = req->httpRequestBody;
+      if (body.startsWith("AT+S,") || body.startsWith("AT+T,") || body.startsWith("AT+S3,") || body.startsWith("AT+S4,")) {
+        Log(DBG, "%sprocessRequest::cache-miss(%.8s) → router.send", _LOG_, body.c_str());
+      }
+      if (_router.send(body,
+                       [=](String res, int err)
+                       { handleRouterResponse(id, res); }))
+        req->state = 1;
+      else
+        Log(DBG, "%sprocessRequest::router.send() failed (busy)", _LOG_);
+    }
     break;
 
   case 1:

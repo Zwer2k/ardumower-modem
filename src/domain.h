@@ -79,6 +79,8 @@ namespace ArduMower
 
           uint32_t gpsJumps;
 
+          Stats() : timestamp(0), mowDistanceTraveled(0), mowMaxDgpsAge(0), tempMin(0), tempMax(0), gpsChecksumErrors(0), dgpsChecksumErrors(0), maxMotorControlCycleTime(0), serialBufferSize(0), freeMemory(0), resetCause(0), gpsJumps(0) {}
+
           bool operator==(const Stats &other);
           bool operator!=(const Stats &other) { return !(*this == other); }
           void marshal(const JsonObject &o) const;
@@ -145,7 +147,7 @@ namespace ArduMower
 
 
           State()
-              : batteryVoltage(0), job(0), sensor(0), amps(0), mapCrc(0), temperature(0), chargingMah(0), motorMowMah(0), motorLeftMah(0), motorRightMah(0)
+              : timestamp(0), batteryVoltage(0), job(0), sensor(0), amps(0), mapCrc(0), temperature(0), chargingMah(0), motorMowMah(0), motorLeftMah(0), motorRightMah(0)
           {
           }
 

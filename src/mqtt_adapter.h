@@ -12,6 +12,8 @@
 #include <inttypes.h>
 #include <MQTT.h>
 #include <WiFi.h>
+#include <lwip/sockets.h>
+#include <lwip/netdb.h>
 
 namespace ArduMower
 {
@@ -31,8 +33,14 @@ namespace ArduMower
       MQTTClient client;
       ArduMower::Util::Backoff backoff;
 
+      int _connectFd;
+      uint32_t _connectStart;
+      uint32_t _connectTimeout;
+      struct sockaddr_in _connectAddr;
+
       void onMqttMessage(String topic, String payload);
       bool handleConnection(const uint32_t now);
+      bool onMqttConnected();
       String topic(String postfix);
 
       void publishState(const uint32_t now);
@@ -54,8 +62,11 @@ namespace ArduMower
             iob(IOBroker::Adapter(
                 _settings, _source, _cmd,
                 std::bind(&MqttAdapter::publishTo, this, std::placeholders::_1, std::placeholders::_2))),
-            client(MQTTClient(2048)), backoff(ArduMower::Util::Backoff(1000, 6000, 1.2))
+            client(MQTTClient(2048)), backoff(ArduMower::Util::Backoff(1000, 6000, 1.2)),
+            _connectFd(-1), _connectStart(0), _connectTimeout(3000)
       {
+        memset(&_connectAddr, 0, sizeof(_connectAddr));
+        _connectAddr.sin_family = AF_INET;
       }
 
       void begin();

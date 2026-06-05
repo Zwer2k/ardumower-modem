@@ -148,6 +148,7 @@ void setup() {
   looptime.add("ota_mower", std::bind(&Ota::MowerUpdater::loop, &mowerUpdater));
   mowerUpdater.addIdleCallback(std::bind(&Router::loop, &router));
   looptime.add("router", std::bind(&Router::loop, &router));
+  looptime.add("mower", [&](){ if (!Ota::MowerUpdater::isFlashing()) mowerAdapter.loop(); });
   looptime.add("ble", [&](){ if (!Ota::MowerUpdater::isFlashing()) bleAdapter.loop(); });
   looptime.add("ui", [&](){ if (!Ota::MowerUpdater::isFlashing()) ui.loop(); });
   looptime.add("socket_handler", [&](){ if (!Ota::MowerUpdater::isFlashing()) socketHandler.loop(); });

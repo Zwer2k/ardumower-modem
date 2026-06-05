@@ -27,6 +27,11 @@ namespace ArduMower
       ArduMower::Domain::Robot::MowerMap _map;
       uint32_t _lastStateRequest = 0;
       uint32_t _lastStatsRequest = 0;
+      // Cache für rohe Antwort-Strings (mit Checksumme) – für HTTP-Cache-Serving
+      String _cachedRawState;
+      String _cachedRawStats;
+      String _cachedRawSensorSummary;
+      String _cachedRawGpsDetails;
       // Temporärer Buffer für alle empfangenen Wegpunkte (alle Typen)
       std::vector<ArduMower::Domain::Robot::MapPoint> tempWaypointsBuffer;
 
@@ -65,6 +70,11 @@ namespace ArduMower
       virtual ArduMower::Domain::Robot::GpsDetails *gpsDetailsP() { return &_gpsDetails; }
       virtual ArduMower::Domain::Robot::UbxResponse *ubxResponseP() { return &_ubxResponse; }
       virtual ArduMower::Domain::Robot::MowerMap mowerMap() { return _map; }
+      // Zugriff auf gecachte rohe Antworten (für HTTP-Cache)
+      virtual String cachedRawState() { return _cachedRawState; }
+      virtual String cachedRawStats() { return _cachedRawStats; }
+      virtual String cachedRawSensorSummary() { return _cachedRawSensorSummary; }
+      virtual String cachedRawGpsDetails() { return _cachedRawGpsDetails; }
       virtual bool changeSpeed(float speed);
       virtual bool dock();
       virtual bool finishAndRestartEnabled(bool enabled);
@@ -91,6 +101,7 @@ namespace ArduMower
       virtual void drainRx(String line, bool &stop) override;
       virtual void drainTx(String line, bool &stop) override;
       virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map);
+      virtual void loop();
     };
   }
 }

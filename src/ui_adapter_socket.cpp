@@ -57,12 +57,9 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
   case RequestDataType::requestGpsDetails:
     _socketHandler->gpsDetailsRefCount++;
     _socketHandler->gpsDetailsActive = true;
-    _socketHandler->ubxResponseActive = true;
-    // Only reset polling timers on first activation (ref was 0)
+    // Only reset polling timer on first activation (ref was 0)
     if (_socketHandler->gpsDetailsRefCount == 1) {
       _socketHandler->resetRequestTimestamp(ResponseDataType::gpsDetails);
-      _socketHandler->ubxPollSequence = 0;          // start from beginning of cycle
-      _socketHandler->ubxConfigIndex = 0;
     }
     Log(INFO, "%s GPS details polling activated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
@@ -73,7 +70,6 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     }
     if (_socketHandler->gpsDetailsRefCount == 0) {
       _socketHandler->gpsDetailsActive = false;
-      _socketHandler->ubxResponseActive = false;
     }
     Log(INFO, "%s GPS details polling deactivated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
@@ -336,19 +332,19 @@ void UiSocketHandler::loop()
       logToUiLoop();
       break;
     case 8:
-      if (sensorSummaryActive) sensorRequestLoop();
+      sensorRequestLoop();
       break;
     case 9:
-      if (sensorSummaryActive && _source.sensorSummary().timestamp > 0) {
+      if (_source.sensorSummary().timestamp > 0) {
         sendData(ResponseDataType::sensorSummary);
       }
       break;
     case 10:
-      if (gpsDetailsActive) gpsRequestLoop();
+      gpsRequestLoop();
       if (gpsDetailsActive) ubxPollLoop();
       break;
     case 11:
-      if (gpsDetailsActive && _source.gpsDetails().timestamp > 0) {
+      if (_source.gpsDetails().timestamp > 0) {
         sendData(ResponseDataType::gpsDetails);
       }
       break;
@@ -399,7 +395,7 @@ void UiSocketHandler::requestStats()
 
 void UiSocketHandler::sensorRequestLoop()
 {
-  if ((lastDataRequestTimestamp[ResponseDataType::sensorSummary] > 0) && ((millis() - lastDataRequestTimestamp[ResponseDataType::sensorSummary]) < 500))
+  if ((lastDataRequestTimestamp[ResponseDataType::sensorSummary] > 0) && ((millis() - lastDataRequestTimestamp[ResponseDataType::sensorSummary]) < 1000))
     return;
   _cmd.requestSensorSummary();
   lastDataRequestTimestamp[ResponseDataType::sensorSummary] = millis();
