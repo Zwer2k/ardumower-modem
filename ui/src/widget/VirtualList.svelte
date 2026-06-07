@@ -148,7 +148,7 @@
 		style="padding-top: {top}px; padding-bottom: {bottom}px;">
 		{#each visible as row (row.index)}
 			<list-row>
-				<slot item={row.data}>Missing template</slot>
+				<slot item={row.data} index={row.index}>Missing template</slot>
 			</list-row>
 		{/each}
 	</list-content>

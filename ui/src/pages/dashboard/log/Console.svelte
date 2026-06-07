@@ -1,5 +1,7 @@
 <script lang="ts">
-    import { Dropdown, Toggle } from "carbon-components-svelte";
+    import { Dropdown, Toggle, TextInput } from "carbon-components-svelte";
+    import IconChevronUp from "carbon-icons-svelte/lib/ChevronUp.svelte";
+    import IconChevronDown from "carbon-icons-svelte/lib/ChevronDown.svelte";
     import VirtualList from "../../../widget/VirtualList.svelte";
     import type { LogLevelDescT, LogLine } from "../../../model";
     import type { DropdownItem } from "carbon-components-svelte/src/Dropdown/Dropdown.svelte";
@@ -18,6 +20,45 @@
     let logLevelIndex: number | undefined;
     let logLines = 10000;
     let lineCounter = 0;
+
+    // ─── Search ──────────────────────────────────────────────────────────────
+    let searchQuery = "";
+    let searchMatches: number[] = [];
+    let searchCurrent = -1;
+    let highlightIndex = -1;
+
+    $: {
+        if (searchQuery.trim() === "") {
+            searchMatches = [];
+            searchCurrent = -1;
+            highlightIndex = -1;
+        } else {
+            const q = searchQuery.toLowerCase();
+            searchMatches = items
+                .map((item, idx) => ({ idx, text: (item.text || "").toLowerCase() }))
+                .filter(({ text }) => text.includes(q))
+                .map(({ idx }) => idx);
+            if (searchMatches.length > 0 && searchCurrent === -1) {
+                searchCurrent = 0;
+                highlightIndex = searchMatches[0];
+                if (scrollToIndex) scrollToIndex(highlightIndex, { behavior: 'smooth' });
+            }
+        }
+    }
+
+    function nextSearchMatch() {
+        if (searchMatches.length === 0) return;
+        searchCurrent = (searchCurrent + 1) % searchMatches.length;
+        highlightIndex = searchMatches[searchCurrent];
+        if (scrollToIndex) scrollToIndex(highlightIndex, { behavior: 'smooth' });
+    }
+
+    function prevSearchMatch() {
+        if (searchMatches.length === 0) return;
+        searchCurrent = (searchCurrent - 1 + searchMatches.length) % searchMatches.length;
+        highlightIndex = searchMatches[searchCurrent];
+        if (scrollToIndex) scrollToIndex(highlightIndex, { behavior: 'smooth' });
+    }
 
     $: {
         if (logData && logData.length > 0) {
@@ -99,6 +140,22 @@
             labelA={""}
             labelB={""}
             bind:toggled={autoscroll}/>
+        <div class="search-box">
+            <TextInput
+                size="sm"
+                placeholder="Search log..."
+                bind:value={searchQuery}
+            />
+            {#if searchMatches.length > 0}
+                <span class="search-count">{searchCurrent + 1} / {searchMatches.length}</span>
+                <button class="search-btn" on:click={prevSearchMatch} title="Previous">
+                    <IconChevronUp />
+                </button>
+                <button class="search-btn" on:click={nextSearchMatch} title="Next">
+                    <IconChevronDown />
+                </button>
+            {/if}
+        </div>
         <button class="export-link" on:click={downloadLog}>
             Download log
         </button>
@@ -107,8 +164,9 @@
         <VirtualList {items}
             height="100%"
             bind:scrollToIndex
-            let:item>
-            <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''}">
+            let:item
+            let:index>
+            <div class="log-line {checkLineNr(item.nr) ? 'ignore' : ''} {index === highlightIndex ? 'highlight' : ''}">
                 <div class="nr">{item.nr}:</div>
                 <div class="level level-{logLevels[(item as LogLine).level]}">{logLevels[(item as LogLine).level]}:</div>
                 <div class="free-heap">{(item as LogLine).freeHeap}:</div>
@@ -229,6 +287,49 @@
         text-decoration: none;
         cursor: pointer;
         transition: background-color 70ms cubic-bezier(0,0,.38,.9);
+    }
+
+    .search-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 10px;
+    }
+
+    .search-box :global(.bx--text-input) {
+        height: 32px;
+        min-width: 160px;
+    }
+
+    .search-count {
+        font-size: 0.75rem;
+        color: #555;
+        min-width: 40px;
+        text-align: center;
+        font-family: monospace;
+    }
+
+    .search-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        background: #f4f4f4;
+        cursor: pointer;
+    }
+
+    .search-btn:hover {
+        background: #e0e0e0;
+    }
+
+    .highlight {
+        background-color: #fff3cd !important;
+        border-left: 3px solid #ffab00;
+        padding-left: 0;
     }
 
     .export-link:hover {
