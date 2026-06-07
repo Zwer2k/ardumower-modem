@@ -57,9 +57,12 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
   case RequestDataType::requestGpsDetails:
     _socketHandler->gpsDetailsRefCount++;
     _socketHandler->gpsDetailsActive = true;
+    _socketHandler->ubxResponseActive = true;
     // Only reset polling timer on first activation (ref was 0)
     if (_socketHandler->gpsDetailsRefCount == 1) {
       _socketHandler->resetRequestTimestamp(ResponseDataType::gpsDetails);
+      _socketHandler->ubxPollSequence = 0;
+      _socketHandler->ubxConfigIndex = 0;
     }
     Log(INFO, "%s GPS details polling activated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
@@ -70,6 +73,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     }
     if (_socketHandler->gpsDetailsRefCount == 0) {
       _socketHandler->gpsDetailsActive = false;
+      _socketHandler->ubxResponseActive = false;
     }
     Log(INFO, "%s GPS details polling deactivated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
