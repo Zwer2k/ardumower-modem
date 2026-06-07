@@ -154,6 +154,12 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
 
     // body may have arrived after constructor (large requests)
     req->recoverRequestBody();
+    if (req->httpRequestBody == "") {
+      if (req->age(millis()) < 3000)
+        return; // body still arriving, retry later
+      req->reject(400, "empty body");
+      return;
+    }
 
     // read-only Kommandos aus dem Cache bedienen (Modem schickt selbst AT+S alle 5s via loop())
     {

@@ -12,7 +12,9 @@ Http::CommandRequest::CommandRequest(
     : _metrics(metrics), id(_id), state(0), httpRequestBody(""), routerResponse(""), request(_request), _done(false), 
       timeReceiveHttpRequest(timeNow)
 {
-  parseHttpRequestBody();
+  serialRequest = request->pause();
+  readHttpRequestBody();
+  trimHttpRequestBody();
 }
 
 bool Http::CommandRequest::done(const uint32_t now)
@@ -32,15 +34,6 @@ bool Http::CommandRequest::timeout(const uint32_t now)
   reject(504, "timeout");
 
   return true;
-}
-
-void Http::CommandRequest::parseHttpRequestBody()
-{
-  Log(DBG, "Http::CommandRequest::parseHttpRequestBody");
-  serialRequest = request->pause();
-  readHttpRequestBody();
-  trimHttpRequestBody();
-  validateHttpRequestBody();
 }
 
 void Http::CommandRequest::readHttpRequestBody()
