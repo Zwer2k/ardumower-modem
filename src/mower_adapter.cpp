@@ -420,6 +420,10 @@ bool MowerAdapter::manualDrive(float linear, float angular)
 bool MowerAdapter::navigateTo(float x, float y)
 {
   Log(DBG, "%snavigateTo(%.2f, %.2f)", _LOG_CMD_, x, y);
+  if (_map.timestamp == 0 || _map.perimeter.size() == 0) {
+    Log(WARN, "%snavigateTo rejected: no map loaded", _LOG_);
+    return false;
+  }
   char buffer[50];
   snprintf(buffer, sizeof(buffer), "AT+R,%.2f,%.2f", x, y);
   String command(buffer);

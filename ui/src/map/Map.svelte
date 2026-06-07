@@ -520,6 +520,7 @@
   let targetDist = 0;
   let targetBearing = 0;
 
+  $: hasMap = $MapStore?.map?.perimeter?.points?.length > 0;
   $: mowerPos = $socketStore.state?.position ?? null;
 
   $: if (mowerPos && targetPos) {
@@ -539,6 +540,7 @@
       return;
     }
     if (edit) return;
+    if (!hasMap) return;
     const { x, y } = event.detail;
     // y from d3.pointer is in viewBox space, where positive=down.
     // The robot's pos.y is in world space, where positive=north.
@@ -651,18 +653,22 @@
         </Column>
       {/if}
       <Column>
-        {#if targetSet}
-          <span class="goto-badge">
-            {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
-          </span>
-          {#if isDriving}
-            <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
-          {:else}
-            <button class="goto-btn drive" on:click={startDrive}>Drive</button>
+        {#if hasMap}
+          {#if targetSet}
+            <span class="goto-badge">
+              {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
+            </span>
+            {#if isDriving}
+              <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
+            {:else}
+              <button class="goto-btn drive" on:click={startDrive}>Drive</button>
+            {/if}
+            <button class="goto-btn clear" on:click={clearTarget}>✕</button>
+          {:else if !edit}
+            <span class="goto-hint">Click map to set target</span>
           {/if}
-          <button class="goto-btn clear" on:click={clearTarget}>✕</button>
         {:else if !edit}
-          <span class="goto-hint">Click map to set target</span>
+          <span class="goto-hint">No map loaded</span>
         {/if}
       </Column>
     </Row>
