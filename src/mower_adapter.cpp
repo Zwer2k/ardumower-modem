@@ -903,13 +903,17 @@ void MowerAdapter::parseATCCommand(String line)
 bool MowerAdapter::assertSendIsInitialized()
 {
   if (sendIsInitialized) {
-    if (_state.timestamp > 0 && (millis() - _state.timestamp) > 30000) {
+    uint32_t age = _state.timestamp > 0
+        ? (millis() - _state.timestamp)
+        : (millis() - _props.timestamp);
+    if (age > 30000) {
       static uint32_t lastStaleWarn = 0;
       uint32_t now = millis();
       if (now - lastStaleWarn >= 10000) {
         lastStaleWarn = now;
         Log(WARN, "%sstate stale for 30s, STM32 may have rebooted - requesting version", _LOG_);
       }
+      _state.timestamp = 0;
       sendIsInitialized = false;
     } else {
       return true;

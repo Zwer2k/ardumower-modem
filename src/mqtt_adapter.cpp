@@ -247,23 +247,16 @@ void MqttAdapter::onMqttMessage(String topic, String payload)
 
 bool MqttAdapter::handleConnection(const uint32_t now)
 {
-  static uint32_t last_connected = 0;
-  static uint32_t first_disconnected = 0;
-  static bool was_wifi_connected = true;
-
-  const bool wifi_connected = WiFi.isConnected();
-  const bool wifi_just_reconnected = wifi_connected && !was_wifi_connected;
-  was_wifi_connected = wifi_connected;
+  static uint32_t last_connect_attempt = 0;
 
   // MQTT already connected
   if (client.loop())
   {
-    last_connected = now;
     backoff.reset();
     return true;
   }
 
-  if (!wifi_connected)
+  if (!WiFi.isConnected())
   {
     if (_connectFd >= 0) { close(_connectFd); _connectFd = -1; }
     return false;
@@ -325,23 +318,11 @@ bool MqttAdapter::handleConnection(const uint32_t now)
     }
   }
 
-  if (wifi_just_reconnected)
-  {
-    backoff.reset();
-    first_disconnected = 0;
-  }
-
-  if (first_disconnected < last_connected)
-  {
-    first_disconnected = now;
-  }
-
-  if (!wifi_just_reconnected && now - first_disconnected < 1000)
+  if (now - last_connect_attempt < 1000)
     return false;
+  last_connect_attempt = now;
 
   static uint32_t next_time = 0;
-  if (wifi_just_reconnected)
-    next_time = 0;
   if (now < next_time)
     return false;
   next_time = now + backoff.next();
@@ -354,14 +335,22 @@ bool MqttAdapter::handleConnection(const uint32_t now)
   int port = url.port();
   if (port == -1) port = 1883;
 
-  IPAddress addr;
-  if (!addr.fromString(url.hostname().c_str()))
+  static IPAddress cached_addr;
+  static uint32_t addr_resolved_at = 0;
+
+  if (addr_resolved_at == 0 || now - addr_resolved_at > 60000)
   {
-    if (!WiFi.hostByName(url.hostname().c_str(), addr))
+    IPAddress addr;
+    if (!addr.fromString(url.hostname().c_str()))
     {
-      Log(ERR, "%scan not resolve host", _LOG_);
-      return false;
+      if (!WiFi.hostByName(url.hostname().c_str(), addr))
+      {
+        Log(ERR, "%scan not resolve host", _LOG_);
+        return false;
+      }
     }
+    cached_addr = addr;
+    addr_resolved_at = now;
   }
 
   int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -376,7 +365,7 @@ bool MqttAdapter::handleConnection(const uint32_t now)
   struct sockaddr_in sa;
   memset(&sa, 0, sizeof(sa));
   sa.sin_family = AF_INET;
-  sa.sin_addr.s_addr = (uint32_t)addr;
+  sa.sin_addr.s_addr = (uint32_t)cached_addr;
   sa.sin_port = htons(port);
 
   int cr = connect(fd, (struct sockaddr*)&sa, sizeof(sa));
@@ -384,6 +373,7 @@ bool MqttAdapter::handleConnection(const uint32_t now)
   {
     Log(ERR, "%sconnect errno=%d", _LOG_, errno);
     close(fd);
+    addr_resolved_at = 0;
     return false;
   }
 
