@@ -97,7 +97,8 @@ void HttpServer::beginModemUpdate(AsyncWebServerRequest *request, size_t index, 
   if (!auth(request))
     return;
 
-  auto session = new Http::ModemUploadSession(this);
+  size_t totalSize = request->contentLength();
+  auto session = new Http::ModemUploadSession(this, totalSize);
   request->_tempObject = session;
   session->handle(index, data, len, final);
 }
@@ -160,8 +161,10 @@ void Http::ModemUploadSession::respond(AsyncWebServerRequest *request)
   request->send(res);
   if (success)
     s->requestRestart();
-  else
+  else {
     Update.abort();
+    
+  }
 }
 
 void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, bool final)
@@ -178,16 +181,18 @@ void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, b
 
   if (index == 0)
   {
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+    if (!Update.begin(_totalSize > 0 ? _totalSize : UPDATE_SIZE_UNKNOWN))
     {
       Log(ERR, "Ota::Http::ModemUploadSession::handle::update-begin-error(%s)", Update.errorString());
       result = Result::UPDATE_BEGIN_FAILED;
+      
       return;
     }
 
     if (!verifyHeader(data, len))
     {
       result = Result::VERIFY_HEADER_FAILED;
+      
       return;
     }
 
@@ -200,6 +205,7 @@ void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, b
   {
     Log(ERR, "Ota::Http::ModemUploadSession::handle::update-write-error(len=%d written=%d error=%s)", len, n, Update.errorString());
     result = Result::SHORT_WRITE_ERROR;
+    
     return;
   }
   _index += len;
@@ -211,6 +217,7 @@ void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, b
   {
     Log(ERR, "Ota::Http::ModemUploadSession::handle::update-end-error(%s)", Update.errorString());
     result = Result::UPDATE_END_FAILED;
+    
     return;
   }
 

@@ -55,8 +55,6 @@ namespace ArduMower
         AsyncWebServerRequestPtr serialRequest;
         bool _done;
         const uint32_t timeReceiveHttpRequest;
-        void readHttpRequestBody();
-        void validateHttpRequestBody();
         bool timeout(const uint32_t now);
       };
     }

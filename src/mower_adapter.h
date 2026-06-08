@@ -87,7 +87,9 @@ namespace ArduMower
       virtual bool sonarEnabled(bool enabled);
       virtual bool requestVersion();
       virtual bool requestStatus();
+      virtual bool requestStatusNow();
       virtual bool requestStats();
+      virtual bool requestStatsNow();
       virtual bool requestSensorSummary();
       virtual bool requestGpsDetails();
       virtual bool sendUbx(const String &hexCmd);

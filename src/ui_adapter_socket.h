@@ -121,6 +121,7 @@ namespace ArduMower
         void navigateTo(float x, float y);
         void uploadMapToMower();
         void requestStats();
+        void requestStatsNow();
         void sendBufferedLogTo(UiSocketItem* item);
         void setMap(const ArduMower::Domain::Robot::MowerMap &map);
 #ifdef MOWER_TERMINAL

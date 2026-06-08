@@ -28,8 +28,8 @@ UiSocketItem::UiSocketItem(
   _socketHandler->sendBufferedTerminalTo(this);
 #endif
 
-  // Request fresh stats from Teensy and send cached data
-  _socketHandler->requestStats();
+  // Request fresh stats from Teensy immediately (bypasses rate limit)
+  _socketHandler->requestStatsNow();
 
   // Send cached UBX data to new client if available
   if (_source.ubxResponse().timestamp > 0) {
@@ -395,6 +395,11 @@ void UiSocketHandler::stateRequestLoop()
 void UiSocketHandler::requestStats()
 {
   _cmd.requestStats();
+}
+
+void UiSocketHandler::requestStatsNow()
+{
+  _cmd.requestStatsNow();
 }
 
 void UiSocketHandler::sensorRequestLoop()

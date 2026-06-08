@@ -62,7 +62,7 @@ Terminal terminal(Serial1);
 WebServer webServer;
 
 // firmware update via Arduino IDE with buggy WiFiUDP
-// Ota::ArduinoOta ota;
+Ota::ArduinoOta ota(settings);
 #ifdef MOWER_TERMINAL
 Ota::MowerUpdater mowerUpdater(terminal, Serial1);
 #else
@@ -122,7 +122,7 @@ void setup() {
   wifiAdapter.begin();
   router.begin();
   modemCli.begin();
-  // ota.begin();
+  ota.begin();
   otaHttpServer.begin();
   bleAdapter.begin();
   httpAdapter.begin();
@@ -143,10 +143,10 @@ void setup() {
 #endif
   looptime.add("wifi", [&](){wifiAdapter.loop();});
   looptime.add("http", [&](){ if (!Ota::MowerUpdater::isFlashing()) httpAdapter.loop(); });
-  // looptime.add("ota_arduino", std::bind(&Ota::ArduinoOta::loop, &ota));
   looptime.add("ota_http", std::bind(&Ota::HttpServer::loop, &otaHttpServer));
   looptime.add("ota_mower", std::bind(&Ota::MowerUpdater::loop, &mowerUpdater));
   mowerUpdater.addIdleCallback(std::bind(&Router::loop, &router));
+  looptime.add("ota_arduino", std::bind(&Ota::ArduinoOta::loop, &ota));
   looptime.add("router", std::bind(&Router::loop, &router));
   looptime.add("mower", [&](){ if (!Ota::MowerUpdater::isFlashing()) mowerAdapter.loop(); });
   looptime.add("ble", [&](){ if (!Ota::MowerUpdater::isFlashing()) bleAdapter.loop(); });

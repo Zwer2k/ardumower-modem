@@ -305,7 +305,9 @@ namespace ArduMower
 
         virtual bool requestVersion() = 0;
         virtual bool requestStatus() = 0;
+        virtual bool requestStatusNow() = 0;
         virtual bool requestStats() = 0;
+        virtual bool requestStatsNow() = 0;
         virtual bool requestSensorSummary() = 0;
         virtual bool requestGpsDetails() = 0;
         virtual bool sendUbx(const String &hexCmd) = 0;

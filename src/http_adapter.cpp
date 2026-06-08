@@ -129,12 +129,37 @@ void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 
 void HttpAdapter::handleCommandRequestBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
-  Log(DBG, "%shandleCommandRequestBody", _LOG_);
-  if (total > 0 && request->_tempObject == NULL) {
-    request->_tempObject = malloc(total);
+  Log(DBG, "%shandleCommandRequestBody len=%u index=%u total=%u", _LOG_, (unsigned)len, (unsigned)index, (unsigned)total);
+
+  if (request->_tempObject == NULL) {
+    size_t allocSize = total > 0 ? total + 1 : len + 1;
+    request->_tempObject = malloc(allocSize);
+    if (request->_tempObject) {
+      memset(request->_tempObject, 0, allocSize);
+    }
+  } else if (total == 0) {
+    // Chunked transfer or unknown length - grow buffer
+    size_t oldLen = strlen((char*)request->_tempObject);
+    void* newBuf = realloc(request->_tempObject, oldLen + len + 1);
+    if (newBuf) {
+      request->_tempObject = newBuf;
+      memset((uint8_t*)request->_tempObject + oldLen, 0, len + 1);
+    } else {
+      return; // realloc failed
+    }
   }
+
   if (request->_tempObject != NULL) {
-    memcpy((uint8_t*)(request->_tempObject) + index, data, len);
+    if (total > 0) {
+      memcpy((uint8_t*)(request->_tempObject) + index, data, len);
+      if (index + len >= total) {
+        ((char*)request->_tempObject)[total] = '\0';
+      }
+    } else {
+      size_t oldLen = strlen((char*)request->_tempObject);
+      memcpy((uint8_t*)(request->_tempObject) + oldLen, data, len);
+      ((char*)request->_tempObject)[oldLen + len] = '\0';
+    }
   }
 }
 
@@ -155,11 +180,15 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
     // body may have arrived after constructor (large requests)
     req->recoverRequestBody();
     if (req->httpRequestBody == "") {
-      if (req->age(millis()) < 3000)
+      if (req->age(millis()) < 3000) {
+        Log(DBG, "%sprocessRequest ID=%d body not yet arrived, age=%u", _LOG_, id, (unsigned)req->age(millis()));
         return; // body still arriving, retry later
+      }
+      Log(ERR, "%sprocessRequest ID=%d body empty after timeout", _LOG_, id);
       req->reject(400, "empty body");
       return;
     }
+    Log(DBG, "%sprocessRequest ID=%d body='%s' len=%u", _LOG_, id, req->httpRequestBody.c_str(), (unsigned)req->httpRequestBody.length());
 
     // read-only Kommandos aus dem Cache bedienen (Modem schickt selbst AT+S alle 5s via loop())
     {

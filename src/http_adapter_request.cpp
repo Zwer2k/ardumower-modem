@@ -13,8 +13,8 @@ Http::CommandRequest::CommandRequest(
       timeReceiveHttpRequest(timeNow)
 {
   serialRequest = request->pause();
-  readHttpRequestBody();
-  trimHttpRequestBody();
+  // Don't read body here - it might not be complete yet (esp. with chunked encoding).
+  // Body is recovered lazily in processQueue() via recoverRequestBody().
 }
 
 bool Http::CommandRequest::done(const uint32_t now)
@@ -36,19 +36,6 @@ bool Http::CommandRequest::timeout(const uint32_t now)
   return true;
 }
 
-void Http::CommandRequest::readHttpRequestBody()
-{
-  if (request->_tempObject)
-  {
-    httpRequestBody = (char*)request->_tempObject;
-    free(request->_tempObject);
-    request->_tempObject = nullptr;
-    return;
-  }
-
-  httpRequestBody = "";
-}
-
 void Http::CommandRequest::trimHttpRequestBody()
 {
   int idx = httpRequestBody.indexOf('\n');
@@ -66,16 +53,6 @@ void Http::CommandRequest::recoverRequestBody()
   free(request->_tempObject);
   request->_tempObject = nullptr;
   trimHttpRequestBody();
-}
-
-void Http::CommandRequest::validateHttpRequestBody()
-{
-  if (httpRequestBody == "")
-  {
-    Log(DBG, "Http::CommandRequest::validateHttpRequestBody::error::empty-body");
-    reject(400, "empty body");
-    return;
-  }
 }
 
 void Http::CommandRequest::reject(int code, String text)

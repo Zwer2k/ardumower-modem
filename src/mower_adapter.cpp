@@ -367,6 +367,18 @@ bool MowerAdapter::requestStats()
   return sendCommand("AT+T", true);
 }
 
+bool MowerAdapter::requestStatusNow()
+{
+  _lastStateRequest = 0;
+  return requestStatus();
+}
+
+bool MowerAdapter::requestStatsNow()
+{
+  _lastStatsRequest = 0;
+  return requestStats();
+}
+
 bool MowerAdapter::requestSensorSummary()
 {
   //Log(DBG, "%srequestSensorSummary", _LOG_);
@@ -1059,8 +1071,15 @@ bool MowerAdapter::uploadMapToMower()
 
 void MowerAdapter::loop()
 {
-  requestStatus();
-  requestStats();
+  uint32_t now = millis();
+  if (_lastStateRequest == 0 || now - _lastStateRequest >= 5000) {
+    _lastStateRequest = now ? now : 1;
+    requestStatus();
+  }
+  if (_lastStatsRequest == 0 || now - _lastStatsRequest >= 5000) {
+    _lastStatsRequest = now ? now : 1;
+    requestStats();
+  }
 }
 
 bool MowerAdapter::sendCommand(String command, bool encrypt)

@@ -51,11 +51,12 @@ namespace ArduMower
           HttpServer *s;
           Result result;
           size_t _index;
+          size_t _totalSize;
 
           bool verifyHeader(uint8_t *data, size_t len);
 
         public:
-        ModemUploadSession(HttpServer *_s) : s(_s), result(Result::PENDING), _index(0) {}
+        ModemUploadSession(HttpServer *_s, size_t totalSize = 0) : s(_s), result(Result::PENDING), _index(0), _totalSize(totalSize) {}
 
           void handle(size_t index, uint8_t *data, size_t len, bool final);
           void respond(AsyncWebServerRequest *request);
