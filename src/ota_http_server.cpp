@@ -167,6 +167,30 @@ void Http::ModemUploadSession::respond(AsyncWebServerRequest *request)
   }
 }
 
+Http::ModemUploadSession::ModemUploadSession(HttpServer *_s, size_t totalSize)
+  : s(_s), result(Result::PENDING), _index(0), _totalSize(totalSize), _bufPos(0)
+{
+  _buffer = (uint8_t*)malloc(BUFFER_SIZE);
+}
+
+Http::ModemUploadSession::~ModemUploadSession()
+{
+  free(_buffer);
+}
+
+void Http::ModemUploadSession::flushBuffer()
+{
+  if (_bufPos == 0) return;
+  auto n = Update.write(_buffer, _bufPos);
+  if (n != _bufPos)
+  {
+    Log(ERR, "Ota::Http::ModemUploadSession::flush::write-error(len=%u written=%u error=%s)", _bufPos, n, Update.errorString());
+    result = Result::SHORT_WRITE_ERROR;
+    return;
+  }
+  _bufPos = 0;
+}
+
 void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, bool final)
 {
   if (!(result == Result::PENDING || result == Result::STARTED))
@@ -200,18 +224,34 @@ void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, b
     result = Result::STARTED;
   }
 
-  auto n = Update.write(data, len);
-  if (n != len)
+  // Accumulate data in intermediate buffer, flush to flash in BUFFER_SIZE blocks
   {
-    Log(ERR, "Ota::Http::ModemUploadSession::handle::update-write-error(len=%d written=%d error=%s)", len, n, Update.errorString());
-    result = Result::SHORT_WRITE_ERROR;
-    
-    return;
+    const uint8_t *ptr = data;
+    size_t remaining = len;
+    while (remaining > 0 && result == Result::STARTED)
+    {
+      size_t space = BUFFER_SIZE - _bufPos;
+      size_t copy = (space < remaining) ? space : remaining;
+      memcpy(_buffer + _bufPos, ptr, copy);
+      _bufPos += copy;
+      ptr += copy;
+      remaining -= copy;
+
+      if (_bufPos == BUFFER_SIZE)
+      {
+        flushBuffer();
+        if (result != Result::STARTED) return;
+      }
+    }
   }
   _index += len;
 
   if (!final)
     return;
+
+  // Flush remaining buffered data
+  flushBuffer();
+  if (result != Result::STARTED) return;
 
   if (!Update.end(true))
   {

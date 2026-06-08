@@ -48,15 +48,21 @@ namespace ArduMower
         class ModemUploadSession : UploadSession
         {
         private:
+          static const size_t BUFFER_SIZE = 8192;
+
           HttpServer *s;
           Result result;
           size_t _index;
           size_t _totalSize;
+          uint8_t *_buffer;
+          size_t _bufPos;
 
           bool verifyHeader(uint8_t *data, size_t len);
+          void flushBuffer();
 
         public:
-        ModemUploadSession(HttpServer *_s, size_t totalSize = 0) : s(_s), result(Result::PENDING), _index(0), _totalSize(totalSize) {}
+        ModemUploadSession(HttpServer *_s, size_t totalSize = 0);
+        ~ModemUploadSession();
 
           void handle(size_t index, uint8_t *data, size_t len, bool final);
           void respond(AsyncWebServerRequest *request);

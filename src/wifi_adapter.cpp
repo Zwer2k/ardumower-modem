@@ -50,6 +50,7 @@ void Adapter::loopSta()
 {
   static bool wasEverConnected = false;
   static bool wasConnected = false;
+  static uint32_t disconnectedSince = 0;
   const bool connected = WiFi.isConnected();
 
   if (!wasEverConnected && !connected && millis() - _staTimeoutStart > staAbortTimeout)
@@ -63,18 +64,30 @@ void Adapter::loopSta()
   }
 
   if (connected == wasConnected)
+  {
+    // Prolonged disconnection after initial connect – force reconnect
+    if (!connected && wasEverConnected && disconnectedSince != 0 &&
+        millis() - disconnectedSince > 15000)
+    {
+      Log(INFO, "WiFi::Adapter::loopSta::reconnecting (disconnected %ums)", millis() - disconnectedSince);
+      WiFi.reconnect();
+      disconnectedSince = millis();
+    }
     return;
+  }
 
   wasConnected = connected;
 
   if (connected)
   {
     wasEverConnected = true;
+    disconnectedSince = 0;
     auto ip = WiFi.localIP().toString();
     Log(INFO, "WiFi::Adapter::STA::IP(%s)", ip.c_str());
   }
   else
   {
+    disconnectedSince = millis();
     Log(INFO, "WiFi::Adapter::STA::disconnected");
   }
 }
