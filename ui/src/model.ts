@@ -317,6 +317,8 @@ export enum RequestDataType {
   uploadMap,
   setMowSettings,
   requestMowSettings,
+  clearWaypoints,
+  calculateWaypoints,
 }
 
 export interface MowSettingsData {

@@ -447,6 +447,22 @@ class SocketService {
     this.sendMessage(req);
   }
 
+  sendClearWaypoints() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.clearWaypoints,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
+  sendCalculateWaypoints() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.calculateWaypoints,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
   disconnect() {
     this.reconnect = false;
     this.clearAllTimers();

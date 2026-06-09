@@ -1,6 +1,7 @@
 #include <functional>
 #include <time.h>
 #include "ui_adapter_socket.h"
+#include "path_planner.h"
 #include "json.h"
 #include "log.h"
 #include "logToUi.h"
@@ -195,6 +196,14 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
 
    case RequestDataType::requestMowSettings:
     _socketHandler->sendData(ResponseDataType::mowSettings, this, true);
+    break;
+
+   case RequestDataType::clearWaypoints:
+    _socketHandler->clearWaypoints();
+    break;
+
+   case RequestDataType::calculateWaypoints:
+    _socketHandler->calculateWaypoints();
     break;
 
   default:
@@ -757,6 +766,30 @@ void UiSocketHandler::uploadMapToMower() {
 
 void UiSocketHandler::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) {
   _source.setMowSettings(s);
+}
+
+void UiSocketHandler::clearWaypoints() {
+  using namespace ArduMower::Domain::Robot;
+  auto map = _source.mowerMap();
+  map.waypoints.clear();
+  _source.setMap(map);
+  abortMapChunkSend();
+  sendData(ResponseDataType::map, NULL, true);
+  Log(INFO, "%s clearWaypoints: waypoints cleared, map broadcast", _LOG_);
+}
+
+void UiSocketHandler::calculateWaypoints() {
+  using namespace ArduMower::Domain::Robot;
+  auto map = _source.mowerMap();
+  auto settings = _source.mowSettings();
+  map.waypoints.clear();
+  auto waypoints = ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings);
+  for (const auto &wp : waypoints)
+    map.waypoints.push_back(wp);
+  _source.setMap(map);
+  abortMapChunkSend();
+  sendData(ResponseDataType::map, NULL, true);
+  Log(INFO, "%s calculateWaypoints: %d waypoints generated, map broadcast", _LOG_, map.waypoints.size());
 }
 
 void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {

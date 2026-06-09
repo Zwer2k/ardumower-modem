@@ -15,6 +15,7 @@
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import IconUpload from "carbon-icons-svelte/lib/Upload.svelte";
   import IconSettings from "carbon-icons-svelte/lib/Settings.svelte";
+  import IconMagicWand from "carbon-icons-svelte/lib/MagicWand.svelte";
   import { onMount } from "svelte";
   import Canvas from "./Canvas.svelte";
   import Exclusion from "./Exclusion.svelte";
@@ -652,6 +653,24 @@
               iconDescription="Mow settings"
               on:click={() => { showMowSettings = true; }}
             />
+            <Button
+              kind="danger"
+              size="small"
+              icon={IconTrashCan}
+              iconDescription="Clear waypoints"
+              on:click={() => { socketService.sendClearWaypoints(); }}
+            >
+              Clear WP
+            </Button>
+            <Button
+              kind="secondary"
+              size="small"
+              icon={IconMagicWand}
+              iconDescription="Calculate waypoints"
+              on:click={() => { socketService.sendCalculateWaypoints(); }}
+            >
+              Calculate
+            </Button>
             <Button
               kind="secondary"
               size="small"

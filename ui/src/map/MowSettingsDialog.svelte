@@ -20,18 +20,20 @@
     { id: 2, text: "Rings" },
   ];
 
-  $: {
-    if (open) {
-      const s = $mowSettingsStore;
-      pattern = s.pattern;
-      width = s.width;
-      angle = s.angle;
-      distanceToBorder = s.distanceToBorder;
-      borderLaps = s.borderLaps;
-      mowArea = s.mowArea;
-      mowExclusionBorder = s.mowExclusionBorder;
-      mowBorderCcw = s.mowBorderCcw;
-    }
+  function roundWidth(v: number) {
+    width = Math.round(v * 100) / 100;
+  }
+
+  function handleOpen() {
+    const s = $mowSettingsStore;
+    pattern = s.pattern;
+    roundWidth(s.width);
+    angle = s.angle;
+    distanceToBorder = s.distanceToBorder;
+    borderLaps = s.borderLaps;
+    mowArea = s.mowArea;
+    mowExclusionBorder = s.mowExclusionBorder;
+    mowBorderCcw = s.mowBorderCcw;
   }
 
   function handleOk() {
@@ -55,6 +57,7 @@
 
 <Modal
   bind:open
+  on:open={handleOpen}
   title="Mow Settings"
   size="sm"
   primaryButtonText="Apply"
@@ -67,7 +70,8 @@
   <div class="mow-settings-form">
     <Select
       labelText="Pattern"
-      bind:value={pattern}
+      selected={pattern}
+      on:update={(e) => { pattern = e.detail; }}
     >
       {#each patterns as p}
         <SelectItem value={p.id} text={p.text} />
@@ -80,7 +84,7 @@
       min={0.01}
       max={1.0}
       step={0.01}
-      format={(v: number) => v.toFixed(2)}
+      on:change={() => roundWidth(width)}
     />
 
     <NumberInput
@@ -109,17 +113,20 @@
 
     <Toggle
       labelText="Mow area"
-      bind:toggled={mowArea}
+      toggled={mowArea}
+      on:toggle={(e) => { mowArea = e.detail.toggled; }}
     />
 
     <Toggle
       labelText="Mow exclusion border"
-      bind:toggled={mowExclusionBorder}
+      toggled={mowExclusionBorder}
+      on:toggle={(e) => { mowExclusionBorder = e.detail.toggled; }}
     />
 
     <Toggle
       labelText="Mow border CCW"
-      bind:toggled={mowBorderCcw}
+      toggled={mowBorderCcw}
+      on:toggle={(e) => { mowBorderCcw = e.detail.toggled; }}
     />
   </div>
 </Modal>
