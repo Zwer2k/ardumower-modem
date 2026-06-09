@@ -256,6 +256,18 @@ export interface UbxResponse {
   hex: string;
 }
 
+export interface MowSettings {
+  timestamp: number;
+  pattern: number;
+  width: number;
+  angle: number;
+  distanceToBorder: number;
+  borderLaps: number;
+  mowArea: boolean;
+  mowExclusionBorder: boolean;
+  mowBorderCcw: boolean;
+}
+
 export enum ResponseDataType {
   hello = 0,
   mowerState,
@@ -268,6 +280,7 @@ export enum ResponseDataType {
   gpsDetails,
   ubxResponse,
   logExport,
+  mowSettings,
 }
 
 // Map data for WebSocket
@@ -285,7 +298,7 @@ export interface MapRaw {
 
 export interface ResponseSocketMessage {
   type: ResponseDataType;
-  data: State | DesiredState | ModemLog | ConsoleResponseData | MapRaw;
+  data: State | DesiredState | ModemLog | ConsoleResponseData | MapRaw | MowSettings;
 }
 
 export enum RequestDataType {
@@ -302,6 +315,19 @@ export enum RequestDataType {
   navigateTo,
   setMap,
   uploadMap,
+  setMowSettings,
+  requestMowSettings,
+}
+
+export interface MowSettingsData {
+  pattern: number;
+  width: number;
+  angle: number;
+  distanceToBorder: number;
+  borderLaps: number;
+  mowArea: boolean;
+  mowExclusionBorder: boolean;
+  mowBorderCcw: boolean;
 }
 
 export interface NavigateToData {

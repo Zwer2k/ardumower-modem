@@ -15,9 +15,12 @@ import type {
   SensorSummary,
   GpsDetails,
   UbxResponse,
+  MowSettings,
+  MowSettingsData,
 } from "../model";
 import { ResponseDataType, RequestDataType } from "../model";
 import { handleMapChunk } from "../map/map-chunk-buffer";
+import { mowSettingsStore } from "../map/mow-settings";
 
 export interface SocketState {
   socket: WebSocket | null;
@@ -155,6 +158,9 @@ class SocketService {
               socket.send(JSON.stringify(msg));
             }
           }
+
+          // Aktuelle MowSettings vom Backend abrufen
+          this.requestMowSettings();
         });
 
         socket.addEventListener("close", (event) => {
@@ -267,6 +273,9 @@ class SocketService {
                   break;
                 case ResponseDataType.ubxResponse:
                   newState.ubxResponse = jsonData.data as UbxResponse;
+                  break;
+                case ResponseDataType.mowSettings:
+                  mowSettingsStore.set(jsonData.data as MowSettings);
                   break;
                 default:
               }
@@ -417,6 +426,22 @@ class SocketService {
   sendUploadMap() {
     const req: RequestSocketMessage = {
       type: RequestDataType.uploadMap,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
+  sendMowSettings(data: MowSettingsData) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.setMowSettings,
+      data,
+    };
+    this.sendMessage(req);
+  }
+
+  requestMowSettings() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.requestMowSettings,
       data: {},
     };
     this.sendMessage(req);

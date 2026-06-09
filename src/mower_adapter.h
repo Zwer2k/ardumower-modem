@@ -25,6 +25,7 @@ namespace ArduMower
       ArduMower::Domain::Robot::GpsDetails _gpsDetails;
       ArduMower::Domain::Robot::UbxResponse _ubxResponse;
       ArduMower::Domain::Robot::MowerMap _map;
+      ArduMower::Domain::Robot::MowSettings _mowSettings;
       uint32_t _lastStateRequest = 0;
       uint32_t _lastStatsRequest = 0;
       // Cache für rohe Antwort-Strings (mit Checksumme) – für HTTP-Cache-Serving
@@ -70,6 +71,8 @@ namespace ArduMower
       virtual ArduMower::Domain::Robot::GpsDetails *gpsDetailsP() { return &_gpsDetails; }
       virtual ArduMower::Domain::Robot::UbxResponse *ubxResponseP() { return &_ubxResponse; }
       virtual ArduMower::Domain::Robot::MowerMap mowerMap() { return _map; }
+      virtual ArduMower::Domain::Robot::MowSettings mowSettings() { return _mowSettings; }
+      virtual ArduMower::Domain::Robot::MowSettings *mowSettingsP() { return &_mowSettings; }
       // Zugriff auf gecachte rohe Antworten (für HTTP-Cache)
       virtual String cachedRawState() { return _cachedRawState; }
       virtual String cachedRawStats() { return _cachedRawStats; }
@@ -103,6 +106,7 @@ namespace ArduMower
       virtual void drainRx(String line, bool &stop) override;
       virtual void drainTx(String line, bool &stop) override;
       virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map);
+      virtual void setMowSettings(const ArduMower::Domain::Robot::MowSettings &s);
       virtual void loop();
     };
   }

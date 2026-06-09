@@ -31,6 +31,8 @@ namespace ArduMower
         navigateTo,
         setMap,
         uploadMap,
+        setMowSettings,
+        requestMowSettings,
         requestDataTypeLength
       };
 
@@ -46,6 +48,7 @@ namespace ArduMower
         gpsDetails,
         ubxResponse,
         logExport,
+        mowSettings,
         responseDataTypeLength
       };
 
@@ -124,6 +127,7 @@ namespace ArduMower
         void requestStatsNow();
         void sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
         void setMap(const ArduMower::Domain::Robot::MowerMap &map);
+        void setMowSettings(const ArduMower::Domain::Robot::MowSettings &s);
         void abortMapChunkSend();
 #ifdef MOWER_TERMINAL
         void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);

@@ -14,6 +14,7 @@
   import IconCut from "carbon-icons-svelte/lib/Cut.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import IconUpload from "carbon-icons-svelte/lib/Upload.svelte";
+  import IconSettings from "carbon-icons-svelte/lib/Settings.svelte";
   import { onMount } from "svelte";
   import Canvas from "./Canvas.svelte";
   import Exclusion from "./Exclusion.svelte";
@@ -25,6 +26,7 @@
   import MowerPosition from "./MowerPosition.svelte";
   import { MapStore } from "./service";
   import { socketStore, socketService } from "../stores/socket";
+  import MowSettingsDialog from "./MowSettingsDialog.svelte";
 
   interface EditItem {
     id: string;
@@ -33,6 +35,7 @@
 
   let edit = false;
   let wasEditing = false;
+  let showMowSettings = false;
   let selectedId: string | null = null;
   let editItemId: string | null = null;
   let editItems: EditItem[] = [];
@@ -641,15 +644,24 @@
         </Column>
       {:else}
         <Column>
-          <Button
-            kind="secondary"
-            size="small"
-            icon={IconUpload}
-            iconDescription="Upload map to mower"
-            on:click={() => { socketService.sendUploadMap(); }}
-          >
-            Upload
-          </Button>
+          <div class="toolbar-btn-row">
+            <Button
+              kind="secondary"
+              size="small"
+              icon={IconSettings}
+              iconDescription="Mow settings"
+              on:click={() => { showMowSettings = true; }}
+            />
+            <Button
+              kind="secondary"
+              size="small"
+              icon={IconUpload}
+              iconDescription="Upload map to mower"
+              on:click={() => { socketService.sendUploadMap(); }}
+            >
+              Upload
+            </Button>
+          </div>
         </Column>
       {/if}
       <Column>
@@ -759,6 +771,8 @@
   </div>
 </div>
 
+<MowSettingsDialog bind:open={showMowSettings} />
+
 <style>
   .map-dashboard {
     width: 100%;
@@ -834,5 +848,11 @@
   .action-btns {
     display: flex;
     flex-wrap: nowrap;
+  }
+
+  .toolbar-btn-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
   }
 </style>

@@ -304,3 +304,16 @@ void UbxResponse::marshal(const JsonObject &o) const
   o["timestamp"] = timestamp;
   o["hex"] = hexData;
 }
+
+void MowSettings::marshal(const JsonObject &o) const
+{
+  o["timestamp"] = timestamp;
+  o["pattern"] = pattern;
+  o["width"] = width;
+  o["angle"] = angle;
+  o["distanceToBorder"] = distanceToBorder;
+  o["borderLaps"] = borderLaps;
+  o["mowArea"] = mowArea;
+  o["mowExclusionBorder"] = mowExclusionBorder;
+  o["mowBorderCcw"] = mowBorderCcw;
+}

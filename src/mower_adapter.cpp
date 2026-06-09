@@ -34,6 +34,13 @@ void MowerAdapter::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
       _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size());
 }
 
+void MowerAdapter::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) {
+  _mowSettings = s;
+  _mowSettings.timestamp = millis();
+  Log(INFO, "%ssetMowSettings: pattern=%d width=%.2f angle=%d distToBorder=%d laps=%d",
+      _LOG_, s.pattern, s.width, s.angle, s.distanceToBorder, s.borderLaps);
+}
+
 // ===== SPIFFS-Persistenz (vorbereitet, aber noch nicht aktiv) =====
 // static const char *mapStorageFile = "/mower_map";
 //

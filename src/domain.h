@@ -265,6 +265,39 @@ namespace ArduMower
         void marshal(const JsonObject &o) const;
       };
 
+      class MowSettings
+      {
+      public:
+        uint32_t timestamp;
+        int pattern;
+        float width;
+        int angle;
+        int distanceToBorder;
+        int borderLaps;
+        bool mowArea;
+        bool mowExclusionBorder;
+        bool mowBorderCcw;
+
+        MowSettings()
+            : timestamp(0), pattern(0), width(0.3f), angle(0),
+              distanceToBorder(0), borderLaps(0),
+              mowArea(true), mowExclusionBorder(false), mowBorderCcw(false) {}
+
+        bool operator==(const MowSettings &other) {
+          return timestamp == other.timestamp
+              && pattern == other.pattern
+              && width == other.width
+              && angle == other.angle
+              && distanceToBorder == other.distanceToBorder
+              && borderLaps == other.borderLaps
+              && mowArea == other.mowArea
+              && mowExclusionBorder == other.mowExclusionBorder
+              && mowBorderCcw == other.mowBorderCcw;
+        }
+        bool operator!=(const MowSettings &other) { return !(*this == other); }
+        void marshal(const JsonObject &o) const;
+      };
+
       class StateSource
       {
       public:
@@ -283,9 +316,12 @@ namespace ArduMower
         virtual GpsDetails *gpsDetailsP() = 0;
         virtual UbxResponse ubxResponse() = 0;
         virtual UbxResponse *ubxResponseP() = 0;
+        virtual MowSettings mowSettings() = 0;
+        virtual MowSettings *mowSettingsP() = 0;
 
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
         virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map) = 0;
+        virtual void setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) = 0;
       };
 
       class CommandExecutor

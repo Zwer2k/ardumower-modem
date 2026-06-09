@@ -176,6 +176,27 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     }
     break;
 
+   case RequestDataType::setMowSettings:
+    {
+      using namespace ArduMower::Domain::Robot;
+      MowSettings s;
+      s.pattern = jsonData["pattern"] | 0;
+      s.width = jsonData["width"] | 0.3f;
+      s.angle = jsonData["angle"] | 0;
+      s.distanceToBorder = jsonData["distanceToBorder"] | 0;
+      s.borderLaps = jsonData["borderLaps"] | 0;
+      s.mowArea = jsonData["mowArea"] | true;
+      s.mowExclusionBorder = jsonData["mowExclusionBorder"] | false;
+      s.mowBorderCcw = jsonData["mowBorderCcw"] | false;
+      _socketHandler->setMowSettings(s);
+      _socketHandler->sendData(ResponseDataType::mowSettings, NULL, true);
+    }
+    break;
+
+   case RequestDataType::requestMowSettings:
+    _socketHandler->sendData(ResponseDataType::mowSettings, this, true);
+    break;
+
   default:
     break;
   }
@@ -537,6 +558,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     case ResponseDataType::ubxResponse:
       sendData(dataType, sendTo, _source.ubxResponse(), force);
       break;
+    case ResponseDataType::mowSettings:
+      sendData(dataType, sendTo, _source.mowSettings(), force);
+      break;
     default:
       break;
   }
@@ -729,6 +753,10 @@ void UiSocketHandler::navigateTo(float x, float y) {
 void UiSocketHandler::uploadMapToMower() {
   _cmd.uploadMapToMower();
   Log(DBG, "%s uploadMapToMower", _LOG_);
+}
+
+void UiSocketHandler::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) {
+  _source.setMowSettings(s);
 }
 
 void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
