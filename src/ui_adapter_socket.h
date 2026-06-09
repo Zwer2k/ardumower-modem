@@ -122,10 +122,11 @@ namespace ArduMower
         void uploadMapToMower();
         void requestStats();
         void requestStatsNow();
-        void sendBufferedLogTo(UiSocketItem* item);
+        void sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
         void setMap(const ArduMower::Domain::Robot::MowerMap &map);
+        void abortMapChunkSend();
 #ifdef MOWER_TERMINAL
-        void sendBufferedTerminalTo(UiSocketItem* item);
+        void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
 #endif
 
         bool gpsDetailsActive = false;
@@ -165,6 +166,7 @@ namespace ArduMower
         void handleData(uint32_t clientId, char *data);
         std::map<uint32_t, UiSocketItem*> itemMap;  
         MapChunkSendState mapChunkSendState;
+        std::map<uint32_t, String> _frameBuffer;
         
         void versionRequestLoop();
         void stateRequestLoop();
@@ -175,6 +177,7 @@ namespace ArduMower
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);
+        size_t countConnectedClients();
         void pingClients();
 #ifdef MOWER_TERMINAL
         void sendTerminalLine(String line);

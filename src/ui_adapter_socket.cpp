@@ -21,11 +21,14 @@ UiSocketItem::UiSocketItem(
   : _socketHandler(socketHandler), _client(client), _source(source) 
 {
   _socketHandler->sendData(ResponseDataType::mowerState, this, true);
+  yield();
   _socketHandler->sendData(ResponseDataType::desiredState, this, true);
+  yield();
   _socketHandler->sendData(ResponseDataType::map, this, true);
-  _socketHandler->sendBufferedLogTo(this);
+  yield();
+  _socketHandler->sendBufferedLogTo(this, 5);
 #ifdef MOWER_TERMINAL
-  _socketHandler->sendBufferedTerminalTo(this);
+  _socketHandler->sendBufferedTerminalTo(this, 5);
 #endif
 
   // Request fresh stats from Teensy immediately (bypasses rate limit)
@@ -130,7 +133,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     _socketHandler->uploadMapToMower();
     break;
 
-  case RequestDataType::setMap:
+   case RequestDataType::setMap:
     {
       using namespace ArduMower::Domain::Robot;
       MowerMap map;
@@ -166,6 +169,10 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
       Log(DBG, "%s setMap: parsed perimeter=%d exclusions=%d dockpoints=%d waypoints=%d", _LOG_,
           map.perimeter.size(), map.exclusions.size(), map.dockpoints.size(), map.waypoints.size());
       _socketHandler->setMap(map);
+      // Aktualisierte Karte sofort an alle verbundenen Clients senden.
+      // Laufenden Chunk-Versand abbrechen, damit die neue Karte übertragen wird.
+      _socketHandler->abortMapChunkSend();
+      _socketHandler->sendData(ResponseDataType::map, NULL, true);
     }
     break;
 
@@ -303,7 +310,7 @@ void UiSocketHandler::begin()
 void UiSocketHandler::loop()
 {
   _ws->cleanupClients();
-  if (_ws->count() == 0)
+  if (countConnectedClients() == 0)
     return;
 
   ubxLoop();
@@ -541,6 +548,8 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   if (mapChunkSendState.active || (!force && (map.timestamp == 0 || map.timestamp == oldDataTimestamp[ResponseDataType::map]))) {
     return;
   }
+  // reading-Flag setzen: schützt _map vor gleichzeitigen setMap()-Aufrufen
+  map.beginRead();
   // Snapshot einmalig speichern - verhindert Race Condition waehrend Chunk-Versand
   mapChunkSendState.snapshot = map;
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
@@ -726,39 +735,57 @@ void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
   _source.setMap(map);
 }
 
-void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item)
+void UiSocketHandler::abortMapChunkSend() {
+  if (mapChunkSendState.active) {
+    mapChunkSendState.active = false;
+    Log(DBG, "%s abortMapChunkSend: ongoing chunk send aborted", _LOG_);
+  }
+}
+
+static bool sendJsonDoc(UiSocketItem *item, DynamicJsonDocument &doc)
 {
+  if (doc.capacity() == 0) return false;
+  String stateStr;
+  serializeJson(doc, stateStr);
+  stateStr = sanitizeUtf8(stateStr);
+  return item->sendText(stateStr);
+}
+
+void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks)
+{
+  uint16_t chunks = 0;
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
-  while (true) {
-    DynamicJsonDocument doc(4096);
+  while (chunks < maxChunks) {
+    DynamicJsonDocument doc(2048);
+    if (doc.capacity() == 0) break;
     doc["type"] = ResponseDataType::modemLog;
     uint16_t sent = logToUi.marshalBatch(doc.createNestedObject("data"), offset, chunkSize);
-    if (sent == 0) break;
-    String stateStr;
-    serializeJson(doc, stateStr);
-    stateStr = sanitizeUtf8(stateStr);
-    item->sendText(stateStr);
+    if (sent == 0 || doc.overflowed()) break;
+    if (!sendJsonDoc(item, doc)) break;
     offset += sent;
+    chunks++;
+    yield();
   }
   oldDataTimestamp[ResponseDataType::modemLog] = logToUi.timestamp;
 }
 
 #ifdef MOWER_TERMINAL
-void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item)
+void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks)
 {
+  uint16_t chunks = 0;
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
-  while (true) {
-    DynamicJsonDocument doc(4096);
+  while (chunks < maxChunks) {
+    DynamicJsonDocument doc(2048);
+    if (doc.capacity() == 0) break;
     doc["type"] = ResponseDataType::mowerConsole;
     uint16_t sent = _terminal.marshalBatch(doc.createNestedObject("data"), offset, chunkSize);
-    if (sent == 0) break;
-    String stateStr;
-    serializeJson(doc, stateStr);
-    stateStr = sanitizeUtf8(stateStr);
-    item->sendText(stateStr);
+    if (sent == 0 || doc.overflowed()) break;
+    if (!sendJsonDoc(item, doc)) break;
     offset += sent;
+    chunks++;
+    yield();
   }
 }
 #endif
@@ -830,8 +857,13 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     sendTo->sendText(stateStr);
   } else {
     if (!sendTextAllWithRetry(_ws, stateStr)) {
-      Log(DBG, "%ssendData cleanup old clients\n", _LOG_); 
-      _ws->cleanupClients(); // cleanup disconnected clients
+      static uint32_t lastCleanupLog = 0;
+      uint32_t now = millis();
+      if (now - lastCleanupLog >= 10000) {
+        lastCleanupLog = now;
+        Log(WARN, "%ssendData cleanup old clients", _LOG_);
+      }
+      _ws->cleanupClients();
     }
   }
 }
@@ -859,6 +891,16 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
     return false;
   }
   return anySent;
+}
+
+size_t UiSocketHandler::countConnectedClients()
+{
+  size_t count = 0;
+  for (auto &c : _ws->getClients()) {
+    if (c.status() == WS_CONNECTED) count++;
+    if (count > 0) break;
+  }
+  return count;
 }
 
 void UiSocketHandler::pingClients()
@@ -919,12 +961,16 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
       delete itemMap[client->id()];
       itemMap.erase(client->id());
     }
+    _frameBuffer.erase(client->id());
     itemMap[client->id()] = new UiSocketItem(this, client, _source);
 
     _ws->cleanupClients(); // cleanup disconnected clients
   } else if(type == WS_EVT_ERROR){
     Log(ERR, "%s ws[%s][%u] error(%u): %s\n", _LOG_, server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+    _frameBuffer.erase(client->id());
     if (itemMap.find(client->id()) != itemMap.end()) {
+      if (mapChunkSendState.sendTo == itemMap[client->id()])
+        mapChunkSendState.sendTo = nullptr;
       delete itemMap[client->id()];
       itemMap.erase(client->id());
     }
@@ -940,7 +986,10 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
     Log(INFO, "%s ws[%s][%u] disconnect\n", _LOG_, server->url(), client->id());
+    _frameBuffer.erase(client->id());
     if (itemMap.find(client->id()) != itemMap.end()) {
+      if (mapChunkSendState.sendTo == itemMap[client->id()])
+        mapChunkSendState.sendTo = nullptr;
       delete itemMap[client->id()];
       itemMap.erase(client->id());
     }
@@ -985,6 +1034,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     } else {
       //message is comprised of multiple frames or the frame is split into multiple packets
       if(info->index == 0){
+        _frameBuffer[client->id()] = String();
         if(info->num == 0)
           Log(DBG, "%s ws[%s][%u] %s-message start\n", _LOG_, server->url(), client->id(), (info->message_opcode == WS_TEXT)?"text":"binary");
         Log(DBG, "%s ws[%s][%u] frame[%u] start[%llu]\n", _LOG_, server->url(), client->id(), info->num, info->len);
@@ -994,6 +1044,10 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
       if(info->message_opcode == WS_TEXT){
         data[len] = 0;
         Log(DBG, "%s %s\n", _LOG_, (char*)data);
+        String frag((const char*)data, len);
+        if (_frameBuffer.find(client->id()) != _frameBuffer.end()) {
+          _frameBuffer[client->id()].concat(frag);
+        }
       } else {
         String logLine = _LOG_;
         for(size_t i=0; i < len; i++){
@@ -1007,10 +1061,11 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
         Log(DBG, "%s ws[%s][%u] frame[%u] end[%llu]\n", _LOG_, server->url(), client->id(), info->num, info->len);
         if(info->final){
           Log(DBG, "%s ws[%s][%u] %s-message end\n", _LOG_, server->url(), client->id(), (info->message_opcode == WS_TEXT)?"text":"binary");
-          if(info->message_opcode == WS_TEXT)
+          if(info->message_opcode == WS_TEXT && _frameBuffer.find(client->id()) != _frameBuffer.end())
           {
-            client->text("I got your text message");
-            handleData(client->id(), (char*)data);
+            String &buf = _frameBuffer[client->id()];
+            handleData(client->id(), (char*)buf.c_str());
+            _frameBuffer.erase(client->id());
           }
           else
             client->binary("I got your binary message");
@@ -1022,20 +1077,24 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
 
 void UiSocketHandler::handleData(uint32_t clientId, char *data) 
 {
-  DynamicJsonDocument doc(strlen(data) * 2);
+  // Reichlich bemessener Puffer: 4x rawLen, da ArduinoJson für tief verschachtelte
+  // Strukturen (Karte mit vielen Stützpunkten) mehr Speicher braucht als das JSON selbst.
+  DynamicJsonDocument doc(strlen(data) * 4 + 2048);
   DeserializationError error = deserializeJson(doc, data);
   if (error) {
-    Log(ERR, "%s deserializeJson() failed: %s", _LOG_, error.f_str());
+    Log(ERR, "%s handleData: deserializeJson failed: %s (rawLen=%u)", _LOG_, error.f_str(), (unsigned)strlen(data));
     return;
   }
 
   if (itemMap.find(clientId) != itemMap.end())
   {
     const size_t dataSize = doc["data"].memoryUsage();
-    Log(DBG, "%s handleData type=%d dataSize=%u rawLen=%u", _LOG_, (int)doc["type"], (unsigned)dataSize, (unsigned)strlen(data));
-    DynamicJsonDocument jsonData(dataSize + 256);
+    const size_t rawLen = strlen(data);
+    Log(DBG, "%s handleData type=%d dataSize=%u rawLen=%u", _LOG_, (int)doc["type"], (unsigned)dataSize, (unsigned)rawLen);
+    const size_t jsonCapacity = (dataSize > 0 ? dataSize * 2 : rawLen) + 1024;
+    DynamicJsonDocument jsonData(jsonCapacity);
     if (!jsonData.set(doc["data"])) {
-      Log(ERR, "%s handleData: jsonData.set() failed (capacity=%u)", _LOG_, (unsigned)jsonData.capacity());
+      Log(ERR, "%s handleData: jsonData.set() failed (capacity=%u dataSize=%u)", _LOG_, (unsigned)jsonData.capacity(), (unsigned)dataSize);
       return;
     }
     itemMap[clientId]->handleData(doc["type"], jsonData);

@@ -63,6 +63,12 @@ void HttpAdapter::processQueue()
       delete req;
       continue;
     }
+    // Skip state-0 requests (waiting for body) if checked recently
+    if (req->state == 0 && req->httpRequestBody == "" && now - req->getLastPoll() < 100)
+    {
+      keep.push_back(req);
+      continue;
+    }
     processRequest(req);
     keep.push_back(req);
   }
@@ -117,6 +123,18 @@ void HttpAdapter::handleCommandRequest(AsyncWebServerRequest *request)
 {
   Log(DBG, "%shandleCommandRequest ID %d, open requests: %u", _LOG_, requestId, (unsigned)_queue.size());
   Http::CommandRequest *req = new Http::CommandRequest(requestId++, _metrics, request, millis());
+
+  // Body is already available in _tempObject (delivered via onBody callbacks
+  // before handleRequest runs). Recover it immediately.
+  req->recoverRequestBody();
+
+  // No body expected (Content-Length: 0 or missing) and none received – discard silently
+  if (req->httpRequestBody == "" && request->contentLength() == 0) {
+    Log(DBG, "%shandleCommandRequest ID=%d empty body (Content-Length: 0), discarding", _LOG_, req->id);
+    delete req;
+    return;
+  }
+
   if (req->done(millis()))
   {
     Log(DBG, "%shandleCommandRequest::fast", _LOG_);
@@ -181,7 +199,13 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
     req->recoverRequestBody();
     if (req->httpRequestBody == "") {
       if (req->age(millis()) < 3000) {
-        Log(DBG, "%sprocessRequest ID=%d body not yet arrived, age=%u", _LOG_, id, (unsigned)req->age(millis()));
+        static uint32_t lastLog = 0;
+        uint32_t now = millis();
+        if (now - lastLog >= 1000) {
+          lastLog = now;
+          Log(DBG, "%sprocessRequest ID=%d body not yet arrived, age=%u", _LOG_, id, (unsigned)req->age(millis()));
+        }
+        req->markPolled(millis());
         return; // body still arriving, retry later
       }
       Log(ERR, "%sprocessRequest ID=%d body empty after timeout", _LOG_, id);

@@ -49,12 +49,15 @@ namespace ArduMower
         void onRouterResponse(String res);
         void trimHttpRequestBody();
         void recoverRequestBody();
+        uint32_t getLastPoll() { return lastPoll; }
+        void markPolled(uint32_t now) { lastPoll = now; }
 
       private:
         AsyncWebServerRequest *request;
         AsyncWebServerRequestPtr serialRequest;
         bool _done;
         const uint32_t timeReceiveHttpRequest;
+        uint32_t lastPoll;
         bool timeout(const uint32_t now);
       };
     }

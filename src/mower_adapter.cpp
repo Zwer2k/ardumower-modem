@@ -5,6 +5,7 @@
 #include "prometheus_util.h"
 #include "settings.h"
 #include "mower_map.h"
+#include <SPIFFS.h>
 
 #define _LOG_ "MowerAdapter::"
 #define _LOG_CMD_ "MowerAdapter::command::"
@@ -32,6 +33,12 @@ void MowerAdapter::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
   Log(INFO, "%ssetMap: perimeter=%d exclusions=%d dockpoints=%d waypoints=%d",
       _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size());
 }
+
+// ===== SPIFFS-Persistenz (vorbereitet, aber noch nicht aktiv) =====
+// static const char *mapStorageFile = "/mower_map";
+//
+// void MowerAdapter::saveMap() { ... }
+// void MowerAdapter::loadMap() { ... }
 
 void MowerAdapter::begin()
 {

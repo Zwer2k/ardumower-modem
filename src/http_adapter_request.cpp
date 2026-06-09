@@ -10,7 +10,7 @@ Http::CommandRequest::CommandRequest(
     AsyncWebServerRequest *_request,
     const uint32_t timeNow)
     : _metrics(metrics), id(_id), state(0), httpRequestBody(""), routerResponse(""), request(_request), _done(false), 
-      timeReceiveHttpRequest(timeNow)
+      timeReceiveHttpRequest(timeNow), lastPoll(0)
 {
   serialRequest = request->pause();
   // Don't read body here - it might not be complete yet (esp. with chunked encoding).
