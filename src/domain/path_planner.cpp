@@ -111,7 +111,7 @@ Polygon offsetPolygonInward(const Polygon &poly, double distance) {
     Polygon result;
     result.reserve(poly.size());
     bool cw = isClockwise(poly);
-    double sign = cw ? 1.0 : -1.0;
+    double sign = cw ? -1.0 : 1.0;
     for (size_t i = 0; i < poly.size(); i++) {
         size_t prev = (i == 0) ? poly.size() - 1 : i - 1;
         size_t next = (i + 1) % poly.size();
@@ -142,6 +142,20 @@ Polygon offsetPolygonInward(const Polygon &poly, double distance) {
     return result;
 }
 
+// Check if the straight line between p1 and p2 stays entirely inside the polygon
+static bool lineWithinPolygon(const Point &p1, const Point &p2, const Polygon &poly) {
+    if (poly.size() < 3) return true;
+    double d = distance(p1, p2);
+    int steps = std::max(3, (int)(d / 0.05));
+    for (int i = 1; i < steps; i++) {
+        Point p = lerp(p1, p2, (double)i / steps);
+        if (!pointInPolygon(p, poly)) return false;
+    }
+    return true;
+}
+
+// Walk along the perimeter from the nearest point to `from` to the nearest point to `to`.
+// Returns perimeter points that act as a valid inside connection.
 static Polygon walkPerimeter(const Polygon &peri, const Point &from, const Point &to) {
     Polygon result;
     if (peri.size() < 3) { result.push_back(to); return result; }
@@ -182,6 +196,12 @@ static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
     return result;
 }
 
+struct Swath {
+    Point a, b;
+    int level;
+    bool visited;
+};
+
 Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow,
     double width, double angleDeg)
 {
@@ -194,8 +214,8 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
     boundingBox(areaRotated, minX, minY, maxX, maxY);
     if (maxY - minY < 0.01) return {};
 
-    // Generate horizontal sweep lines across the rotated polygon
-    std::vector<Polygon> segments;
+    // Create swath list (each swath = one horizontal line segment inside the rotated area)
+    std::vector<Swath> swaths;
     double y = minY;
     while (y <= maxY + 0.001) {
         auto crossings = intersectRayWithPolygon(y, areaRotated);
@@ -203,66 +223,160 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
             double x1 = crossings[i].x;
             double x2 = crossings[i + 1].x;
             if (std::abs(x2 - x1) < 0.02) continue;
-            Polygon seg;
-            seg.push_back({x1, y});
-            seg.push_back({x2, y});
-            segments.push_back(seg);
+            swaths.push_back({{x1, y}, {x2, y}, 0, false});
         }
         y += width;
     }
 
-    Log(DBG, "%scalculateLinesPattern %d segments", _LOG_, segments.size());
-    if (segments.empty()) return {};
+    Log(DBG, "%scalculateLinesPattern %d swaths", _LOG_, swaths.size());
+    if (swaths.empty()) return {};
 
-    // Sort segments by y-position for snake ordering
-    std::sort(segments.begin(), segments.end(),
-        [](const Polygon &a, const Polygon &b) {
-            return a.empty() ? false : b.empty() ? true : a[0].Y < b[0].Y;
-        });
-
-    // Find nearest segment to start point (rotated)
-    Point startNear = {0, 0};
-    if (!perimeter.empty())
-        startNear = rotatePoint(perimeter[0], -angleDeg);
-
-    size_t nearest = 0;
-    double bestDist = std::numeric_limits<double>::max();
-    for (size_t i = 0; i < segments.size(); i++) {
-        if (segments[i].size() < 2) continue;
-        for (int k = 0; k < 2; k++) {
-            double d = distance(startNear, segments[i][k]);
-            if (d < bestDist) { bestDist = d; nearest = i; }
-        }
+    // Sort by Y and assign levels (Cassandra: level = progress in Y direction)
+    std::sort(swaths.begin(), swaths.end(),
+        [](const Swath &a, const Swath &b) { return a.a.Y < b.a.Y; });
+    int level = 0;
+    double lastY = swaths[0].a.Y;
+    for (auto &s : swaths) {
+        if (s.a.Y > lastY + 0.001) level++;
+        s.level = level;
+        lastY = s.a.Y;
     }
-    std::swap(segments[0], segments[nearest]);
 
-    // Build route: each swath connected by walking the perimeter
-    Polygon route;
-    bool rev = distance(startNear, segments[0].back()) < distance(startNear, segments[0][0]);
-    if (rev) std::reverse(segments[0].begin(), segments[0].end());
-    for (const auto &p : segments[0])
-        if (pointInPolygon(p, areaRotated))
-            route.push_back(p);
+    // Rotated start position
+    Point start = {0, 0};
+    if (!perimeter.empty())
+        start = rotatePoint(perimeter[0], -angleDeg);
 
-    for (size_t i = 1; i < segments.size(); i++) {
-        if (segments[i].size() < 2) continue;
-        Point prevEnd = route.empty() ? startNear : route.back();
-        double dS = distance(prevEnd, segments[i][0]);
-        double dE = distance(prevEnd, segments[i].back());
-        if (dE < dS) std::reverse(segments[i].begin(), segments[i].end());
-        Point swathStart = segments[i][0];
-
-        // Connect via perimeter walk instead of straight line
-        double lineDist = distance(prevEnd, swathStart);
-        if (lineDist > width * 2) {
-            Polygon conn = walkPerimeter(periRotated, prevEnd, swathStart);
-            for (const auto &p : conn)
-                if (pointInPolygon(p, areaRotated) && distance(route.back(), p) > 0.01)
-                    route.push_back(p);
+    // Find nearest swath to start
+    {
+        size_t nearest = 0;
+        double best = std::numeric_limits<double>::max();
+        for (size_t i = 0; i < swaths.size(); i++) {
+            double d1 = distance(start, swaths[i].a);
+            double d2 = distance(start, swaths[i].b);
+            if (d1 < best) { best = d1; nearest = i; }
+            if (d2 < best) { best = d2; nearest = i; }
         }
-        for (const auto &p : segments[i])
-            if (pointInPolygon(p, areaRotated) && distance(route.back(), p) > 0.01)
-                route.push_back(p);
+        if (nearest != 0) std::swap(swaths[0], swaths[nearest]);
+    }
+
+    // Greedy Cassandra-style route building
+    Polygon route;
+    size_t currentLevel = 0;
+    Point currentPos = start;
+    int visitedCount = 0;
+
+    // Helper: add a swath (with orientation) to the route
+    auto addSwath = [&](const Swath &s, bool reverse) {
+        if (reverse) {
+            if (route.empty() || distance(route.back(), s.b) > 0.01)
+                route.push_back(s.b);
+            if (distance(route.back(), s.a) > 0.01)
+                route.push_back(s.a);
+        } else {
+            if (route.empty() || distance(route.back(), s.a) > 0.01)
+                route.push_back(s.a);
+            if (distance(route.back(), s.b) > 0.01)
+                route.push_back(s.b);
+        }
+    };
+
+    // Activate first swath
+    {
+        double dA = distance(start, swaths[0].a);
+        double dB = distance(start, swaths[0].b);
+        addSwath(swaths[0], dB < dA);
+        currentPos = route.back();
+        currentLevel = swaths[0].level;
+        swaths[0].visited = true;
+        visitedCount++;
+    }
+
+    while (visitedCount < (int)swaths.size()) {
+        // Collect candidate swaths (priority to current/adjacent levels, like Cassandra)
+        std::vector<size_t> candidates;
+        for (size_t i = 0; i < swaths.size(); i++) {
+            if (swaths[i].visited) continue;
+            int dl = std::abs(swaths[i].level - (int)currentLevel);
+            if (dl <= 1) candidates.push_back(i);
+        }
+        if (candidates.empty()) {
+            for (size_t i = 0; i < swaths.size(); i++)
+                if (!swaths[i].visited) candidates.push_back(i);
+        }
+
+        size_t bestIdx = swaths.size();
+        int bestOrient = 0;   // 0 = forward (a->b), 1 = reverse (b->a)
+        double bestDist = std::numeric_limits<double>::max();
+        Polygon bestPath;
+
+        auto tryConnection = [&](const Point &from, const Point &swathPoint,
+                                 const Swath &sw, int orient) {
+            // Cassandra step 1: try direct line
+            if (lineWithinPolygon(from, swathPoint, areaRotated)) {
+                double d = distance(from, swathPoint);
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestIdx = &sw - swaths.data();
+                    bestOrient = orient;
+                    bestPath.clear();
+                }
+                return true;
+            }
+            // Cassandra step 2: fallback → walk perimeter along boundary
+            Polygon conn = walkPerimeter(areaRotated, from, swathPoint);
+            // Validate that walk path (from → nearestPeri → ... → swathPoint) stays inside
+            bool valid = true;
+            Point prev = from;
+            for (const auto &p : conn) {
+                if (!pointInPolygon(p, areaRotated)) { valid = false; break; }
+                if (!lineWithinPolygon(prev, p, areaRotated)) { valid = false; break; }
+                prev = p;
+            }
+            if (valid) {
+                double d = distance(from, swathPoint);
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestIdx = &sw - swaths.data();
+                    bestOrient = orient;
+                    bestPath = conn;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        for (size_t ci : candidates) {
+            const auto &sw = swaths[ci];
+            tryConnection(currentPos, sw.a, sw, 0);
+            tryConnection(currentPos, sw.b, sw, 1);
+        }
+
+        if (bestIdx < swaths.size()) {
+            // Add connection path (if any) + swath
+            for (const auto &p : bestPath)
+                if (distance(route.back(), p) > 0.01)
+                    route.push_back(p);
+            addSwath(swaths[bestIdx], bestOrient == 1);
+            currentPos = route.back();
+            currentLevel = swaths[bestIdx].level;
+            swaths[bestIdx].visited = true;
+            visitedCount++;
+            Log(DBG, "%scalculateLinesPattern visited %d/%d level=%d", _LOG_,
+                visitedCount, (int)swaths.size(), currentLevel);
+        } else {
+            // No valid connection found for any candidate
+            // Cassandra: use A* as last resort. Here we add remaining swaths directly
+            // and let the mower handle outside segments.
+            Log(WARN, "%scalculateLinesPattern no valid connection, adding remaining directly", _LOG_);
+            for (auto &sw : swaths) {
+                if (sw.visited) continue;
+                addSwath(sw, false);
+                sw.visited = true;
+                visitedCount++;
+            }
+            break;
+        }
     }
 
     route = rotatePolygon(route, angleDeg);
@@ -277,46 +391,46 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     Log(DBG, "%scalculateRingsPattern width=%.3f", _LOG_, width);
     if (areaToMow.size() < 3 || width < 0.001) return {};
 
-    double minX, minY, maxX, maxY;
-    boundingBox(areaToMow, minX, minY, maxX, maxY);
-    double cx = (minX + maxX) / 2.0;
-    double cy = (minY + maxY) / 2.0;
-    double maxR = std::sqrt((maxX - cx) * (maxX - cx) + (maxY - cy) * (maxY - cy));
-    int numRings = std::max(1, (int)(maxR / width));
-
-    Point center = {cx, cy};
+    // Cassandra: shrink areaToMow inward by `-width` repeatedly
+    // to create concentric rings. Each ring is the full polygon outline,
+    // NOT centroid-scaled.
     Polygon route;
+    Polygon currentArea = areaToMow;
+    Point startNear = perimeter.empty() ? areaToMow[0] : perimeter[0];
 
-    for (int r = 0; r < numRings; r++) {
-        double scale = 1.0 - (double)(r + 1) / (numRings + 1);
-        if (scale < 0.01) {
-            if (route.empty() || distance(route.back(), center) > 0.01)
-                route.push_back(center);
+    while (true) {
+        if (currentArea.size() < 3) {
+            // Add centroid as final point
+            double minX, minY, maxX, maxY;
+            boundingBox(areaToMow, minX, minY, maxX, maxY);
+            Point c = {(minX + maxX) / 2.0, (minY + maxY) / 2.0};
+            if (route.empty() || distance(route.back(), c) > 0.01)
+                route.push_back(c);
             break;
         }
+
+        // Walk the current ring, starting at the point nearest to startNear
+        size_t startIdx = nearestPointIndex(startNear, currentArea);
+        bool cw = isClockwise(currentArea);
         Polygon ring;
-        ring.reserve(areaToMow.size());
-        for (const auto &p : areaToMow) {
-            double px = center.X + (p.X - center.X) * scale;
-            double py = center.Y + (p.Y - center.Y) * scale;
-            Point scaled = {px, py};
-            if (pointInPolygon(scaled, areaToMow))
-                ring.push_back(scaled);
+        for (size_t i = 0; i < currentArea.size(); i++) {
+            size_t idx = cw ? (startIdx + i) % currentArea.size()
+                            : (startIdx + currentArea.size() - i) % currentArea.size();
+            ring.push_back(currentArea[idx]);
         }
-        if (ring.size() < 3) {
-            if (route.empty() || distance(route.back(), center) > 0.01)
-                route.push_back(center);
+        for (const auto &p : ring)
+            if (route.empty() || distance(route.back(), p) > 0.01)
+                route.push_back(p);
+
+        // Shrink inward using buffer-like simplification
+        Polygon next = offsetPolygonInward(currentArea, width);
+        if (next.size() == currentArea.size() &&
+            distance(next[0], currentArea[0]) < 0.001) {
+            // offsetPolygonInward didn't actually change the polygon
             break;
         }
-
-        size_t startIdx = 0;
-        if (!perimeter.empty())
-            startIdx = nearestPointIndex(perimeter[0], ring);
-        bool cw = isClockwise(ring);
-        for (size_t i = 0; i < ring.size(); i++) {
-            size_t idx = cw ? (startIdx + i) % ring.size() : (startIdx + ring.size() - i) % ring.size();
-            route.push_back(ring[idx]);
-        }
+        currentArea = next;
+        if (isClockwise(currentArea) != cw) break;
     }
 
     route = pruneOutside(route, areaToMow);

@@ -4,7 +4,7 @@
 
 #include "../src/ui_adapter.h"
 #include "../src/git_version.h"
-#include "../src/asset_bundle.h"
+#include "../src/sys/asset_bundle.h"
 
 using namespace aunit;
 

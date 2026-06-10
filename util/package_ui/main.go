@@ -11,7 +11,7 @@ func dataDirectory() string {
 }
 
 func bundleFile() string {
-	return "../../src/asset_bundle.h"
+	return "../../src/sys/asset_bundle.h"
 }
 
 func main() {

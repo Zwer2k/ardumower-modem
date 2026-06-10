@@ -46,7 +46,7 @@ tasks:
     - task: build-ui
     dir: util/package_ui
     generates:
-    - ../../src/asset_bundle.h
+    - ../../src/sys/asset_bundle.h
     sources:
     - ../../ui/build/**/*
     - ./**/*

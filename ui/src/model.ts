@@ -66,6 +66,7 @@ export interface Info {
   git_hash: string;
   git_time: string;
   git_tag: string;
+  build_time: string;
   uptime: number;
   bt_mac: string;
 }

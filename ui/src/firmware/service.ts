@@ -176,6 +176,7 @@ export interface ApiModemInfoResponse {
   git_hash: string
   git_time: string
   git_tag: string
+  build_time: string
   uptime: number
   terminal_available?: boolean;
 }

@@ -6,6 +6,7 @@ as compiler defines - equivalent to ci/bin/git-tag.sh used in Taskfile.
 
 import subprocess
 import os
+from datetime import datetime
 
 Import("env")  # noqa: F821 (PlatformIO injects this)
 
@@ -49,6 +50,7 @@ def get_git_tag():
 git_hash = get_git_hash()
 git_time = get_git_time()
 git_tag  = get_git_tag()
+build_time = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
 def make_tag(value):
@@ -66,7 +68,8 @@ cpp_content = (
     'const char *git_hash = "{}";\n'
     'const char *git_time = "{}";\n'
     'const char *git_tag = "{}";\n'
-).format(git_hash or "unknown", git_time or "unknown", git_tag or "")
+    'const char *build_time = "{}";\n'
+).format(git_hash or "unknown", git_time or "unknown", git_tag or "", build_time or "unknown")
 
 with open(cpp_path, "w") as f:
     f.write(cpp_content)

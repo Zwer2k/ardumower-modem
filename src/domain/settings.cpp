@@ -55,6 +55,7 @@ const char * _t_both = "both";
 const char * _t_git_hash = "git_hash";
 const char * _t_git_time = "git_time";
 const char * _t_git_tag = "git_tag";
+const char * _t_build_time = "build_time";
 const char * _t_uptime = "uptime";
 const char * _t_bt_mac = "bt_mac";
 const char * _t_terminal_available = "terminal_available";
@@ -612,6 +613,7 @@ void PropertiesClass::marshal(const JsonObject &o) const
   o[_t_git_hash] = git_hash;
   o[_t_git_time] = git_time;
   o[_t_git_tag] = git_tag;
+  o[_t_build_time] = build_time;
   o[_t_uptime] = millis();
   o[_t_bt_mac] = getBTMacAddress();
 #ifdef MOWER_TERMINAL

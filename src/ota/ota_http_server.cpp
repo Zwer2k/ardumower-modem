@@ -266,12 +266,21 @@ void Http::ModemUploadSession::respond(AsyncWebServerRequest *request)
   request->send(res);
 
   if (result == Result::FLASH_PENDING)
+  {
     s->queueFlash(this);
+    request->_tempObject = NULL;
+  }
   else if (result == Result::SUCCESS)
+  {
     s->requestRestart();
+    request->_tempObject = NULL;
+    delete this;
+  }
   else {
+    request->_tempObject = NULL;
     if (_buffer) free(_buffer);
     _buffer = NULL;
+    delete this;
   }
 }
 
@@ -313,6 +322,7 @@ void Http::ModemUploadSession::doFlash()
     }
     written += chunk;
     esp_task_wdt_reset();
+    delay(1);
   }
 
   if (!Update.end(true))

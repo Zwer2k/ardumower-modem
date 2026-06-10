@@ -82,6 +82,10 @@
           <StructuredListCell>Source Version</StructuredListCell>
           <StructuredListCell>{$InfoStore.git_hash}</StructuredListCell>
         </StructuredListRow>
+        <StructuredListRow>
+          <StructuredListCell>Build Time</StructuredListCell>
+          <StructuredListCell>{$InfoStore.build_time}</StructuredListCell>
+        </StructuredListRow>
       </StructuredListBody>
     </StructuredList>
   {/if}

@@ -190,6 +190,7 @@ void Console::printInfo()
           git["hash"] = git_hash;
           git["time"] = git_time;
           git["tag"] = git_tag;
+          info["build_time"] = build_time;
         });
     return;
   }
@@ -203,13 +204,15 @@ void Console::printInfo()
       "Git:\r\n"
       "  Hash: %s\r\n"
       "  Time: %s\r\n"
-      "  Tag : %s\r\n",
+      "  Tag : %s\r\n"
+      "  Build: %s\r\n",
       "ArduMower Modem",
       id.c_str(),
       settings.general.name.c_str(),
       git_hash,
       git_time,
-      git_tag);
+      git_tag,
+      build_time);
 }
 
 void Console::printStatus()
