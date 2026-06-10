@@ -3,6 +3,8 @@
 #include <Update.h>
 #include <AsyncJson.h>
 #include <SPIFFS.h>
+#include <esp_task_wdt.h>
+#include <Arduino.h>
 
 using namespace ArduMower::Modem::Ota;
 using namespace std::placeholders;
@@ -28,7 +30,22 @@ void HttpServer::begin()
 
 void HttpServer::loop()
 {
+  loopFlash();
   loopRestart();
+}
+
+void HttpServer::queueFlash(Http::ModemUploadSession *session)
+{
+  _flashSession = session;
+}
+
+void HttpServer::loopFlash()
+{
+  if (!_flashSession) return;
+
+  auto session = _flashSession;
+  _flashSession = NULL;
+  session->doFlash();
 }
 
 void HttpServer::handleUploadRequest(AsyncWebServerRequest *request)
@@ -97,8 +114,7 @@ void HttpServer::beginModemUpdate(AsyncWebServerRequest *request, size_t index, 
   if (!auth(request))
     return;
 
-  size_t totalSize = request->contentLength();
-  auto session = new Http::ModemUploadSession(this, totalSize);
+  auto session = new Http::ModemUploadSession(this);
   request->_tempObject = session;
   session->handle(index, data, len, final);
 }
@@ -141,54 +157,24 @@ void HttpServer::loopRestart()
 
 // Http::ModemUploadSession
 
-void Http::ModemUploadSession::respond(AsyncWebServerRequest *request)
+Http::ModemUploadSession::ModemUploadSession(HttpServer *_s)
+  : s(_s), result(Result::PENDING), _buffer(NULL), _bufferPos(0), _streaming(false)
 {
-
-  auto res = new AsyncJsonResponse();
-  auto o = res->getRoot();
-
-  auto success = result == Result::SUCCESS;
-
-  // TODO unify with error handling from http_common.h
-  o["success"] = success;
-  o["result"] = resultToString(result);
-
-  if (success)
-    o["md5"] = Update.md5String();
-
-  Log(INFO, "Ota::Http::ModemUploadSession::respond(%d / %s)", (int)result, resultToString(result));
-  res->setLength();
-  request->send(res);
-  if (success)
-    s->requestRestart();
-  else {
-    Update.abort();
-    
+  _buffer = (uint8_t*)ps_malloc(MAX_OTA_SIZE);
+  if (_buffer)
+  {
+    Log(INFO, "Ota::Http::ModemUploadSession::mode=buffered(size=%u)", MAX_OTA_SIZE);
   }
-}
-
-Http::ModemUploadSession::ModemUploadSession(HttpServer *_s, size_t totalSize)
-  : s(_s), result(Result::PENDING), _index(0), _totalSize(totalSize), _bufPos(0)
-{
-  _buffer = (uint8_t*)malloc(BUFFER_SIZE);
+  else
+  {
+    Log(WARN, "Ota::Http::ModemUploadSession::mode=streaming (ps_malloc failed)");
+    _streaming = true;
+  }
 }
 
 Http::ModemUploadSession::~ModemUploadSession()
 {
-  free(_buffer);
-}
-
-void Http::ModemUploadSession::flushBuffer()
-{
-  if (_bufPos == 0) return;
-  auto n = Update.write(_buffer, _bufPos);
-  if (n != _bufPos)
-  {
-    Log(ERR, "Ota::Http::ModemUploadSession::flush::write-error(len=%u written=%u error=%s)", _bufPos, n, Update.errorString());
-    result = Result::SHORT_WRITE_ERROR;
-    return;
-  }
-  _bufPos = 0;
+  if (_buffer) free(_buffer);
 }
 
 void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, bool final)
@@ -196,73 +182,154 @@ void Http::ModemUploadSession::handle(size_t index, uint8_t *data, size_t len, b
   if (!(result == Result::PENDING || result == Result::STARTED))
     return;
 
-  if (_index != index)
-  {
-    Log(ERR, "Ota::Http::ModemUploadSession::handle::index-mismatch(expect=%u is=%u)", _index, index);
-    result = Result::INDEX_MISMATCH;
-    return;
-  }
-
   if (index == 0)
   {
-    if (!Update.begin(_totalSize > 0 ? _totalSize : UPDATE_SIZE_UNKNOWN))
-    {
-      Log(ERR, "Ota::Http::ModemUploadSession::handle::update-begin-error(%s)", Update.errorString());
-      result = Result::UPDATE_BEGIN_FAILED;
-      
-      return;
-    }
-
     if (!verifyHeader(data, len))
     {
       result = Result::VERIFY_HEADER_FAILED;
-      
       return;
     }
 
-    Log(INFO, "Ota::Http::ModemUploadSession::handle::update-begin");
+    if (_streaming)
+    {
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+      {
+        Log(ERR, "Ota::Http::ModemUploadSession::handle::update-begin-error(%s)", Update.errorString());
+        result = Result::UPDATE_BEGIN_FAILED;
+        return;
+      }
+      Log(INFO, "Ota::Http::ModemUploadSession::handle::streaming-begin");
+    }
+    else
+    {
+      Log(INFO, "Ota::Http::ModemUploadSession::handle::buffer-begin");
+    }
+
     result = Result::STARTED;
   }
 
-  // Accumulate data in intermediate buffer, flush to flash in BUFFER_SIZE blocks
+  if (_streaming)
   {
-    const uint8_t *ptr = data;
-    size_t remaining = len;
-    while (remaining > 0 && result == Result::STARTED)
+    if (Update.write(data, len) != len)
     {
-      size_t space = BUFFER_SIZE - _bufPos;
-      size_t copy = (space < remaining) ? space : remaining;
-      memcpy(_buffer + _bufPos, ptr, copy);
-      _bufPos += copy;
-      ptr += copy;
-      remaining -= copy;
-
-      if (_bufPos == BUFFER_SIZE)
-      {
-        flushBuffer();
-        if (result != Result::STARTED) return;
-      }
+      Log(ERR, "Ota::Http::ModemUploadSession::handle::write-error(%s)", Update.errorString());
+      result = Result::SHORT_WRITE_ERROR;
+      return;
     }
+    esp_task_wdt_reset();
+
+    if (!final) return;
+
+    if (!Update.end(true))
+    {
+      Log(ERR, "Ota::Http::ModemUploadSession::handle::update-end-error(%s)", Update.errorString());
+      result = Result::UPDATE_END_FAILED;
+      return;
+    }
+    Log(INFO, "Ota::Http::ModemUploadSession::handle::streaming-end");
+    result = Result::SUCCESS;
   }
-  _index += len;
+  else
+  {
+    if (_bufferPos + len > MAX_OTA_SIZE)
+    {
+      Log(ERR, "Ota::Http::ModemUploadSession::handle::buffer-overflow(%u+%u > %u)", _bufferPos, len, MAX_OTA_SIZE);
+      result = Result::ERROR;
+      return;
+    }
 
-  if (!final)
+    memcpy(_buffer + _bufferPos, data, len);
+    _bufferPos += len;
+
+    if (!final) return;
+
+    Log(INFO, "Ota::Http::ModemUploadSession::handle::buffer-end(size=%u)", _bufferPos);
+    result = Result::FLASH_PENDING;
+  }
+}
+
+void Http::ModemUploadSession::respond(AsyncWebServerRequest *request)
+{
+  auto res = new AsyncJsonResponse();
+  auto o = res->getRoot();
+
+  bool success = (result == Result::FLASH_PENDING || result == Result::SUCCESS);
+
+  if (_streaming && result == Result::SUCCESS)
+    o["md5"] = Update.md5String();
+
+  o["success"] = success;
+  o["result"] = resultToString(result);
+
+  Log(INFO, "Ota::Http::ModemUploadSession::respond(%d / %s)", (int)result, resultToString(result));
+  res->setLength();
+  request->send(res);
+
+  if (result == Result::FLASH_PENDING)
+    s->queueFlash(this);
+  else if (result == Result::SUCCESS)
+    s->requestRestart();
+  else {
+    if (_buffer) free(_buffer);
+    _buffer = NULL;
+  }
+}
+
+void Http::ModemUploadSession::doFlash()
+{
+  Log(INFO, "Ota::Http::ModemUploadSession::flash-start(size=%u)", _bufferPos);
+
+  if (!_buffer || _bufferPos == 0)
+  {
+    Log(ERR, "Ota::Http::ModemUploadSession::flash::no-data");
+    delete this;
     return;
+  }
 
-  // Flush remaining buffered data
-  flushBuffer();
-  if (result != Result::STARTED) return;
+  if (!Update.begin(_bufferPos))
+  {
+    Log(ERR, "Ota::Http::ModemUploadSession::flash::update-begin-error(%s)", Update.errorString());
+    free(_buffer);
+    _buffer = NULL;
+    delete this;
+    return;
+  }
+
+  size_t written = 0;
+  while (written < _bufferPos)
+  {
+    size_t chunk = _bufferPos - written;
+    if (chunk > 4096) chunk = 4096;
+
+    auto n = Update.write(_buffer + written, chunk);
+    if (n != chunk)
+    {
+      Log(ERR, "Ota::Http::ModemUploadSession::flash::write-error(%s)", Update.errorString());
+      Update.abort();
+      free(_buffer);
+      _buffer = NULL;
+      delete this;
+      return;
+    }
+    written += chunk;
+    esp_task_wdt_reset();
+  }
 
   if (!Update.end(true))
   {
-    Log(ERR, "Ota::Http::ModemUploadSession::handle::update-end-error(%s)", Update.errorString());
-    result = Result::UPDATE_END_FAILED;
-    
+    Log(ERR, "Ota::Http::ModemUploadSession::flash::update-end-error(%s)", Update.errorString());
+    free(_buffer);
+    _buffer = NULL;
+    delete this;
     return;
   }
 
-  Log(INFO, "Ota::Http::ModemUploadSession::handle::update-end");
-  result = Result::SUCCESS;
+  Log(INFO, "Ota::Http::ModemUploadSession::flash::success");
+  free(_buffer);
+  _buffer = NULL;
+
+  s->requestRestart();
+  delete this;
 }
 
 bool Http::ModemUploadSession::verifyHeader(uint8_t *data, size_t len)
@@ -300,6 +367,7 @@ static const char *result_update_begin_failed = "update_begin_failed";
 static const char *result_verify_header_failed = "verify_header_failed";
 static const char *result_short_write_error = "short_write_error";
 static const char *result_update_end_failed = "update_end_failed";
+static const char *result_flash_pending = "flash_pending";
 static const char *result_unknown = "unknown";
 
 const char *resultToString(Http::Result r)
@@ -335,6 +403,9 @@ const char *resultToString(Http::Result r)
 
   case Http::Result::UPDATE_END_FAILED:
     return result_update_end_failed;
+
+  case Http::Result::FLASH_PENDING:
+    return result_flash_pending;
 
   default:
     return result_unknown;

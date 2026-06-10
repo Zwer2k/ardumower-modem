@@ -19,7 +19,7 @@ import type {
   MowSettingsData,
 } from "../model";
 import { ResponseDataType, RequestDataType } from "../model";
-import { handleMapChunk } from "../map/map-chunk-buffer";
+import { handleMapChunk, waypointsStore, resetMapChunkBuffer } from "../map/map-chunk-buffer";
 import { mowSettingsStore } from "../map/mow-settings";
 
 export interface SocketState {
@@ -453,6 +453,7 @@ class SocketService {
       data: {},
     };
     this.sendMessage(req);
+    waypointsStore.set([]);
   }
 
   sendCalculateWaypoints() {
@@ -461,6 +462,7 @@ class SocketService {
       data: {},
     };
     this.sendMessage(req);
+    resetMapChunkBuffer();
   }
 
   disconnect() {

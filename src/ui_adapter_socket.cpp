@@ -649,7 +649,10 @@ void UiSocketHandler::processMapChunkSend() {
         mapChunkSendState.idx += blockSize;
         if (mapChunkSendState.idx >= map.waypoints.size()) { mapChunkSendState.phase = 4; mapChunkSendState.idx = 0; }
         break;
-      } else { mapChunkSendState.phase = 4; mapChunkSendState.idx = 0; }
+      } else {
+        sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, 0, 0);
+        mapChunkSendState.phase = 4; mapChunkSendState.idx = 0;
+      }
       // fallthrough
     case 4:
       mapChunkSendState.active = false;
@@ -663,7 +666,7 @@ void UiSocketHandler::processMapChunkSend() {
 bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem* sendTo, int exclusionIdx, size_t startIdx, size_t blockSize) {
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
-  if (startIdx >= total) return false;
+  if (startIdx > total || (startIdx == total && total > 0)) return false;
   DynamicJsonDocument doc(maxJsonSize);
   doc["type"] = ResponseDataType::map;
   doc["timestamp"] = timestamp;
@@ -768,12 +771,33 @@ void UiSocketHandler::setMowSettings(const ArduMower::Domain::Robot::MowSettings
   _source.setMowSettings(s);
 }
 
+void UiSocketHandler::sendWaypointsDirect(const std::vector<ArduMower::Domain::Robot::MapPoint> &waypoints, uint32_t timestamp) {
+  DynamicJsonDocument doc(2048);
+  doc["type"] = ResponseDataType::map;
+  doc["timestamp"] = timestamp;
+  auto data = doc.createNestedObject("data");
+  data["startIndex"] = 0;
+  data["total"] = (int)waypoints.size();
+  data["pointType"] = static_cast<int>(MapPointType::Waypoints);
+  auto arr = data.createNestedArray("points");
+  for (const auto &wp : waypoints) {
+    JsonObject obj = arr.createNestedObject();
+    wp.marshal(obj);
+  }
+  String json;
+  serializeJson(doc, json);
+  json = sanitizeUtf8(json);
+  sendTextAllWithRetry(_ws, json);
+}
+
 void UiSocketHandler::clearWaypoints() {
   using namespace ArduMower::Domain::Robot;
   auto map = _source.mowerMap();
+  uint32_t ts = millis();
   map.waypoints.clear();
   _source.setMap(map);
   abortMapChunkSend();
+  sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
   Log(INFO, "%s clearWaypoints: waypoints cleared, map broadcast", _LOG_);
 }
@@ -781,6 +805,7 @@ void UiSocketHandler::clearWaypoints() {
 void UiSocketHandler::calculateWaypoints() {
   using namespace ArduMower::Domain::Robot;
   auto map = _source.mowerMap();
+  uint32_t ts = millis();
   auto settings = _source.mowSettings();
   map.waypoints.clear();
   auto waypoints = ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings);
@@ -788,6 +813,7 @@ void UiSocketHandler::calculateWaypoints() {
     map.waypoints.push_back(wp);
   _source.setMap(map);
   abortMapChunkSend();
+  sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
   Log(INFO, "%s calculateWaypoints: %d waypoints generated, map broadcast", _LOG_, map.waypoints.size());
 }
@@ -917,13 +943,8 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   if (sendTo != NULL) {
     sendTo->sendText(stateStr);
   } else {
+    if (countConnectedClients() == 0) return;
     if (!sendTextAllWithRetry(_ws, stateStr)) {
-      static uint32_t lastCleanupLog = 0;
-      uint32_t now = millis();
-      if (now - lastCleanupLog >= 10000) {
-        lastCleanupLog = now;
-        Log(WARN, "%ssendData cleanup old clients", _LOG_);
-      }
       _ws->cleanupClients();
     }
   }
@@ -933,24 +954,27 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
 {
   bool anySent = false;
   int clientCount = 0;
+  bool anyConnected = false;
   try {
     for (auto &client : ws->getClients()) {
       if (++clientCount > 16)
-        break; // Sicherheitslimit, um Endlosschleifen zu vermeiden
-      if (client.status() == WS_DISCONNECTED)
+        break;
+      auto status = client.status();
+      if (status != WS_CONNECTED)
         continue;
+      anyConnected = true;
       try {
         if (client.text(text.c_str())) {
           anySent = true;
         }
       } catch (...) {
-        // ignore send errors for individual clients
       }
-      yield(); // Watchdog füttern
+      yield();
     }
   } catch (...) {
     return false;
   }
+  if (!anyConnected) return true;
   return anySent;
 }
 

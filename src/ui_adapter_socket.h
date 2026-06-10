@@ -133,6 +133,7 @@ namespace ArduMower
         void clearWaypoints();
         void calculateWaypoints();
         void abortMapChunkSend();
+        void sendWaypointsDirect(const std::vector<ArduMower::Domain::Robot::MapPoint> &waypoints, uint32_t timestamp);
 #ifdef MOWER_TERMINAL
         void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
 #endif

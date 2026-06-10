@@ -34,12 +34,14 @@ namespace ArduMower
           VERIFY_HEADER_FAILED,
           SHORT_WRITE_ERROR,
           UPDATE_END_FAILED,
+          FLASH_PENDING,
         };
 
         class UploadSession
         {
         public: 
           UploadSession() {}
+          virtual ~UploadSession() {}
 
           virtual void handle(size_t index, uint8_t *data, size_t len, bool final);
           virtual void respond(AsyncWebServerRequest *request);
@@ -48,24 +50,25 @@ namespace ArduMower
         class ModemUploadSession : UploadSession
         {
         private:
-          static const size_t BUFFER_SIZE = 8192;
+          static const size_t MAX_OTA_SIZE = 0x200000; // 2MB PSRAM buffer
 
           HttpServer *s;
           Result result;
-          size_t _index;
-          size_t _totalSize;
-          uint8_t *_buffer;
-          size_t _bufPos;
+          uint8_t *_buffer;     // PSRAM buffer (NULL = streaming fallback)
+          size_t _bufferPos;    // bytes buffered so far / total firmware size
+          bool _streaming;      // true = direct Update.write(), no buffering
 
           bool verifyHeader(uint8_t *data, size_t len);
-          void flushBuffer();
 
         public:
-        ModemUploadSession(HttpServer *_s, size_t totalSize = 0);
-        ~ModemUploadSession();
+          ModemUploadSession(HttpServer *_s);
+          ~ModemUploadSession();
 
           void handle(size_t index, uint8_t *data, size_t len, bool final);
           void respond(AsyncWebServerRequest *request);
+
+          bool isFlashPending() { return result == Result::FLASH_PENDING; }
+          void doFlash();
         };
 
         class MowerUploadSession : UploadSession
@@ -99,6 +102,7 @@ namespace ArduMower
         bool _failed;
         bool _restart;
         uint32_t _restartTime;
+        Http::ModemUploadSession *_flashSession;
 
         void handleUploadRequest(AsyncWebServerRequest *request);
         void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
@@ -111,6 +115,7 @@ namespace ArduMower
         void continueUpdate(AsyncWebServerRequest *request, size_t index, uint8_t *data, size_t len, bool final);
 
         void loopRestart();
+        void loopFlash();
         FirmwareUploadType getUploadType(AsyncWebServerRequest *request);
 
       public:
@@ -121,7 +126,7 @@ namespace ArduMower
         virtual bool active() override { return _active; };
 
         void requestRestart();
-        
+        void queueFlash(Http::ModemUploadSession *session);
       };
     }
   }
