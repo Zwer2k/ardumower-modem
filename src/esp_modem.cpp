@@ -149,8 +149,10 @@ void setup() {
   looptime.add("ota_arduino", std::bind(&Ota::ArduinoOta::loop, &ota));
   looptime.add("flash_progress", [&](){
     static uint32_t last = 0;
-    if (Ota::otaFlashTotal > 0 && millis() - last > 500) {
-      last = millis();
+    uint32_t now = millis();
+    if (Ota::otaFlashTotal > 0 && now - last > 500) {
+      last = now;
+      Log(DBG, "flash_progress: %u/%u", (unsigned)Ota::otaFlashProgress, (unsigned)Ota::otaFlashTotal);
       socketHandler.broadcastFlashProgress(Ota::otaFlashProgress, Ota::otaFlashTotal);
     }
   });

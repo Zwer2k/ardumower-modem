@@ -739,12 +739,15 @@ void UiSocketHandler::logToUiLoop()
 
 void UiSocketHandler::broadcastFlashProgress(size_t current, size_t total)
 {
+  int pct = (total > 0) ? (current * 100 / total) : 0;
+  int clients = countConnectedClients();
+  Log(DBG, "UiSocket::broadcastFlashProgress(pct=%d, clients=%d)", pct, clients);
+  if (clients == 0) return;
   DynamicJsonDocument doc(128);
   auto status = doc.createNestedObject("status");
-  status["progress"] = (total > 0) ? (current * 100 / total) : 0;
+  status["progress"] = pct;
   String json;
   serializeJson(doc, json);
-  if (countConnectedClients() == 0) return;
   sendTextAllWithRetry(_ws, json);
 }
 

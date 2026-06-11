@@ -236,11 +236,17 @@ Polygon offsetPolygonInward(const Polygon &poly, double distance) {
     // Validate: offset polygon should be mostly inside the original.
     // If the offset was larger than the polygon can support, points will
     // end up outside (effectively an outward offset). In that case return empty.
+    // For very small polygons this check is relaxed.
     int insideCount = 0;
     for (const auto &p : result) {
         if (pointInPolygon(p, poly)) insideCount++;
     }
-    if (insideCount < (int)result.size() / 2 + 1) {
+    // Require at least half of points to be inside. For tiny polygons
+    // (area < distance²) the offset is expected to push some points outside,
+    // so we only check that at least one point is inside.
+    double originalArea = std::abs(polygonArea(poly));
+    int minInside = (originalArea < distance * distance * 2.0) ? 1 : (int)result.size() / 2;
+    if (insideCount < minInside) {
         return Polygon();
     }
 
@@ -598,10 +604,12 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
         double curArea = std::abs(polygonArea(currentArea));
         if (nextArea >= curArea - 0.001) {
             // Area not decreasing (offset too large for this polygon)
-            break;
-        }
-        if (nextArea < width * width * 0.5) {
-            // Polygon became too small to continue meaningfully
+            // Still add the centroid of the current area as final point
+            double minX, minY, maxX, maxY;
+            boundingBox(currentArea, minX, minY, maxX, maxY);
+            Point c = {(minX + maxX) / 2.0, (minY + maxY) / 2.0};
+            if (route.empty() || distance(route.back(), c) > 0.01)
+                route.push_back(c);
             break;
         }
         currentArea = next;
