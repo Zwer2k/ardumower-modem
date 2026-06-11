@@ -119,6 +119,7 @@ namespace ArduMower
         void logToUiLoop();
         bool cmdToMower(String cmd);
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
+        void broadcastFlashProgress(size_t current, size_t total);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
         bool sendUbx(const String &hexCmd);
         void resetRequestTimestamp(ResponseDataType dataType);

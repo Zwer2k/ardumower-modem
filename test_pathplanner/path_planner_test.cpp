@@ -1,11 +1,39 @@
-#include "path_planner.h"
-#include "log.h"
+#include "test_stub.h"
 #include <cmath>
 #include <algorithm>
 #include <limits>
 #include <cstdlib>
+#include <iostream>
+
+namespace ArduMower {
+    namespace Modem {
+        namespace PathPlanner {
+
+using Point = ArduMower::Domain::Robot::MapPoint;
+using Polygon = std::vector<Point>;
+using MowerMap = ArduMower::Domain::Robot::MowerMap;
+using MowSettings = ArduMower::Domain::Robot::MowSettings;
 
 #define _LOG_ "PathPlanner::"
+
+struct Intersection {
+    double x;
+    int edgeIndex;
+};
+
+std::vector<Intersection> intersectRayWithPolygon(double y, const Polygon &poly);
+Polygon offsetPolygonInward(const Polygon &poly, double distance);
+Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow,
+    double width, double angleDeg);
+Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
+    double width);
+Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
+    const Point &startNear, double width);
+Polygon calculateWaypoints(MowerMap &map, MowSettings &settings);
+
+        }
+    }
+}
 
 namespace ArduMower {
     namespace Modem {
@@ -656,8 +684,8 @@ Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
     return route;
 }
 
-Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
-    ArduMower::Domain::Robot::MowSettings &settings)
+Polygon calculateWaypoints(MowerMap &map,
+    MowSettings &settings)
 {
     Log(INFO, "%scalculateWaypoints pattern=%d width=%.3f angle=%d distToBorder=%d borderLaps=%d",
         _LOG_, settings.pattern, settings.width, settings.angle,

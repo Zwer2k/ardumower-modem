@@ -14,6 +14,9 @@ namespace ArduMower
     {
       class HttpServer;
 
+      extern volatile size_t otaFlashProgress;
+      extern volatile size_t otaFlashTotal;
+
       enum FirmwareUploadType {
         modem = 0,
         mower
@@ -35,6 +38,7 @@ namespace ArduMower
           SHORT_WRITE_ERROR,
           UPDATE_END_FAILED,
           FLASH_PENDING,
+          FLASHING,
         };
 
         class UploadSession
@@ -51,12 +55,16 @@ namespace ArduMower
         {
         private:
           static const size_t MAX_OTA_SIZE = 0x200000; // 2MB PSRAM buffer
+          static const size_t FLASH_CHUNK_SIZE = 4096;
 
           HttpServer *s;
           Result result;
           uint8_t *_buffer;     // PSRAM buffer (NULL = streaming fallback)
           size_t _bufferPos;    // bytes buffered so far / total firmware size
           bool _streaming;      // true = direct Update.write(), no buffering
+
+          size_t _flashWritten;
+          uint8_t *_dramBuf;
 
           bool verifyHeader(uint8_t *data, size_t len);
 
@@ -68,7 +76,12 @@ namespace ArduMower
           void respond(AsyncWebServerRequest *request);
 
           bool isFlashPending() { return result == Result::FLASH_PENDING; }
-          void doFlash();
+          bool beginFlash();
+          bool loopFlashWrite();
+          bool endFlash();
+
+          size_t flashProgress() { return _flashWritten; }
+          size_t flashTotal() { return _bufferPos; }
         };
 
         class MowerUploadSession : UploadSession

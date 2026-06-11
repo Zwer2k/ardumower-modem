@@ -106,144 +106,39 @@ std::vector<Intersection> intersectRayWithPolygon(double y, const Polygon &poly)
     return result;
 }
 
-// Helper: line intersection of two infinite lines (p1+dir1*t, p2+dir2*s)
-// Returns true if intersection exists (not parallel)
-static bool lineIntersection(const Point &p1, const Point &dir1,
-    const Point &p2, const Point &dir2, double &t)
-{
-    double det = dir1.X * dir2.Y - dir1.Y * dir2.X;
-    if (std::abs(det) < 1e-12) return false;
-    double dx = p2.X - p1.X;
-    double dy = p2.Y - p1.Y;
-    t = (dx * dir2.Y - dy * dir2.X) / det;
-    return true;
-}
-
-// Remove self-intersections from a polygon using a simple ear-clipping-like approach.
-// For each edge, check if it intersects any non-adjacent edge. If so, trim the loop.
-static Polygon removeSelfIntersections(const Polygon &poly) {
-    if (poly.size() < 4) return poly;
-    Polygon res = poly;
-    bool changed = true;
-    int iterations = 0;
-    while (changed && iterations < 10) {
-        changed = false;
-        iterations++;
-        size_t n = res.size();
-        for (size_t i = 0; i < n && !changed; i++) {
-            size_t j = (i + 1) % n;
-            for (size_t k = i + 2; k < n && !changed; k++) {
-                size_t l = (k + 1) % n;
-                if (j == k || l == i) continue;
-                Point a1 = res[i], a2 = res[j];
-                Point b1 = res[k], b2 = res[l];
-                double dx1 = a2.X - a1.X, dy1 = a2.Y - a1.Y;
-                double dx2 = b2.X - b1.X, dy2 = b2.Y - b1.Y;
-                double det = dx1 * dy2 - dy1 * dx2;
-                if (std::abs(det) < 1e-10) continue;
-                double t = ((b1.X - a1.X) * dy2 - (b1.Y - a1.Y) * dx2) / det;
-                double u = ((b1.X - a1.X) * dy1 - (b1.Y - a1.Y) * dx1) / det;
-                if (t > 1e-8 && t < 1 - 1e-8 && u > 1e-8 && u < 1 - 1e-8) {
-                    // Intersection found: remove the loop vertices between j and k
-                    Point ix{a1.X + t * dx1, a1.Y + t * dy1};
-                    Polygon trimmed;
-                    trimmed.reserve(n);
-                    for (size_t idx = 0; idx <= i; idx++) trimmed.push_back(res[idx]);
-                    trimmed.push_back(ix);
-                    for (size_t idx = l; idx < n; idx++) trimmed.push_back(res[idx]);
-                    res = trimmed;
-                    changed = true;
-                }
-            }
-        }
-    }
-    return res;
-}
-
 Polygon offsetPolygonInward(const Polygon &poly, double distance) {
     if (distance <= 0.001 || poly.size() < 3) return poly;
+    Polygon result;
+    result.reserve(poly.size());
     bool cw = isClockwise(poly);
     double sign = cw ? -1.0 : 1.0;
-
-    // Build offset edges (parallel lines shifted inward)
-    struct OffsetEdge {
-        Point p1, p2; // original edge endpoints
-        Point n;      // inward normal (unit)
-    };
-    std::vector<OffsetEdge> edges;
-    edges.reserve(poly.size());
     for (size_t i = 0; i < poly.size(); i++) {
-        size_t j = (i + 1) % poly.size();
-        double dx = poly[j].X - poly[i].X;
-        double dy = poly[j].Y - poly[i].Y;
-        double len = std::sqrt(dx * dx + dy * dy);
-        if (len < 0.001) continue;
-        double nx = -dy / len * sign;
-        double ny = dx / len * sign;
-        edges.push_back({poly[i], poly[j], {nx, ny}});
+        size_t prev = (i == 0) ? poly.size() - 1 : i - 1;
+        size_t next = (i + 1) % poly.size();
+        double dx1 = poly[i].X - poly[prev].X;
+        double dy1 = poly[i].Y - poly[prev].Y;
+        double len1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
+        double dx2 = poly[next].X - poly[i].X;
+        double dy2 = poly[next].Y - poly[i].Y;
+        double len2 = std::sqrt(dx2 * dx2 + dy2 * dy2);
+        if (len1 < 0.001 || len2 < 0.001) continue;
+        double nx1 = -dy1 / len1 * sign;
+        double ny1 = dx1 / len1 * sign;
+        double nx2 = -dy2 / len2 * sign;
+        double ny2 = dx2 / len2 * sign;
+        double bisectorX = nx1 + nx2;
+        double bisectorY = ny1 + ny2;
+        double bisectorLen = std::sqrt(bisectorX * bisectorX + bisectorY * bisectorY);
+        if (bisectorLen < 0.001) continue;
+        bisectorX /= bisectorLen;
+        bisectorY /= bisectorLen;
+        double dot = nx1 * bisectorX + ny1 * bisectorY;
+        if (std::abs(dot) < 0.001) continue;
+        double offset = distance / dot;
+        result.push_back({poly[i].X + bisectorX * offset, poly[i].Y + bisectorY * offset});
     }
-    if (edges.size() < 3) return poly;
-
-    // Intersect adjacent offset edges to get new vertices
-    Polygon result;
-    result.reserve(edges.size());
-    double miterLimit = distance * 3.0; // prevent extreme spikes
-
-    for (size_t i = 0; i < edges.size(); i++) {
-        size_t prev = (i == 0) ? edges.size() - 1 : i - 1;
-        const auto &e1 = edges[prev];
-        const auto &e2 = edges[i];
-
-        // Offset lines: p + normal*distance
-        Point o1a{e1.p1.X + e1.n.X * distance, e1.p1.Y + e1.n.Y * distance};
-        Point o1b{e1.p2.X + e1.n.X * distance, e1.p2.Y + e1.n.Y * distance};
-        Point o2a{e2.p1.X + e2.n.X * distance, e2.p1.Y + e2.n.Y * distance};
-        Point o2b{e2.p2.X + e2.n.X * distance, e2.p2.Y + e2.n.Y * distance};
-
-        Point dir1{o1b.X - o1a.X, o1b.Y - o1a.Y};
-        Point dir2{o2b.X - o2a.X, o2b.Y - o2a.Y};
-
-        double t;
-        Point vertex;
-        if (lineIntersection(o1a, dir1, o2a, dir2, t)) {
-            vertex = {o1a.X + dir1.X * t, o1a.Y + dir1.Y * t};
-            // Check how far the vertex moved from original corner
-            double originalX = e2.p1.X; // shared vertex of e1 and e2
-            double originalY = e2.p1.Y;
-            double shift = std::sqrt((vertex.X - originalX) * (vertex.X - originalX)
-                                   + (vertex.Y - originalY) * (vertex.Y - originalY));
-            if (shift > miterLimit) {
-                // Clip to miter limit: project back toward original vertex
-                double scale = miterLimit / shift;
-                vertex.X = originalX + (vertex.X - originalX) * scale;
-                vertex.Y = originalY + (vertex.Y - originalY) * scale;
-            }
-        } else {
-            // Parallel edges: use midpoint of the two offset points
-            vertex = {(o1b.X + o2a.X) * 0.5, (o1b.Y + o2a.Y) * 0.5};
-        }
-        result.push_back(vertex);
-    }
-
-    if (result.size() < 3) return poly;
-
-    // Remove self-intersections introduced by sharp concave corners
-    result = removeSelfIntersections(result);
-
     if (result.size() < 3) return poly;
     if (isClockwise(result) != cw) return poly;
-
-    // Validate: offset polygon should be mostly inside the original.
-    // If the offset was larger than the polygon can support, points will
-    // end up outside (effectively an outward offset). In that case return empty.
-    int insideCount = 0;
-    for (const auto &p : result) {
-        if (pointInPolygon(p, poly)) insideCount++;
-    }
-    if (insideCount < (int)result.size() / 2 + 1) {
-        return Polygon();
-    }
-
     return result;
 }
 
@@ -417,13 +312,6 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
         for (const auto &p : walk) addPoint(p);
     };
 
-    // Assign levels to swaths based on their y-position (already sorted by construction)
-    std::vector<int> swathLevel(swaths.size());
-    for (size_t i = 0; i < swaths.size(); i++) {
-        swathLevel[i] = (int)std::round((swaths[i].a.Y - minY) / width);
-    }
-
-    int currentLevel = -1;
     int remaining = (int)swaths.size();
     while (remaining > 0) {
         int bestIdx = -1;
@@ -431,96 +319,28 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
         bool bestRev = false;
         bool needFallback = false;
 
-        auto findBest = [&](bool restrictLevel) {
-            int localBest = -1;
-            double localBestDist = std::numeric_limits<double>::max();
-            bool localBestRev = false;
-            for (int i = 0; i < (int)swaths.size(); i++) {
-                if (swaths[i].visited) continue;
-                if (restrictLevel && currentLevel >= 0) {
-                    int lvl = swathLevel[i];
-                    if (std::abs(lvl - currentLevel) > 1) continue;
-                }
-                double dA = distance(currentPos, swaths[i].a);
-                double dB = distance(currentPos, swaths[i].b);
-                if (dA < localBestDist) { localBestDist = dA; localBest = i; localBestRev = false; }
-                if (dB < localBestDist) { localBestDist = dB; localBest = i; localBestRev = true; }
+        // First pass: find nearest with clear path
+        for (int i = 0; i < (int)swaths.size(); i++) {
+            if (swaths[i].visited) continue;
+            double dA = distance(currentPos, swaths[i].a);
+            double dB = distance(currentPos, swaths[i].b);
+            if (dA < bestDist && isPathClear(currentPos, swaths[i].a)) {
+                bestDist = dA; bestIdx = i; bestRev = false;
             }
-            return std::make_tuple(localBest, localBestDist, localBestRev);
-        };
-
-        // First pass: nearest swath in same/adjacent level with clear path
-        {
-            int localBest = -1;
-            double localBestDist = std::numeric_limits<double>::max();
-            bool localBestRev = false;
-            for (int i = 0; i < (int)swaths.size(); i++) {
-                if (swaths[i].visited) continue;
-                if (currentLevel >= 0) {
-                    int lvl = swathLevel[i];
-                    if (std::abs(lvl - currentLevel) > 1) continue;
-                }
-                double dA = distance(currentPos, swaths[i].a);
-                double dB = distance(currentPos, swaths[i].b);
-                if (dA < localBestDist && isPathClear(currentPos, swaths[i].a)) {
-                    localBestDist = dA; localBest = i; localBestRev = false;
-                }
-                if (dB < localBestDist && isPathClear(currentPos, swaths[i].b)) {
-                    localBestDist = dB; localBest = i; localBestRev = true;
-                }
-            }
-            if (localBest != -1) {
-                bestIdx = localBest; bestDist = localBestDist; bestRev = localBestRev;
-            }
-        }
-
-        // Second pass: nearest swath in any level with clear path
-        if (bestIdx == -1) {
-            for (int i = 0; i < (int)swaths.size(); i++) {
-                if (swaths[i].visited) continue;
-                double dA = distance(currentPos, swaths[i].a);
-                double dB = distance(currentPos, swaths[i].b);
-                if (dA < bestDist && isPathClear(currentPos, swaths[i].a)) {
-                    bestDist = dA; bestIdx = i; bestRev = false;
-                }
-                if (dB < bestDist && isPathClear(currentPos, swaths[i].b)) {
-                    bestDist = dB; bestIdx = i; bestRev = true;
-                }
+            if (dB < bestDist && isPathClear(currentPos, swaths[i].b)) {
+                bestDist = dB; bestIdx = i; bestRev = true;
             }
         }
 
         // Fallback: no clear path to any swath → pick nearest regardless
         if (bestIdx == -1) {
             needFallback = true;
-            // Try same/adjacent level first
-            {
-                int localBest = -1;
-                double localBestDist = std::numeric_limits<double>::max();
-                bool localBestRev = false;
-                for (int i = 0; i < (int)swaths.size(); i++) {
-                    if (swaths[i].visited) continue;
-                    if (currentLevel >= 0) {
-                        int lvl = swathLevel[i];
-                        if (std::abs(lvl - currentLevel) > 1) continue;
-                    }
-                    double dA = distance(currentPos, swaths[i].a);
-                    double dB = distance(currentPos, swaths[i].b);
-                    if (dA < localBestDist) { localBestDist = dA; localBest = i; localBestRev = false; }
-                    if (dB < localBestDist) { localBestDist = dB; localBest = i; localBestRev = true; }
-                }
-                if (localBest != -1) {
-                    bestIdx = localBest; bestDist = localBestDist; bestRev = localBestRev;
-                }
-            }
-            // Then any level
-            if (bestIdx == -1) {
-                for (int i = 0; i < (int)swaths.size(); i++) {
-                    if (swaths[i].visited) continue;
-                    double dA = distance(currentPos, swaths[i].a);
-                    double dB = distance(currentPos, swaths[i].b);
-                    if (dA < bestDist) { bestDist = dA; bestIdx = i; bestRev = false; }
-                    if (dB < bestDist) { bestDist = dB; bestIdx = i; bestRev = true; }
-                }
+            for (int i = 0; i < (int)swaths.size(); i++) {
+                if (swaths[i].visited) continue;
+                double dA = distance(currentPos, swaths[i].a);
+                double dB = distance(currentPos, swaths[i].b);
+                if (dA < bestDist) { bestDist = dA; bestIdx = i; bestRev = false; }
+                if (dB < bestDist) { bestDist = dB; bestIdx = i; bestRev = true; }
             }
         }
 
@@ -536,7 +356,6 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
         addPoint(bestRev ? sw.a : sw.b);
         currentPos = route.back();
         sw.visited = true;
-        currentLevel = swathLevel[bestIdx];
         remaining--;
     }
 
@@ -585,23 +404,9 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
 
         // Shrink inward using buffer-like simplification
         Polygon next = offsetPolygonInward(currentArea, width);
-        if (next.empty() || next.size() < 3) {
-            // Polygon became too small for further offset
-            break;
-        }
         if (next.size() == currentArea.size() &&
             distance(next[0], currentArea[0]) < 0.001) {
             // offsetPolygonInward didn't actually change the polygon
-            break;
-        }
-        double nextArea = std::abs(polygonArea(next));
-        double curArea = std::abs(polygonArea(currentArea));
-        if (nextArea >= curArea - 0.001) {
-            // Area not decreasing (offset too large for this polygon)
-            break;
-        }
-        if (nextArea < width * width * 0.5) {
-            // Polygon became too small to continue meaningfully
             break;
         }
         currentArea = next;

@@ -13,7 +13,7 @@ namespace ArduMower
       class Attributes;
       class Measurement;
 
-      extern std::list<Measurement *> _allMeasurements;
+      std::list<Measurement *> &allMeasurements();
 
       class Attribute
       {

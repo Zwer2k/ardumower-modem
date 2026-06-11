@@ -134,7 +134,7 @@ const uploadRequest = (file: File): FormData => {
   return result
 }
 
-const makeRebootAwaiter = async (timeout: number = 10000): Promise<() => Promise<void>> => {
+const makeRebootAwaiter = async (timeout: number = 30000): Promise<() => Promise<void>> => {
   const before = await getModemInfo()
 
   const isAfter = (i: ApiModemInfoResponse): boolean => i.uptime < before.uptime

@@ -4,17 +4,21 @@
 
 using namespace ArduMower::Modem::Prometheus;
 
-std::list<Measurement *> ArduMower::Modem::Prometheus::_allMeasurements;
+std::list<Measurement *> &ArduMower::Modem::Prometheus::allMeasurements()
+{
+  static std::list<Measurement *> list;
+  return list;
+}
 
 Measurement::Measurement(const char *key, Attributes attrs)
     : _key(key), _attrs(attrs)
 {
-  _allMeasurements.push_back(this);
+  allMeasurements().push_back(this);
 }
 
 Measurement::~Measurement()
 {
-  _allMeasurements.remove(this);
+  allMeasurements().remove(this);
 }
 
 int Measurement::write(char *buf, int size)

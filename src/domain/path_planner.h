@@ -25,7 +25,6 @@ struct Intersection {
     int edgeIndex;
 };
 std::vector<Intersection> intersectRayWithPolygon(double y, const Polygon &poly);
-std::vector<Polygon> clipLinesToPolygon(const std::vector<Polygon> &lines, const Polygon &poly);
 
 Polygon offsetPolygonInward(const Polygon &poly, double distance);
 
@@ -34,7 +33,7 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
     double width);
 Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
-    const Point &startNear);
+    const Point &startNear, double width);
 
 Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
     ArduMower::Domain::Robot::MowSettings &settings);

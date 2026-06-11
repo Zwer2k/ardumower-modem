@@ -36,7 +36,8 @@ void Adapter::metrics(AsyncWebServerRequest *request)
   {
     Log(DBG, "Prometheus::Adapter::metrics::send");
     unsigned int size = 1;
-    for (auto it : ArduMower::Modem::Prometheus::_allMeasurements)
+    auto &all = ArduMower::Modem::Prometheus::allMeasurements();
+    for (auto it : all)
       size += it->length();
     char *buffer = (char *)malloc(size + 1);
     if (buffer == nullptr)
@@ -45,7 +46,7 @@ void Adapter::metrics(AsyncWebServerRequest *request)
       return;
     }
     unsigned int index = 0;
-    for (auto it : ArduMower::Modem::Prometheus::_allMeasurements)
+    for (auto it : all)
     {
       index += it->write(&buffer[index], size - index);
     }
