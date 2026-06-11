@@ -165,10 +165,9 @@ Polygon offsetPolygonInward(const Polygon &poly, double distance) {
     bool cw = isClockwise(poly);
     double sign = cw ? -1.0 : 1.0;
 
-    // Build offset edges (parallel lines shifted inward)
     struct OffsetEdge {
-        Point p1, p2; // original edge endpoints
-        Point n;      // inward normal (unit)
+        Point p1, p2;
+        Point n;
     };
     std::vector<OffsetEdge> edges;
     edges.reserve(poly.size());
@@ -182,19 +181,17 @@ Polygon offsetPolygonInward(const Polygon &poly, double distance) {
         double ny = dx / len * sign;
         edges.push_back({poly[i], poly[j], {nx, ny}});
     }
-    if (edges.size() < 3) return poly;
+    if (edges.size() < 3) return Polygon();
 
-    // Intersect adjacent offset edges to get new vertices
     Polygon result;
     result.reserve(edges.size());
-    double miterLimit = distance * 3.0; // prevent extreme spikes
+    double miterLimit = distance * 3.0;
 
     for (size_t i = 0; i < edges.size(); i++) {
         size_t prev = (i == 0) ? edges.size() - 1 : i - 1;
         const auto &e1 = edges[prev];
         const auto &e2 = edges[i];
 
-        // Offset lines: p + normal*distance
         Point o1a{e1.p1.X + e1.n.X * distance, e1.p1.Y + e1.n.Y * distance};
         Point o1b{e1.p2.X + e1.n.X * distance, e1.p2.Y + e1.n.Y * distance};
         Point o2a{e2.p1.X + e2.n.X * distance, e2.p1.Y + e2.n.Y * distance};
@@ -207,48 +204,43 @@ Polygon offsetPolygonInward(const Polygon &poly, double distance) {
         Point vertex;
         if (lineIntersection(o1a, dir1, o2a, dir2, t)) {
             vertex = {o1a.X + dir1.X * t, o1a.Y + dir1.Y * t};
-            // Check how far the vertex moved from original corner
-            double originalX = e2.p1.X; // shared vertex of e1 and e2
+            double originalX = e2.p1.X;
             double originalY = e2.p1.Y;
             double shift = std::sqrt((vertex.X - originalX) * (vertex.X - originalX)
                                    + (vertex.Y - originalY) * (vertex.Y - originalY));
             if (shift > miterLimit) {
-                // Clip to miter limit: project back toward original vertex
-                double scale = miterLimit / shift;
-                vertex.X = originalX + (vertex.X - originalX) * scale;
-                vertex.Y = originalY + (vertex.Y - originalY) * scale;
+                double sc = miterLimit / shift;
+                vertex.X = originalX + (vertex.X - originalX) * sc;
+                vertex.Y = originalY + (vertex.Y - originalY) * sc;
             }
         } else {
-            // Parallel edges: use midpoint of the two offset points
             vertex = {(o1b.X + o2a.X) * 0.5, (o1b.Y + o2a.Y) * 0.5};
         }
         result.push_back(vertex);
     }
 
-    if (result.size() < 3) return poly;
+    if (result.size() < 3) return Polygon();
 
-    // Remove self-intersections introduced by sharp concave corners
     result = removeSelfIntersections(result);
 
-    if (result.size() < 3) return poly;
-    if (isClockwise(result) != cw) return poly;
+    if (result.size() < 3) return Polygon();
+    if (isClockwise(result) != cw) return Polygon();
 
-    // Validate: offset polygon should be mostly inside the original.
-    // If the offset was larger than the polygon can support, points will
-    // end up outside (effectively an outward offset). In that case return empty.
-    // For very small polygons this check is relaxed.
-    int insideCount = 0;
-    for (const auto &p : result) {
-        if (pointInPolygon(p, poly)) insideCount++;
+    {
+        bool degenerate = true;
+        for (size_t i = 1; i < result.size(); i++) {
+            double dx = result[i].X - result[0].X;
+            double dy = result[i].Y - result[0].Y;
+            if (std::sqrt(dx*dx + dy*dy) > 0.001) { degenerate = false; break; }
+        }
+        if (degenerate) return Polygon();
     }
-    // Require at least half of points to be inside. For tiny polygons
-    // (area < distance²) the offset is expected to push some points outside,
-    // so we only check that at least one point is inside.
-    double originalArea = std::abs(polygonArea(poly));
-    int minInside = (originalArea < distance * distance * 2.0) ? 1 : (int)result.size() / 2;
-    if (insideCount < minInside) {
-        return Polygon();
-    }
+
+    Point rCentroid{0, 0};
+    for (const auto &p : result) { rCentroid.X += p.X; rCentroid.Y += p.Y; }
+    rCentroid.X /= result.size();
+    rCentroid.Y /= result.size();
+    if (!pointInPolygon(rCentroid, poly)) return Polygon();
 
     return result;
 }
@@ -437,24 +429,6 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
         bool bestRev = false;
         bool needFallback = false;
 
-        auto findBest = [&](bool restrictLevel) {
-            int localBest = -1;
-            double localBestDist = std::numeric_limits<double>::max();
-            bool localBestRev = false;
-            for (int i = 0; i < (int)swaths.size(); i++) {
-                if (swaths[i].visited) continue;
-                if (restrictLevel && currentLevel >= 0) {
-                    int lvl = swathLevel[i];
-                    if (std::abs(lvl - currentLevel) > 1) continue;
-                }
-                double dA = distance(currentPos, swaths[i].a);
-                double dB = distance(currentPos, swaths[i].b);
-                if (dA < localBestDist) { localBestDist = dA; localBest = i; localBestRev = false; }
-                if (dB < localBestDist) { localBestDist = dB; localBest = i; localBestRev = true; }
-            }
-            return std::make_tuple(localBest, localBestDist, localBestRev);
-        };
-
         // First pass: nearest swath in same/adjacent level with clear path
         {
             int localBest = -1;
@@ -592,24 +566,20 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
         // Shrink inward using buffer-like simplification
         Polygon next = offsetPolygonInward(currentArea, width);
         if (next.empty() || next.size() < 3) {
-            // Polygon became too small for further offset
+            // Tight spot: try smaller offset (half width)
+            next = offsetPolygonInward(currentArea, width * 0.5);
+        }
+        if (next.empty() || next.size() < 3) {
+            // Also failed: stop without centroid line
             break;
         }
         if (next.size() == currentArea.size() &&
             distance(next[0], currentArea[0]) < 0.001) {
-            // offsetPolygonInward didn't actually change the polygon
             break;
         }
         double nextArea = std::abs(polygonArea(next));
         double curArea = std::abs(polygonArea(currentArea));
-        if (nextArea >= curArea - 0.001) {
-            // Area not decreasing (offset too large for this polygon)
-            // Still add the centroid of the current area as final point
-            double minX, minY, maxX, maxY;
-            boundingBox(currentArea, minX, minY, maxX, maxY);
-            Point c = {(minX + maxX) / 2.0, (minY + maxY) / 2.0};
-            if (route.empty() || distance(route.back(), c) > 0.01)
-                route.push_back(c);
+        if (nextArea < 0.001 || nextArea >= curArea - 0.001) {
             break;
         }
         currentArea = next;
