@@ -15,6 +15,7 @@ double crossProduct(const Point &a, const Point &b, const Point &c);
 bool pointInPolygon(const Point &p, const Polygon &poly);
 Point rotatePoint(const Point &p, double angleDeg);
 Polygon rotatePolygon(const Polygon &poly, double angleDeg);
+std::vector<Polygon> rotatePolygons(const std::vector<Polygon> &polys, double angleDeg);
 void boundingBox(const Polygon &poly, double &minX, double &minY, double &maxX, double &maxY);
 double polygonArea(const Polygon &poly);
 bool isClockwise(const Polygon &poly);
@@ -34,6 +35,10 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     double width);
 Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
     const Point &startNear, double width);
+
+void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point &startPt);
+void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon> &polys,
+    const Polygon &perimeter);
 
 Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
     ArduMower::Domain::Robot::MowSettings &settings);

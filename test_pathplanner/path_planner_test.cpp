@@ -586,23 +586,20 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     Log(DBG, "%scalculateRingsPattern width=%.3f", _LOG_, width);
     if (areaToMow.size() < 3 || width < 0.001) return {};
 
-    // Cassandra: shrink areaToMow inward by `-width` repeatedly
-    // to create concentric rings. Each ring is the full polygon outline,
-    // NOT centroid-scaled.
+    // Cassandra: BFS ring processing — queue-based shrinking
+    // Each polygon is offset inward; the result is enqueued for further processing.
+    // If offset fails, try 50% width; if that also fails, skip (continue with next in queue).
+    std::vector<Polygon> queue;
+    queue.push_back(areaToMow);
+
     Polygon route;
-    Polygon currentArea = areaToMow;
     Point startNear = perimeter.empty() ? areaToMow[0] : perimeter[0];
 
-    while (true) {
-        if (currentArea.size() < 3) {
-            // Add centroid as final point
-            double minX, minY, maxX, maxY;
-            boundingBox(areaToMow, minX, minY, maxX, maxY);
-            Point c = {(minX + maxX) / 2.0, (minY + maxY) / 2.0};
-            if (route.empty() || distance(route.back(), c) > 0.01)
-                route.push_back(c);
-            break;
-        }
+    while (!queue.empty()) {
+        Polygon currentArea = queue.front();
+        queue.erase(queue.begin());
+
+        if (currentArea.size() < 3) continue;
 
         // Walk the current ring, starting at the point nearest to startNear
         size_t startIdx = nearestPointIndex(startNear, currentArea);
@@ -617,31 +614,23 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
             if (route.empty() || distance(route.back(), p) > 0.01)
                 route.push_back(p);
 
-        // Shrink inward using buffer-like simplification
+        // Shrink inward
         Polygon next = offsetPolygonInward(currentArea, width);
         if (next.empty() || next.size() < 3) {
-            // Polygon became too small for further offset
-            break;
+            next = offsetPolygonInward(currentArea, width * 0.5);
         }
+        if (next.empty() || next.size() < 3) continue;
+
         if (next.size() == currentArea.size() &&
             distance(next[0], currentArea[0]) < 0.001) {
-            // offsetPolygonInward didn't actually change the polygon
-            break;
+            continue;
         }
         double nextArea = std::abs(polygonArea(next));
         double curArea = std::abs(polygonArea(currentArea));
-        if (nextArea >= curArea - 0.001) {
-            // Area not decreasing (offset too large for this polygon)
-            // Still add the centroid of the current area as final point
-            double minX, minY, maxX, maxY;
-            boundingBox(currentArea, minX, minY, maxX, maxY);
-            Point c = {(minX + maxX) / 2.0, (minY + maxY) / 2.0};
-            if (route.empty() || distance(route.back(), c) > 0.01)
-                route.push_back(c);
-            break;
-        }
-        currentArea = next;
-        if (isClockwise(currentArea) != cw) break;
+        if (nextArea < 0.001 || nextArea >= curArea - 0.001) continue;
+        if (isClockwise(next) != cw) continue;
+
+        queue.push_back(next);
     }
 
     route = pruneOutside(route, areaToMow);
