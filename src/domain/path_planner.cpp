@@ -220,7 +220,7 @@ static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
 
 // ── Lines pattern (zigzag clipped to polygon via Clipper2 Intersection) ──
 Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow,
-    double width, double angleDeg)
+    double width, double angleDeg, const Point &startNear)
 {
     Log(DBG, "%scalculateLinesPattern width=%.3f angle=%.1f", _LOG_, width, angleDeg);
     if (areaToMow.size() < 3 || width < 0.001) return {};
@@ -249,8 +249,8 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
     if (polys.empty()) return {};
 
     // sortSolutionPolygonsByDistance (matches web app)
-    Point startNear = perimeter.empty() ? Point{0,0} : rotatePoint(perimeter[0], -angleDeg);
-    sortSolutionPolygonsByDistance(polys, startNear);
+    Point startPt = rotatePoint(startNear, -angleDeg);
+    sortSolutionPolygonsByDistance(polys, startPt);
 
     // Connect polys into a single route (matches web app connectPolysUsingPathFinding)
     Polygon route;
@@ -262,14 +262,22 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
 
 // ── Rings pattern (BFS queue + Clipper2 InflatePaths) ──
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
-    double width)
+    double width, const Point &startNear)
 {
     Log(DBG, "%scalculateRingsPattern width=%.3f", _LOG_, width);
     if (areaToMow.size() < 3 || width < 0.001) return {};
 
+    // Rotate first ring so start is near startNear
+    Polygon first = areaToMow;
+    size_t firstBest = nearestPointIndex(startNear, first);
+    Polygon firstRot;
+    firstRot.reserve(first.size());
+    for (size_t i = 0; i < first.size(); i++)
+        firstRot.push_back(first[(firstBest + i) % first.size()]);
+
     // BFS ring processing (matches web app calcPatternRings)
     std::vector<Polygon> queue;
-    queue.push_back(areaToMow);
+    queue.push_back(firstRot);
 
     Polygon route;
 
@@ -319,13 +327,14 @@ Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
 
     Polygon route;
     Polygon currentRing = perimeter;
+    Point near = startNear;
 
     for (int lap = 0; lap < laps; lap++) {
         bool cw = isClockwise(currentRing);
         Polygon ring = currentRing;
         if (ccw == cw) std::reverse(ring.begin(), ring.end());
 
-        size_t startIdx = nearestPointIndex(startNear, ring);
+        size_t startIdx = nearestPointIndex(near, ring);
         Polygon ordered;
         for (size_t i = 0; i < ring.size(); i++) {
             size_t idx = (startIdx + i) % ring.size();
@@ -338,6 +347,8 @@ Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
         for (const auto &p : ordered)
             if (route.empty() || distance(route.back(), p) > 0.01)
                 route.push_back(p);
+
+        if (!route.empty()) near = route.back();
 
         if (lap + 1 < laps) {
             auto nextList = clipOffset(currentRing, -width);
@@ -458,37 +469,54 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
     }
     if (areaToMow.size() < 3) areaToMow = perimeter;
 
+    if (settings.borderLaps > 0 && settings.mowBorderCcw) {
+        Polygon borderLaps = addBorderLaps(perimeter, settings.borderLaps, true, startNear, settings.width);
+        route = borderLaps;
+        if (!route.empty()) startNear = route.back();
+    }
+
     if (settings.mowArea && areaToMow.size() >= 3) {
         Polygon pattern;
         if (settings.pattern == 2) {
-            pattern = calculateRingsPattern(perimeter, areaToMow, settings.width);
+            pattern = calculateRingsPattern(perimeter, areaToMow, settings.width, startNear);
         } else if (settings.pattern == 1) {
-            Polygon p1 = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle);
-            Polygon p2 = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle + 90.0);
+            Polygon p1 = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle, startNear);
+            Polygon p2 = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle + 90.0,
+                p1.empty() ? startNear : p1.back());
             pattern.reserve(p1.size() + p2.size());
             pattern.insert(pattern.end(), p1.begin(), p1.end());
-            if (!p1.empty() && !p2.empty() && !pointInPolygon(p1.back(), areaToMow))
-                pattern.push_back(pattern.back());
+            if (!p1.empty() && !p2.empty()) {
+                Polygon conn = walkPerimeter(perimeter, p1.back(), p2[0]);
+                for (size_t k = 0; k < conn.size(); k++)
+                    if (distance(pattern.back(), conn[k]) > 0.01)
+                        pattern.push_back(conn[k]);
+            }
             pattern.insert(pattern.end(), p2.begin(), p2.end());
         } else {
-            pattern = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle);
+            pattern = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle, startNear);
         }
-        if (!route.empty() && !pattern.empty())
-            route.push_back(route.back());
+        if (!route.empty() && !pattern.empty()) {
+            Polygon conn = walkPerimeter(perimeter, route.back(), pattern[0]);
+            for (size_t k = 0; k < conn.size(); k++)
+                if (distance(route.back(), conn[k]) > 0.01)
+                    route.push_back(conn[k]);
+        }
         route.insert(route.end(), pattern.begin(), pattern.end());
+        if (!route.empty()) startNear = route.back();
     }
 
-    if (settings.borderLaps > 0) {
-        Polygon borderLaps = addBorderLaps(perimeter, settings.borderLaps, settings.mowBorderCcw,
-            route.empty() ? startNear : route.back(), settings.width);
-        if (settings.mowBorderCcw) {
-            borderLaps.insert(borderLaps.end(), route.begin(), route.end());
-            route = borderLaps;
-        } else {
-            route.insert(route.end(), borderLaps.begin(), borderLaps.end());
+    if (settings.borderLaps > 0 && !settings.mowBorderCcw) {
+        Polygon borderLaps = addBorderLaps(perimeter, settings.borderLaps, false, startNear, settings.width);
+        if (!route.empty() && !borderLaps.empty()) {
+            Polygon conn = walkPerimeter(perimeter, route.back(), borderLaps[0]);
+            for (size_t k = 0; k < conn.size(); k++)
+                if (distance(route.back(), conn[k]) > 0.01)
+                    route.push_back(conn[k]);
         }
+        route.insert(route.end(), borderLaps.begin(), borderLaps.end());
     }
 
+    route = pruneOutside(route, perimeter);
     Log(INFO, "%scalculateWaypoints done: %d waypoints", _LOG_, route.size());
     return route;
 }
