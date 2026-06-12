@@ -1017,6 +1017,8 @@ bool MowerAdapter::uploadMapToMower()
     return false;
   }
 
+  _map.beginRead();
+  _mapUploadState.snapshot = _map;
   _mapUploadState.active = true;
   _mapUploadState.phase = MapUploadState::start;
   _mapUploadState.polygonIdx = 0;
@@ -1026,6 +1028,7 @@ bool MowerAdapter::uploadMapToMower()
   _mapUploadState.lastResponse = "";
   _mapUploadState.lastOk = false;
   _mapUploadState.waitingForResponse = false;
+  // _map bleibt im reading-Zustand, um parseATNCommand/setMap während des Uploads zu blockieren
 
   Log(INFO, "%suploadMapToMower: started", _LOG_);
   return true;
@@ -1094,6 +1097,10 @@ void MowerAdapter::processMapUpload()
       Log(WARN, "%sprocessMapUpload: command failed in phase %d (retry %d/3)", _LOG_, _mapUploadState.phase, _mapUploadState.chunkRetry);
       if (_mapUploadState.chunkRetry >= 3) {
         Log(ERR, "%sprocessMapUpload: command failed in phase %d after 3 retries", _LOG_, _mapUploadState.phase);
+        _map = _mapUploadState.snapshot;
+        _map.timestamp = millis();
+        _map.endRead();
+        _mapUploadState.snapshot = ArduMower::Domain::Robot::MowerMap();
         _mapUploadState.phase = MapUploadState::error;
         _mapUploadState.active = false;
         return;
@@ -1128,8 +1135,8 @@ void MowerAdapter::processMapUpload()
       break;
 
     case MapUploadState::perimeter:
-      if (_mapUploadState.pointIdx >= _map.perimeter.size()) {
-        _mapUploadState.totalPointsSent += _map.perimeter.size();
+      if (_mapUploadState.pointIdx >= _mapUploadState.snapshot.perimeter.size()) {
+        _mapUploadState.totalPointsSent += _mapUploadState.snapshot.perimeter.size();
         _mapUploadState.phase = MapUploadState::exclusions;
         _mapUploadState.polygonIdx = 0;
         _mapUploadState.pointIdx = 0;
@@ -1137,56 +1144,56 @@ void MowerAdapter::processMapUpload()
         _mapUploadState.lastResponse = "";
         break;
       }
-      sendMapChunkAsync(_map.perimeter, _mapUploadState.totalPointsSent);
+      sendMapChunkAsync(_mapUploadState.snapshot.perimeter, _mapUploadState.totalPointsSent);
       break;
 
     case MapUploadState::exclusions:
-      if (_mapUploadState.polygonIdx >= _map.exclusions.size()) {
+      if (_mapUploadState.polygonIdx >= _mapUploadState.snapshot.exclusions.size()) {
         _mapUploadState.phase = MapUploadState::dockpoints;
         _mapUploadState.pointIdx = 0;
         _mapUploadState.chunkRetry = 0;
         _mapUploadState.lastResponse = "";
         break;
       }
-      if (_mapUploadState.pointIdx >= _map.exclusions[_mapUploadState.polygonIdx].size()) {
-        _mapUploadState.totalPointsSent += _map.exclusions[_mapUploadState.polygonIdx].size();
+      if (_mapUploadState.pointIdx >= _mapUploadState.snapshot.exclusions[_mapUploadState.polygonIdx].size()) {
+        _mapUploadState.totalPointsSent += _mapUploadState.snapshot.exclusions[_mapUploadState.polygonIdx].size();
         _mapUploadState.polygonIdx++;
         _mapUploadState.pointIdx = 0;
         _mapUploadState.chunkRetry = 0;
         _mapUploadState.lastResponse = "";
         break;
       }
-      sendMapChunkAsync(_map.exclusions[_mapUploadState.polygonIdx], _mapUploadState.totalPointsSent);
+      sendMapChunkAsync(_mapUploadState.snapshot.exclusions[_mapUploadState.polygonIdx], _mapUploadState.totalPointsSent);
       break;
 
     case MapUploadState::dockpoints:
-      if (_mapUploadState.pointIdx >= _map.dockpoints.size()) {
-        _mapUploadState.totalPointsSent += _map.dockpoints.size();
+      if (_mapUploadState.pointIdx >= _mapUploadState.snapshot.dockpoints.size()) {
+        _mapUploadState.totalPointsSent += _mapUploadState.snapshot.dockpoints.size();
         _mapUploadState.phase = MapUploadState::waypoints;
         _mapUploadState.pointIdx = 0;
         _mapUploadState.chunkRetry = 0;
         _mapUploadState.lastResponse = "";
         break;
       }
-      sendMapChunkAsync(_map.dockpoints, _mapUploadState.totalPointsSent);
+      sendMapChunkAsync(_mapUploadState.snapshot.dockpoints, _mapUploadState.totalPointsSent);
       break;
 
     case MapUploadState::waypoints:
-      if (_mapUploadState.pointIdx >= _map.waypoints.size()) {
-        _mapUploadState.totalPointsSent += _map.waypoints.size();
+      if (_mapUploadState.pointIdx >= _mapUploadState.snapshot.waypoints.size()) {
+        _mapUploadState.totalPointsSent += _mapUploadState.snapshot.waypoints.size();
         _mapUploadState.phase = MapUploadState::counts;
         _mapUploadState.lastResponse = "";
         break;
       }
-      sendMapChunkAsync(_map.waypoints, _mapUploadState.totalPointsSent);
+      sendMapChunkAsync(_mapUploadState.snapshot.waypoints, _mapUploadState.totalPointsSent);
       break;
 
     case MapUploadState::counts: {
       size_t totalExclPoints = 0;
-      for (const auto &excl : _map.exclusions)
+      for (const auto &excl : _mapUploadState.snapshot.exclusions)
         totalExclPoints += excl.size();
-      String cmd = "AT+N," + String(_map.perimeter.size()) + "," + String(totalExclPoints) + ","
-                  + String(_map.dockpoints.size()) + "," + String(_map.waypoints.size()) + ",0";
+      String cmd = "AT+N," + String(_mapUploadState.snapshot.perimeter.size()) + "," + String(totalExclPoints) + ","
+                  + String(_mapUploadState.snapshot.dockpoints.size()) + "," + String(_mapUploadState.snapshot.waypoints.size()) + ",0";
       bool queued = sendCommandWithResponseAsync(cmd, [&](String response, bool ok) {
         _mapUploadState.lastResponse = response;
         _mapUploadState.lastOk = ok;
@@ -1201,13 +1208,13 @@ void MowerAdapter::processMapUpload()
     }
 
     case MapUploadState::exclusionSizes:
-      if (_mapUploadState.polygonIdx >= _map.exclusions.size()) {
+      if (_mapUploadState.polygonIdx >= _mapUploadState.snapshot.exclusions.size()) {
         _mapUploadState.phase = MapUploadState::finalizing;
         _mapUploadState.lastResponse = "";
         break;
       }
       {
-        String cmd = "AT+X," + String(_mapUploadState.polygonIdx) + "," + String(_map.exclusions[_mapUploadState.polygonIdx].size());
+        String cmd = "AT+X," + String(_mapUploadState.polygonIdx) + "," + String(_mapUploadState.snapshot.exclusions[_mapUploadState.polygonIdx].size());
         bool queued = sendCommandWithResponseAsync(cmd, [&](String response, bool ok) {
           _mapUploadState.lastResponse = response;
           _mapUploadState.lastOk = ok;
@@ -1221,6 +1228,10 @@ void MowerAdapter::processMapUpload()
       break;
 
     case MapUploadState::finalizing:
+      _map = _mapUploadState.snapshot;
+      _map.timestamp = millis();
+      _map.endRead();
+      _mapUploadState.snapshot = ArduMower::Domain::Robot::MowerMap();
       _mapUploadState.phase = MapUploadState::done;
       _mapUploadState.active = false;
       Log(INFO, "%sprocessMapUpload: Map upload complete (%d perimeter, %d exclusions, %d dockpoints, %d waypoints)",
@@ -1232,6 +1243,7 @@ void MowerAdapter::processMapUpload()
     case MapUploadState::error:
     case MapUploadState::idle:
     default:
+      _mapUploadState.snapshot = ArduMower::Domain::Robot::MowerMap();
       _mapUploadState.active = false;
       break;
   }

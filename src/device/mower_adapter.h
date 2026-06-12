@@ -44,6 +44,7 @@ namespace ArduMower
       String lastResponse;
       bool lastOk = false;
       bool waitingForResponse = false;
+      ArduMower::Domain::Robot::MowerMap snapshot;
     };
 
     class MowerAdapter : public RxDrain, public TxDrain, public ArduMower::Domain::Robot::StateSource, public ArduMower::Domain::Robot::CommandExecutor {
