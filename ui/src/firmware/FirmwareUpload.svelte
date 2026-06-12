@@ -181,6 +181,11 @@
     initWebSocket();
   }
 
+  $: if (uploadType === FirmwareUploadType.modem && $uploaderStatus === FirmwareUploadStatus.success) {
+    flashProgress = 100;
+    flashStatus = FirmwareFlashStatus.success;
+  }
+
   onDestroy(() => {
     closeWebSocket();
   });

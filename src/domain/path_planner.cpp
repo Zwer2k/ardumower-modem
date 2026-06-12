@@ -242,10 +242,11 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
         iterCount++;
     }
 
-    // Clip zigzag to areaToMow using Clipper2 Intersection
+    // Clip zigzag to areaToMow using Clipper2 Intersection with open paths
     // (web app uses ctDifference which for open paths clips to OUTSIDE;
-    //  we need INSIDE, so use ctIntersection)
-    std::vector<Polygon> polys = clipIntersect(std::vector<Polygon>{zigzag}, areaToMow);
+    //  we need INSIDE, so use ctIntersection with AddOpenSubject so the zigzag
+    //  is not improperly treated as a closed polygon)
+    std::vector<Polygon> polys = clipIntersectOpen(std::vector<Polygon>{zigzag}, areaToMow);
     if (polys.empty()) return {};
 
     // sortSolutionPolygonsByDistance (matches web app)
@@ -422,7 +423,7 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
             // (endpoints on the boundary are treated as inside)
             bool needWalk = false;
             if (d > 0.1) {
-                for (double t = 0.2; t < 1.0; t += 0.2) {
+                for (double t = 0.1; t < 1.0; t += 0.15) {
                     Point mid = lerp(from, to, t);
                     if (!pointInPolygon(mid, perimeter)) {
                         needWalk = true;

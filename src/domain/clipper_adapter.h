@@ -98,6 +98,22 @@ inline std::vector<Polygon> clipIntersect(const std::vector<Polygon> &subjects,
     return toDbl(doClipOp(ClipType::Intersection, toI64(subjects), Paths64{toI64(clip)}));
 }
 
+// Clip open paths (polylines) against a closed polygon, returning the parts inside.
+// Unlike clipIntersect (which treats subjects as closed polygons), this uses
+// AddOpenSubject so the zigzag is not improperly closed by a last→first edge.
+inline std::vector<Polygon> clipIntersectOpen(const std::vector<Polygon> &subjects,
+    const Polygon &clip) {
+    Clipper64 c;
+    c.AddOpenSubject(toI64(subjects));
+    c.AddClip(Paths64{toI64(clip)});
+    Paths64 closed, open;
+    c.Execute(ClipType::Intersection, FillRule::NonZero, closed, open);
+    auto result = toDbl(closed);
+    auto openDbl = toDbl(open);
+    result.insert(result.end(), openDbl.begin(), openDbl.end());
+    return result;
+}
+
         }
     }
 }

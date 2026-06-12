@@ -61,8 +61,10 @@ void HttpServer::loopFlash()
 
   if (s->flashProgress() >= s->flashTotal())
   {
-    if (s->endFlash())
+    if (s->endFlash()) {
+      if (onFlashProgress) onFlashProgress(s->flashTotal(), s->flashTotal());
       requestRestart();
+    }
     delete s;
     _flashSession = NULL;
     return;

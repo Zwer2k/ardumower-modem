@@ -141,6 +141,7 @@ namespace ArduMower
 
         void requestRestart();
         void queueFlash(Http::ModemUploadSession *session);
+        std::function<void(size_t, size_t)> onFlashProgress;
       };
     }
   }

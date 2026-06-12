@@ -124,6 +124,7 @@ void setup() {
   modemCli.begin();
   ota.begin();
   otaHttpServer.begin();
+  otaHttpServer.onFlashProgress = [&](size_t cur, size_t tot){ socketHandler.broadcastFlashProgress(cur, tot); };
   bleAdapter.begin();
   httpAdapter.begin();
   mowerAdapter.begin();
