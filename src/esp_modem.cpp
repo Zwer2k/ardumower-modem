@@ -149,12 +149,14 @@ void setup() {
   looptime.add("ota_arduino", std::bind(&Ota::ArduinoOta::loop, &ota));
   looptime.add("flash_progress", [&](){
     static uint32_t last = 0;
+    if (Ota::otaFlashTotal == 0) return;
     uint32_t now = millis();
-    if (Ota::otaFlashTotal > 0 && now - last > 500) {
-      last = now;
-      Log(DBG, "flash_progress: %u/%u", (unsigned)Ota::otaFlashProgress, (unsigned)Ota::otaFlashTotal);
-      socketHandler.broadcastFlashProgress(Ota::otaFlashProgress, Ota::otaFlashTotal);
-    }
+    bool force = Ota::otaFlashForceSend;
+    if (!force && now - last < 500) return;
+    last = now;
+    Ota::otaFlashForceSend = false;
+    Log(DBG, "flash_progress: %u/%u", (unsigned)Ota::otaFlashProgress, (unsigned)Ota::otaFlashTotal);
+    socketHandler.broadcastFlashProgress(Ota::otaFlashProgress, Ota::otaFlashTotal);
   });
   looptime.add("router", std::bind(&Router::loop, &router));
   looptime.add("mower", [&](){ if (!Ota::MowerUpdater::isFlashing()) mowerAdapter.loop(); });

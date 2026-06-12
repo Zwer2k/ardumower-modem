@@ -36,6 +36,9 @@ export interface SocketState {
   consoleLines: ConsoleLine[];
   modemDbgLevel: number;
   mapRaw: MapRaw | null;
+  mapEnabled: boolean;
+  liveMapEnabled: boolean;
+  gpsDashboardEnabled: boolean;
 }
 
 const initialState: SocketState = {
@@ -52,6 +55,9 @@ const initialState: SocketState = {
   consoleLines: [],
   modemDbgLevel: 15,
   mapRaw: null,
+  mapEnabled: false,
+  liveMapEnabled: false,
+  gpsDashboardEnabled: false,
 };
 
 export const socketStore = writable<SocketState>(initialState);
@@ -220,6 +226,9 @@ class SocketService {
                   newState.valueDescriptions =
                     jsonData.data as ValueDescriptions;
                   newState.modemDbgLevel = newState.valueDescriptions.logLevel;
+                  newState.mapEnabled = !!(jsonData.data as any).mapEnabled;
+                  newState.liveMapEnabled = !!(jsonData.data as any).liveMapEnabled;
+                  newState.gpsDashboardEnabled = !!(jsonData.data as any).gpsDashboardEnabled;
                   break;
                 case ResponseDataType.mowerState:
                   newState.state = jsonData.data as State;

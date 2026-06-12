@@ -321,7 +321,7 @@ namespace ArduMower
 
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
         virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map) = 0;
-        virtual void setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) = 0;
+        virtual void setMowSettings(const MowSettings &s) = 0;
       };
 
       class CommandExecutor
@@ -345,8 +345,10 @@ namespace ArduMower
         virtual bool requestStats() = 0;
         virtual bool requestStatsNow() = 0;
         virtual bool requestSensorSummary() = 0;
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
         virtual bool requestGpsDetails() = 0;
         virtual bool sendUbx(const String &hexCmd) = 0;
+#endif
 
         virtual bool manualDrive(float linear, float angular) = 0;
         virtual bool navigateTo(float x, float y) = 0;

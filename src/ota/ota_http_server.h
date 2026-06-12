@@ -16,6 +16,7 @@ namespace ArduMower
 
       extern volatile size_t otaFlashProgress;
       extern volatile size_t otaFlashTotal;
+      extern volatile bool otaFlashForceSend;
 
       enum FirmwareUploadType {
         modem = 0,

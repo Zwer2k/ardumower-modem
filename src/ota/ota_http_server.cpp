@@ -11,6 +11,7 @@ using namespace std::placeholders;
 
 volatile size_t ArduMower::Modem::Ota::otaFlashProgress = 0;
 volatile size_t ArduMower::Modem::Ota::otaFlashTotal = 0;
+volatile bool ArduMower::Modem::Ota::otaFlashForceSend = false;
 
 const char *resultToString(Http::Result r);
 
@@ -376,6 +377,7 @@ bool Http::ModemUploadSession::endFlash()
   }
 
   otaFlashProgress = otaFlashTotal;
+  otaFlashForceSend = true;
   Log(INFO, "Ota::Http::ModemUploadSession::flash::success");
   return true;
 }

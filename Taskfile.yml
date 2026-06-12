@@ -13,18 +13,13 @@ tasks:
     - rm -rf ui/build
 
   build-ui:
+    vars:
+      VITE_ENABLE_MAP: '{{default "false" .VITE_ENABLE_MAP}}'
+      VITE_ENABLE_LIVE_MAP: '{{default "false" .VITE_ENABLE_LIVE_MAP}}'
+      VITE_ENABLE_GPS_DASHBOARD: '{{default "false" .VITE_ENABLE_GPS_DASHBOARD}}'
     cmds:
-    - npm run build
+    - VITE_ENABLE_MAP={{.VITE_ENABLE_MAP}} VITE_ENABLE_LIVE_MAP={{.VITE_ENABLE_LIVE_MAP}} VITE_ENABLE_GPS_DASHBOARD={{.VITE_ENABLE_GPS_DASHBOARD}} npm run build
     dir: ui
-    generates:
-    - build/**/*
-    #- public/build/**/*
-    sources:
-    - public/index.html
-    - public/smui.css
-    - src/**/*
-    - package.json
-    - rollup.config.js
   
   debug-ui:
     cmds:
@@ -40,10 +35,18 @@ tasks:
     - rollup.config.js
 
   package-ui:
+    vars:
+      VITE_ENABLE_MAP: '{{default "false" .VITE_ENABLE_MAP}}'
+      VITE_ENABLE_LIVE_MAP: '{{default "false" .VITE_ENABLE_LIVE_MAP}}'
+      VITE_ENABLE_GPS_DASHBOARD: '{{default "false" .VITE_ENABLE_GPS_DASHBOARD}}'
     cmds:
     - go run .
     deps:
     - task: build-ui
+      vars:
+        VITE_ENABLE_MAP: '{{.VITE_ENABLE_MAP}}'
+        VITE_ENABLE_LIVE_MAP: '{{.VITE_ENABLE_LIVE_MAP}}'
+        VITE_ENABLE_GPS_DASHBOARD: '{{.VITE_ENABLE_GPS_DASHBOARD}}'
     dir: util/package_ui
     generates:
     - ../../src/sys/asset_bundle.h
@@ -100,19 +103,35 @@ tasks:
           --build-property upload.maximum_size="$upload_size" \
           --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} -DENABLE_PS4_CONTROLLER $git_tag_defines"
       fi
-    deps: [task: package-ui]
+    deps:
+    - task: package-ui
+      vars:
+        VITE_ENABLE_MAP: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
+        VITE_ENABLE_LIVE_MAP: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
+        VITE_ENABLE_GPS_DASHBOARD: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
 
   compile-with-ps4:
     cmds:
     - ~/.platformio/penv/bin/pio run
-    deps: [task: package-ui]
+    deps:
+    - task: package-ui
+      vars:
+        VITE_ENABLE_MAP: 'true'
+        VITE_ENABLE_LIVE_MAP: 'true'
+        VITE_ENABLE_GPS_DASHBOARD: 'true'
 
   compile-pio:
     vars:
-      PIO_ENV: '{{default "esp32-S3-N16-R8" .PIO_ENV}}'
+      ESP_TARGET: '{{default "esp32-S3" .ESP_TARGET}}'
+      PIO_ENV: '{{if eq .ESP_TARGET "esp32-S3"}}esp32-S3-N16-R8{{else}}{{.ESP_TARGET}}{{end}}'
     cmds:
     - ~/.platformio/penv/bin/pio run -e {{.PIO_ENV}}
-    deps: [task: package-ui]
+    deps:
+    - task: package-ui
+      vars:
+        VITE_ENABLE_MAP: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
+        VITE_ENABLE_LIVE_MAP: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
+        VITE_ENABLE_GPS_DASHBOARD: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
     
   build:
     deps:

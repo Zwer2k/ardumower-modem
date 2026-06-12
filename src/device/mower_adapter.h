@@ -1,8 +1,8 @@
 #ifndef _MOWER_ADAPTER_H
 #define _MOWER_ADAPTER_H
 
-#include "mower_map.h"
 #include "domain.h"
+#include "mower_map.h"
 #include "router.h"
 #include "encrypt.h"
 #include "settings.h"
@@ -42,8 +42,10 @@ namespace ArduMower
       void parseStateResponse(String line);
       void parseStatisticsResponse(String line);
       void parseSensorSummaryResponse(String line);
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
       void parseGpsDetailsResponse(String line);
       void parseUbxResponse(String line);
+#endif
       void parseATCCommand(String line);
       void parseATWCommand(String line);
       void parseATNCommand(String line);
@@ -94,8 +96,10 @@ namespace ArduMower
       virtual bool requestStats();
       virtual bool requestStatsNow();
       virtual bool requestSensorSummary();
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
       virtual bool requestGpsDetails();
       virtual bool sendUbx(const String &hexCmd);
+#endif
       virtual bool manualDrive(float linear, float angular);
       virtual bool navigateTo(float x, float y);
       virtual bool reboot();

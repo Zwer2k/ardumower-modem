@@ -1,4 +1,5 @@
 #pragma once
+#ifdef ENABLE_MAP
 #include <vector>
 #include "mower_map.h"
 #include "domain.h"
@@ -46,3 +47,4 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
         }
     }
 }
+#endif

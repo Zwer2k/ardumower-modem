@@ -1,3 +1,4 @@
+#ifdef ENABLE_MAP
 #include "path_planner.h"
 #include "clipper_adapter.h"
 #include "log.h"
@@ -149,14 +150,14 @@ static Polygon walkPerimeter(const Polygon &peri, const Point &from, const Point
     auto [iFrom, projFrom] = nearestOnBoundary(from);
     auto [iTo, projTo] = nearestOnBoundary(to);
 
+    result.push_back(projFrom);
+
     if (iFrom == iTo) {
-        result.push_back(projFrom);
         result.push_back(projTo);
         return result;
     }
 
     Polygon fwd, rev;
-    fwd.push_back(projFrom);
     for (size_t k = (iFrom + 1) % n; ; k = (k + 1) % n) {
         fwd.push_back(peri[k]);
         if (k == iTo) break;
@@ -164,7 +165,6 @@ static Polygon walkPerimeter(const Polygon &peri, const Point &from, const Point
     }
     fwd.push_back(projTo);
 
-    rev.push_back(projFrom);
     for (size_t k = iFrom; ; ) {
         rev.push_back(peri[k]);
         if (k == (iTo + 1) % n) break;
@@ -255,7 +255,7 @@ Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow
     // Connect polys into a single route (matches web app connectPolysUsingPathFinding)
     Polygon route;
     connectPolysUsingPathFinding(route, polys, perimeter);
-    route = pruneOutside(route, areaToMow);
+    route = pruneOutside(route, perimeter);
     Log(DBG, "%scalculateLinesPattern done: %d points", _LOG_, route.size());
     return route;
 }
@@ -295,7 +295,7 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
         queue.push_back(next);
     }
 
-    route = pruneOutside(route, areaToMow);
+    route = pruneOutside(route, perimeter);
     Log(DBG, "%scalculateRingsPattern done: %d points", _LOG_, route.size());
     return route;
 }
@@ -350,36 +350,35 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
         double minDist = 160000;
         size_t minPolyIdx = 0;
         size_t minPtIdx = 0;
+        bool reverse = false;
 
         for (size_t i = 0; i < solution.size(); i++) {
-            for (size_t j = 0; j < solution[i].size(); j++) {
-                double d = distance(currentPos, solution[i][j]);
-                if (d < minDist) {
-                    minDist = d;
-                    minPolyIdx = i;
-                    minPtIdx = j;
-                }
+            size_t n = solution[i].size();
+            if (n == 0) continue;
+
+            double dFirst = distance(currentPos, solution[i][0]);
+            double dLast = distance(currentPos, solution[i][n - 1]);
+            if (dFirst < minDist) {
+                minDist = dFirst; minPolyIdx = i; minPtIdx = 0; reverse = false;
+            }
+            if (dLast < minDist) {
+                minDist = dLast; minPolyIdx = i; minPtIdx = n - 1; reverse = true;
             }
         }
 
         Polygon poly = solution[minPolyIdx];
         solution.erase(solution.begin() + minPolyIdx);
 
-        // Rotate so nearest point is first
-        if (minPtIdx > 0 && minPtIdx < poly.size()) {
-            Polygon rotated;
-            rotated.reserve(poly.size());
-            for (size_t i = 0; i < poly.size(); i++)
-                rotated.push_back(poly[(minPtIdx + i) % poly.size()]);
-            poly = rotated;
+        if (reverse) {
+            Polygon rev;
+            rev.reserve(poly.size());
+            for (int i = (int)poly.size() - 1; i >= 0; i--)
+                rev.push_back(poly[i]);
+            poly = rev;
         }
 
-        // Close ring (append first point)
-        if (!poly.empty() && distance(poly.front(), poly.back()) > 0.01)
-            poly.push_back(poly[0]);
-
         sorted.push_back(poly);
-        if (!poly.empty()) currentPos = poly[0];
+        if (!poly.empty()) currentPos = poly.back();
     }
 
     solution = sorted;
@@ -395,11 +394,9 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
         const auto &poly = polys[i];
         for (size_t j = 0; j < poly.size(); j++) {
             if (i > 0 && j == 0) {
-                // Connect from last polygon's last point to this polygon's first point
-                Polygon walk = walkPerimeter(perimeter, lastPoint, poly[0]);
-                for (const auto &p : walk) {
-                    if (waypoints.empty() || distance(waypoints.back(), p) > 0.01)
-                        waypoints.push_back(p);
+                // Direct line from end of previous swath to start of next swath
+                if (distance(lastPoint, poly[0]) > 0.01) {
+                    waypoints.push_back(poly[0]);
                 }
             } else {
                 if (waypoints.empty() || distance(waypoints.back(), poly[j]) > 0.01)
@@ -473,3 +470,4 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
         }
     }
 }
+#endif

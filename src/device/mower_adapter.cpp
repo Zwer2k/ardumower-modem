@@ -101,11 +101,15 @@ void MowerAdapter::parseArduMowerResponse(String line)
   // TODO test
   // if (chk.value != checksum) return;
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   if (payload.startsWith("U,"))
     parseUbxResponse(payload);
   else if (payload.startsWith("S4,"))
     { _cachedRawGpsDetails = line; parseGpsDetailsResponse(payload); }
   else if (payload.startsWith("S3,"))
+#else
+  if (payload.startsWith("S3,"))
+#endif
     { _cachedRawSensorSummary = line; parseSensorSummaryResponse(payload); }
   else if (payload.startsWith("S,"))
     { _cachedRawState = line; parseStateResponse(payload); }
@@ -401,6 +405,7 @@ bool MowerAdapter::requestSensorSummary()
   return sendCommand("AT+S3", true);
 }
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
 bool MowerAdapter::requestGpsDetails()
 {
   Log(DBG, "%srequestGpsDetails", _LOG_);
@@ -430,6 +435,7 @@ void MowerAdapter::parseUbxResponse(String line)
   }
   _ubxResponse.timestamp = now;
 }
+#endif
 
 // linear: m/s
 // angular: rad/s
@@ -637,6 +643,7 @@ void MowerAdapter::parseSensorSummaryResponse(String line)
   _sensorSummary.timestamp = now;
 }
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
 void MowerAdapter::parseGpsDetailsResponse(String line)
 {
   Log(DBG, "%sparseGpsDetailsResponse", _LOG_);
@@ -721,6 +728,7 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
   Log(DBG, "%sparseGpsDetailsResponse done sats=%d/%d fields=%d fps=%d",
       _LOG_, (int)_gpsDetails.satellites.size(), satCount, fieldIdx, fieldsPerSat);
 }
+#endif
 
 void MowerAdapter::parseVersionResponse(String line)
 {

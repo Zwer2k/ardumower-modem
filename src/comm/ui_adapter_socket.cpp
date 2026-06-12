@@ -1,7 +1,9 @@
 #include <functional>
 #include <time.h>
 #include "ui_adapter_socket.h"
+#ifdef ENABLE_MAP
 #include "path_planner.h"
+#endif
 #include "json.h"
 #include "log.h"
 #include "logToUi.h"
@@ -35,6 +37,7 @@ UiSocketItem::UiSocketItem(
   // Request fresh stats from Teensy immediately (bypasses rate limit)
   _socketHandler->requestStatsNow();
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   // Send cached UBX data to new client if available
   if (_source.ubxResponse().timestamp > 0) {
     _socketHandler->sendData(ResponseDataType::ubxResponse, this, true);
@@ -42,6 +45,7 @@ UiSocketItem::UiSocketItem(
   if (_source.gpsDetails().timestamp > 0) {
     _socketHandler->sendData(ResponseDataType::gpsDetails, this, true);
   }
+#endif
 }
 
 void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jsonData)
@@ -58,6 +62,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     _socketHandler->cmdToMower(jsonData["cmd"]);
     break;
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   case RequestDataType::requestGpsDetails:
     _socketHandler->gpsDetailsRefCount++;
     _socketHandler->gpsDetailsActive = true;
@@ -81,6 +86,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     }
     Log(INFO, "%s GPS details polling deactivated (ref=%d)", _LOG_, _socketHandler->gpsDetailsRefCount);
     break;
+#endif
 
   case RequestDataType::requestSensorSummary:
     _socketHandler->sensorSummaryRefCount++;
@@ -102,6 +108,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
     Log(INFO, "%s Sensor summary polling deactivated (ref=%d)", _LOG_, _socketHandler->sensorSummaryRefCount);
     break;
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   case RequestDataType::requestUbx:
     {
       String hexCmd = jsonData["hex"] | "";
@@ -113,6 +120,7 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
       }
     }
     break;
+#endif
 
   case RequestDataType::joystickMove:
     {
@@ -343,7 +351,9 @@ void UiSocketHandler::loop()
   if (countConnectedClients() == 0)
     return;
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   ubxLoop();
+#endif
 
   static byte loopCase = 0;
     switch (loopCase)
@@ -380,6 +390,7 @@ void UiSocketHandler::loop()
         sendData(ResponseDataType::sensorSummary);
       }
       break;
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
     case 10:
       gpsRequestLoop();
       if (gpsDetailsActive) ubxPollLoop();
@@ -397,6 +408,7 @@ void UiSocketHandler::loop()
         _lastSentUbxTimestamp = 0; // Allow next poll to advance immediately
       }
       break;
+#endif
     }
     loopCase++;
     if (loopCase > 12) loopCase = 0;
@@ -447,6 +459,7 @@ void UiSocketHandler::sensorRequestLoop()
   lastDataRequestTimestamp[ResponseDataType::sensorSummary] = millis();
 }
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
 void UiSocketHandler::gpsRequestLoop()
 {
   if ((lastDataRequestTimestamp[ResponseDataType::gpsDetails] > 0) && ((millis() - lastDataRequestTimestamp[ResponseDataType::gpsDetails]) < 20000))
@@ -519,12 +532,14 @@ bool UiSocketHandler::sendUbx(const String &hexCmd)
   _lastSentUbxTimestamp = 0;
   return true;
 }
+#endif
 
 void UiSocketHandler::resetRequestTimestamp(ResponseDataType dataType)
 {
   lastDataRequestTimestamp[dataType] = 0;
 }
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
 void UiSocketHandler::ubxLoop()
 {
   if (pendingUbxCmd.length() == 0) return;
@@ -539,6 +554,7 @@ void UiSocketHandler::ubxLoop()
     _lastSentUbxTimestamp = millis();
   }
 }
+#endif
 
 static String sanitizeUtf8(const String& input);
 
@@ -561,12 +577,14 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     case ResponseDataType::sensorSummary:
       sendData(dataType, sendTo, _source.sensorSummary(), force);
       break;
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
     case ResponseDataType::gpsDetails:
       sendData(dataType, sendTo, _source.gpsDetails(), force);
       break;
     case ResponseDataType::ubxResponse:
       sendData(dataType, sendTo, _source.ubxResponse(), force);
       break;
+#endif
     case ResponseDataType::mowSettings:
       sendData(dataType, sendTo, _source.mowSettings(), force);
       break;
@@ -822,9 +840,11 @@ void UiSocketHandler::calculateWaypoints() {
   uint32_t ts = millis();
   auto settings = _source.mowSettings();
   map.waypoints.clear();
+#ifdef ENABLE_MAP
   auto waypoints = ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings);
   for (const auto &wp : waypoints)
     map.waypoints.push_back(wp);
+#endif
   _source.setMap(map);
   abortMapChunkSend();
   sendWaypointsDirect(map.waypoints, ts);
@@ -937,7 +957,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   // otherwise they would re-request immediately after sending data
   switch (dataType) {
     case ResponseDataType::mowerState:
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
     case ResponseDataType::gpsDetails:
+#endif
     case ResponseDataType::sensorSummary:
       break;
     default:
@@ -945,7 +967,11 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       break;
   }
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   const size_t docSize = (dataType == ResponseDataType::gpsDetails || dataType == ResponseDataType::ubxResponse) ? 8192 : 4096;
+#else
+  const size_t docSize = 4096;
+#endif
   DynamicJsonDocument doc(docSize);
   doc["type"] = dataType;
   data.marshal(doc.createNestedObject("data"));
@@ -1049,6 +1075,16 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
 
     valueDescriptions["logLevel"] = logToUi.modemLogLevel;
 
+#ifdef ENABLE_MAP
+    valueDescriptions["mapEnabled"] = true;
+#endif
+#ifdef ENABLE_LIVE_MAP
+    valueDescriptions["liveMapEnabled"] = true;
+#endif
+#ifdef ENABLE_GPS_DASHBOARD
+    valueDescriptions["gpsDashboardEnabled"] = true;
+#endif
+
     String dataStr;
     serializeJson(doc, dataStr);
     dataStr = sanitizeUtf8(dataStr);
@@ -1075,11 +1111,13 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     }
     // Clean up ref counts if this was the last client
     if (itemMap.empty()) {
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
       gpsDetailsRefCount = 0;
-      sensorSummaryRefCount = 0;
       gpsDetailsActive = false;
-      sensorSummaryActive = false;
       ubxResponseActive = false;
+#endif
+      sensorSummaryRefCount = 0;
+      sensorSummaryActive = false;
       Log(INFO, "%s last client removed on error, resetting all ref counts", _LOG_);
     }
   } else if(type == WS_EVT_DISCONNECT){
@@ -1094,11 +1132,13 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     }
     // Clean up ref counts if this was the last client
     if (itemMap.empty()) {
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
       gpsDetailsRefCount = 0;
-      sensorSummaryRefCount = 0;
       gpsDetailsActive = false;
-      sensorSummaryActive = false;
       ubxResponseActive = false;
+#endif
+      sensorSummaryRefCount = 0;
+      sensorSummaryActive = false;
       Log(INFO, "%s last client disconnected, resetting all ref counts", _LOG_);
     }
   } else if(type == WS_EVT_ERROR){

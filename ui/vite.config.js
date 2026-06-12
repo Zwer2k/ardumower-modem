@@ -9,7 +9,16 @@ export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, '../', '');
 	const espDevIp = env.ESP_DEV_IP || '192.168.43.221';
 
+	const mapEnabled = env.VITE_ENABLE_MAP === 'true';
+	const liveMapEnabled = env.VITE_ENABLE_LIVE_MAP === 'true';
+	const gpsDashboardEnabled = env.VITE_ENABLE_GPS_DASHBOARD === 'true';
+
 	return {
+		define: {
+			'import.meta.env.VITE_ENABLE_MAP': mapEnabled ? '"true"' : '"false"',
+			'import.meta.env.VITE_ENABLE_LIVE_MAP': liveMapEnabled ? '"true"' : '"false"',
+			'import.meta.env.VITE_ENABLE_GPS_DASHBOARD': gpsDashboardEnabled ? '"true"' : '"false"'
+		},
 		...(!production && { 
 			server: {
 				host: 'localhost',
@@ -37,9 +46,9 @@ export default defineConfig(({ mode }) => {
 		build: {
 			rollupOptions: {
 				output: {
-					manualChunks: (id) => {
+					manualChunks: mapEnabled ? (id) => {
 						return 'my-app';
-					}
+					} : undefined
 				}
 			}
 		}

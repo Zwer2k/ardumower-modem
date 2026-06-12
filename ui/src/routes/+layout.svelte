@@ -61,6 +61,7 @@
         iconDescription="Status">
         <span class="button-text">Status</span>
     </Button>
+    {#if import.meta.env.VITE_ENABLE_MAP === 'true'}
     <Button
         href="/?dashboard=map"
         kind="tertiary"
@@ -68,6 +69,8 @@
         iconDescription="Map">
         <span class="button-text">Map</span>
     </Button>
+    {/if}
+    {#if import.meta.env.VITE_ENABLE_LIVE_MAP === 'true'}
     <Button
         href="/?dashboard=livemap"
         kind="tertiary"
@@ -75,6 +78,8 @@
         iconDescription="Live Map">
         <span class="button-text">Live Map</span>
     </Button>
+    {/if}
+    {#if import.meta.env.VITE_ENABLE_GPS_DASHBOARD === 'true'}
     <Button
         href="/?dashboard=gps"
         kind="tertiary"
@@ -82,6 +87,7 @@
         iconDescription="GPS">
         <span class="button-text">GPS</span>
     </Button>
+    {/if}
 
     <div slot="skip-to-content">
         <SkipToContent />

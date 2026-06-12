@@ -225,6 +225,7 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
           req->onRouterResponse(cached);
           return;
         }
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
       } else if (body.startsWith("AT+S4,")) {
         String cached = _mower.cachedRawGpsDetails();
         if (cached.length() > 0) {
@@ -232,6 +233,7 @@ void HttpAdapter::processRequest(Http::CommandRequest *req)
           req->onRouterResponse(cached);
           return;
         }
+#endif
       } else if (body.startsWith("AT+S,") && !body.startsWith("AT+S2,")) {
         String cached = _mower.cachedRawState();
         if (cached.length() > 0) {

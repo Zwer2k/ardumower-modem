@@ -2,14 +2,16 @@
     import { onMount, onDestroy } from 'svelte';
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
-    import { socketService, socketStore } from '../../stores/socket';
+    import { socketService } from '../../stores/socket';
     import StatusDashboard from './status/StatusDashboard.svelte';
     import LogDashboard from './log/LogDashboard.svelte';
     import TerminalDashboard from './terminal/TerminalDashboard.svelte';
-    import GpsDashboard from './gps/GpsDashboard.svelte';
-    import LiveMap from './map/LiveMap.svelte';
     import TestsDashboard from './tests/TestsDashboard.svelte';
-    import Map from '../../map/Map.svelte';
+    import GpsDashboard from './gps/GpsDashboard.svelte';
+
+    const mapEnabled = import.meta.env.VITE_ENABLE_MAP === 'true';
+    const liveMapEnabled = import.meta.env.VITE_ENABLE_LIVE_MAP === 'true';
+    const gpsDashboardEnabled = import.meta.env.VITE_ENABLE_GPS_DASHBOARD === 'true';
 
     let currentDashboard = $state('status');
 
@@ -17,7 +19,11 @@
     $effect(() => {
         if (browser && $page.url) {
             const dashboard = $page.url.searchParams.get('dashboard') || 'status';
-            if (['status', 'log', 'terminal', 'map', 'gps', 'livemap', 'tests'].includes(dashboard)) {
+            const validDashboards = ['status', 'log', 'terminal', 'tests'];
+            if (mapEnabled) validDashboards.push('map');
+            if (gpsDashboardEnabled) validDashboards.push('gps');
+            if (liveMapEnabled) validDashboards.push('livemap');
+            if (validDashboards.includes(dashboard)) {
                 currentDashboard = dashboard;
             }
         }
@@ -49,15 +55,25 @@
     <div class="dashboard-panel" class:active={currentDashboard === 'terminal'}>
         <TerminalDashboard />
     </div>
+    {#if mapEnabled}
     <div class="dashboard-panel" class:active={currentDashboard === 'map'}>
-        <Map />
+        {#await import('../../map/Map.svelte') then { default: MapComp }}
+            <MapComp />
+        {/await}
     </div>
+    {/if}
+    {#if gpsDashboardEnabled}
     <div class="dashboard-panel" class:active={currentDashboard === 'gps'}>
         <GpsDashboard />
     </div>
+    {/if}
+    {#if liveMapEnabled}
     <div class="dashboard-panel" class:active={currentDashboard === 'livemap'}>
-        <LiveMap />
+        {#await import('./map/LiveMap.svelte') then { default: LiveMapComp }}
+            <LiveMapComp />
+        {/await}
     </div>
+    {/if}
     <div class="dashboard-panel" class:active={currentDashboard === 'tests'}>
         <TestsDashboard />
     </div>

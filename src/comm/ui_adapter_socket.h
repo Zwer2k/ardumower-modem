@@ -80,7 +80,7 @@ namespace ArduMower
         UiSocketHandler *_socketHandler;
         AsyncWebSocketClient *_client;
         ArduMower::Domain::Robot::StateSource &_source;
-      };      
+      };
 
       struct MapChunkSendState {
         bool active = false;
@@ -121,7 +121,9 @@ namespace ArduMower
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
         void broadcastFlashProgress(size_t current, size_t total);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
         bool sendUbx(const String &hexCmd);
+#endif
         void resetRequestTimestamp(ResponseDataType dataType);
         void joystickMove(float linear, float angular);
         void navigateTo(float x, float y);
@@ -139,8 +141,11 @@ namespace ArduMower
         void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
 #endif
 
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
         bool gpsDetailsActive = false;
+#endif
         bool sensorSummaryActive = false;
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
         bool ubxResponseActive = false;
         String pendingUbxCmd;
 
@@ -150,6 +155,7 @@ namespace ArduMower
 
         // Reference counting for multi-client support
         uint32_t gpsDetailsRefCount = 0;
+#endif
         uint32_t sensorSummaryRefCount = 0;
 
       private:
@@ -163,7 +169,9 @@ namespace ArduMower
         uint32_t lastDataRequestTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastSentTimestamp[ResponseDataType::responseDataTypeLength];
         uint32_t lastclientPing = 0;
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
         uint32_t _lastSentUbxTimestamp = 0;
+#endif
         
   #ifdef MOWER_TERMINAL
   Terminal &_terminal;
@@ -174,16 +182,18 @@ namespace ArduMower
         Ota::MowerUpdater &_mowerUpdater;
 
         void handleData(uint32_t clientId, char *data);
-        std::map<uint32_t, UiSocketItem*> itemMap;  
+        std::map<uint32_t, UiSocketItem*> itemMap;
         MapChunkSendState mapChunkSendState;
         std::map<uint32_t, String> _frameBuffer;
         
         void versionRequestLoop();
         void stateRequestLoop();
         void sensorRequestLoop();
+#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
         void gpsRequestLoop();
         void ubxLoop();
         void ubxPollLoop();
+#endif
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);

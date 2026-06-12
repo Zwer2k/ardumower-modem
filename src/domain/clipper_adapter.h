@@ -1,4 +1,5 @@
 #pragma once
+#ifdef ENABLE_MAP
 #include "clipper2/clipper.core.h"
 #include "clipper2/clipper.engine.h"
 #include "clipper2/clipper.offset.h"
@@ -100,3 +101,4 @@ inline std::vector<Polygon> clipIntersect(const std::vector<Polygon> &subjects,
         }
     }
 }
+#endif
