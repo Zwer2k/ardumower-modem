@@ -278,6 +278,16 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
         queue.erase(queue.begin());
         if (currentArea.size() < 3) continue;
 
+        // Rotate ring so start is near previous end
+        if (!route.empty()) {
+            size_t best = nearestPointIndex(route.back(), currentArea);
+            Polygon rot;
+            rot.reserve(currentArea.size());
+            for (size_t i = 0; i < currentArea.size(); i++)
+                rot.push_back(currentArea[(best + i) % currentArea.size()]);
+            currentArea = rot;
+        }
+
         // Add current ring to route
         for (const auto &p : currentArea)
             if (route.empty() || distance(route.back(), p) > 0.01)
@@ -388,22 +398,38 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
 void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon> &polys,
     const Polygon &perimeter) {
     waypoints.clear();
-    Point lastPoint;
 
     for (size_t i = 0; i < polys.size(); i++) {
         const auto &poly = polys[i];
-        for (size_t j = 0; j < poly.size(); j++) {
-            if (i > 0 && j == 0) {
-                // Direct line from end of previous swath to start of next swath
-                if (distance(lastPoint, poly[0]) > 0.01) {
-                    waypoints.push_back(poly[0]);
+        if (poly.empty()) continue;
+
+        if (i > 0) {
+            const Point &from = waypoints.back();
+            const Point &to = poly[0];
+            double d = distance(from, to);
+            // Only walk perimeter if direct line crosses outside the perimeter
+            // (endpoints on the boundary are treated as inside)
+            bool needWalk = false;
+            if (d > 0.1) {
+                for (double t = 0.2; t < 1.0; t += 0.2) {
+                    Point mid = lerp(from, to, t);
+                    if (!pointInPolygon(mid, perimeter)) {
+                        needWalk = true;
+                        break;
+                    }
                 }
-            } else {
-                if (waypoints.empty() || distance(waypoints.back(), poly[j]) > 0.01)
-                    waypoints.push_back(poly[j]);
             }
-            lastPoint = poly[j];
+            if (needWalk) {
+                Polygon conn = walkPerimeter(perimeter, from, to);
+                for (size_t k = 0; k < conn.size(); k++)
+                    if (distance(waypoints.back(), conn[k]) > 0.01)
+                        waypoints.push_back(conn[k]);
+            }
         }
+
+        for (size_t j = 0; j < poly.size(); j++)
+            if (waypoints.empty() || distance(waypoints.back(), poly[j]) > 0.01)
+                waypoints.push_back(poly[j]);
     }
 }
 
