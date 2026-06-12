@@ -129,7 +129,6 @@ namespace ArduMower
         void joystickMove(float linear, float angular);
         void navigateTo(float x, float y);
         void sendProgress(String operation, int progress, String message = "");
-        void uploadMapToMower();
         void requestStats();
         void requestStatsNow();
         void sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
@@ -138,6 +137,8 @@ namespace ArduMower
         void clearWaypoints();
         void calculateWaypoints();
         void processCalculateWaypoints();
+        void uploadMapToMower();
+        void processUploadToMower();
         void abortMapChunkSend();
         void sendWaypointsDirect(const std::vector<ArduMower::Domain::Robot::MapPoint> &waypoints, uint32_t timestamp);
 #ifdef MOWER_TERMINAL
@@ -181,8 +182,9 @@ namespace ArduMower
         String _progressMsg;
         uint32_t _lastLogSend = 0;
 
-        bool _calculateWaypointsPending = false;
-        bool _calculateWaypointsRunning = false;
+        volatile bool _uploadToMowerPending = false;
+        volatile bool _calculateWaypointsPending = false;
+        volatile bool _calculateWaypointsRunning = false;
         uint32_t _calculateWaypointsTimestamp = 0;
         ArduMower::Domain::Robot::MowerMap _calculateWaypointsMap;
         ArduMower::Domain::Robot::MowSettings _calculateWaypointsSettings;

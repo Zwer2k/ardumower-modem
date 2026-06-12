@@ -358,6 +358,8 @@ namespace ArduMower
         virtual bool powerOff() = 0;
 
         virtual bool uploadMapToMower() = 0;
+        virtual bool uploadMapToMowerActive() { return false; }
+        virtual bool uploadMapToMowerSuccess() { return false; }
         virtual bool customCmd(String cmd) = 0;
       };
     }

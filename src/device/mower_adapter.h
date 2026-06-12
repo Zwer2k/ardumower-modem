@@ -66,6 +66,7 @@ namespace ArduMower
       uint32_t _lastStatsRequest = 0;
       PendingCommand _pendingCommand;
       MapUploadState _mapUploadState;
+      volatile bool _mapUploadPending = false;
       // Cache für rohe Antwort-Strings (mit Checksumme) – für HTTP-Cache-Serving
       String _cachedRawState;
       String _cachedRawStats;
@@ -93,6 +94,7 @@ namespace ArduMower
       bool sendCommandWithResponseAsync(String command, std::function<void(String, bool)> callback, bool encrypt = true, int timeoutMs = 3000);
       void processPendingCommand();
       void processMapUpload();
+      void startMapUploadFromLoop();
       bool sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot::MapPoint> &pts, int baseIdx);
       bool assertSendIsInitialized();
       int containsNonUTF8(const String& input);
@@ -148,6 +150,8 @@ namespace ArduMower
       virtual bool rebootGPS();
       virtual bool powerOff();
       virtual bool uploadMapToMower() override;
+      virtual bool uploadMapToMowerActive() override { return _mapUploadState.active; }
+      virtual bool uploadMapToMowerSuccess() override { return _mapUploadState.phase == MapUploadState::done; }
       virtual bool customCmd(String cmd);
       virtual void drainRx(String line, bool &stop) override;
       virtual void drainTx(String line, bool &stop) override;

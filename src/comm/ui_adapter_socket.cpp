@@ -412,9 +412,12 @@ void UiSocketHandler::loop()
       }
       break;
 #endif
+    case 14:
+      processUploadToMower();
+      break;
     }
     loopCase++;
-    if (loopCase > 13) loopCase = 0;
+    if (loopCase > 14) loopCase = 0;
   yield();
   
   //pingClients();
@@ -564,9 +567,30 @@ static String sanitizeUtf8(const String& input);
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, bool force)
 {
   switch (dataType) {
-    case ResponseDataType::mowerState:
-      sendData(dataType, sendTo, _source.state(), force);
+    case ResponseDataType::mowerState: {
+      auto state = _source.state();
+      // Wenn der Mäher lädt (negativer Strom), befindet er sich in der Docking-Station.
+      // In diesem Fall hat er oft keinen GPS-Fix und meldet Position 0/0. Sunray setzt
+      // den gemeldeten Roboter-Position dann auf den letzten Punkt der Dock-Linie
+      // (Home-Position). Dieses Verhalten wird hier nachgebildet.
+      if (state.amps < 0) {
+        auto map = _source.mowerMap();
+        if (map.dockpoints.size() > 0) {
+          const auto &home = map.dockpoints.back();
+          state.position.x = home.X;
+          state.position.y = home.Y;
+          // Orientierung aus der Dock-Linie ableiten (Vektor vom vorletzten zum letzten Punkt)
+          if (map.dockpoints.size() >= 2) {
+            const auto &prev = map.dockpoints[map.dockpoints.size() - 2];
+            state.position.delta = atan2(home.Y - prev.Y, home.X - prev.X);
+          }
+          Log(DBG, "%s sendData: docked (amps=%.2f), overriding position with home/dock (%.2f, %.2f)",
+              _LOG_, state.amps, state.position.x, state.position.y);
+        }
+      }
+      sendData(dataType, sendTo, state, force);
       break;
+    }
     case ResponseDataType::mowerStats:
       sendData(dataType, sendTo, _source.stats(), force);
       break;
@@ -806,11 +830,33 @@ void UiSocketHandler::sendProgress(String operation, int progress, String messag
 }
 
 void UiSocketHandler::uploadMapToMower() {
+  if (_uploadToMowerPending) {
+    Log(INFO, "%s uploadMapToMower: upload already in progress", _LOG_);
+    return;
+  }
+  if (!_cmd.uploadMapToMower()) {
+    Log(WARN, "%s uploadMapToMower: could not start upload", _LOG_);
+    return;
+  }
+  _uploadToMowerPending = true;
   sendProgress("upload", 0, "Uploading map...");
   sendData(ResponseDataType::mowerState, NULL, true);
-  _cmd.uploadMapToMower();
-  Log(DBG, "%s uploadMapToMower", _LOG_);
-  sendProgress("upload", 100, "Upload complete");
+  Log(INFO, "%s uploadMapToMower: started", _LOG_);
+}
+
+void UiSocketHandler::processUploadToMower() {
+  if (!_uploadToMowerPending) return;
+  if (_cmd.uploadMapToMowerActive()) return;
+
+  _uploadToMowerPending = false;
+  if (_cmd.uploadMapToMowerSuccess()) {
+    sendProgress("upload", 100, "Upload complete");
+    Log(INFO, "%s processUploadToMower: upload complete, broadcasting map and state", _LOG_);
+  } else {
+    sendProgress("upload", 100, "Upload failed");
+    Log(WARN, "%s processUploadToMower: upload failed", _LOG_);
+  }
+  sendData(ResponseDataType::map, NULL, true);
   sendData(ResponseDataType::mowerState, NULL, true);
 }
 

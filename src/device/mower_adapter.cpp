@@ -1012,9 +1012,24 @@ String MowerAdapter::bytesToHexString(const String& byteString) {
 
 bool MowerAdapter::uploadMapToMower()
 {
-  if (_mapUploadState.active) {
+  if (_mapUploadState.active || _mapUploadPending) {
     Log(WARN, "%suploadMapToMower: upload already in progress", _LOG_);
     return false;
+  }
+
+  _mapUploadPending = true;
+  Log(INFO, "%suploadMapToMower: queued", _LOG_);
+  return true;
+}
+
+void MowerAdapter::startMapUploadFromLoop()
+{
+  if (!_mapUploadPending) return;
+  _mapUploadPending = false;
+
+  if (_mapUploadState.active) {
+    Log(WARN, "%sstartMapUploadFromLoop: upload already active", _LOG_);
+    return;
   }
 
   _map.beginRead();
@@ -1030,8 +1045,7 @@ bool MowerAdapter::uploadMapToMower()
   _mapUploadState.waitingForResponse = false;
   // _map bleibt im reading-Zustand, um parseATNCommand/setMap während des Uploads zu blockieren
 
-  Log(INFO, "%suploadMapToMower: started", _LOG_);
-  return true;
+  Log(INFO, "%sstartMapUploadFromLoop: started", _LOG_);
 }
 
 bool MowerAdapter::sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot::MapPoint> &pts, int baseIdx)
@@ -1251,6 +1265,7 @@ void MowerAdapter::processMapUpload()
 
 void MowerAdapter::loop()
 {
+  startMapUploadFromLoop();
   processPendingCommand();
   processMapUpload();
 
