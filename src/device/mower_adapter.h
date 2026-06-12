@@ -105,7 +105,7 @@ namespace ArduMower
       virtual bool reboot();
       virtual bool rebootGPS();
       virtual bool powerOff();
-      virtual bool uploadMapToMower();
+      virtual bool uploadMapToMower() override;
       virtual bool customCmd(String cmd);
       virtual void drainRx(String line, bool &stop) override;
       virtual void drainTx(String line, bool &stop) override;

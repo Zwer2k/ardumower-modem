@@ -51,6 +51,7 @@ namespace ArduMower
         ubxResponse,
         logExport,
         mowSettings,
+        operationProgress,
         responseDataTypeLength
       };
 
@@ -127,6 +128,7 @@ namespace ArduMower
         void resetRequestTimestamp(ResponseDataType dataType);
         void joystickMove(float linear, float angular);
         void navigateTo(float x, float y);
+        void sendProgress(String operation, int progress, String message = "");
         void uploadMapToMower();
         void requestStats();
         void requestStatsNow();
@@ -173,6 +175,11 @@ namespace ArduMower
         uint32_t _lastSentUbxTimestamp = 0;
 #endif
         
+        int _progressPct = 0;
+        String _progressOp;
+        String _progressMsg;
+        uint32_t _lastLogSend = 0;
+
   #ifdef MOWER_TERMINAL
   Terminal &_terminal;
   #endif

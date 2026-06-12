@@ -159,6 +159,8 @@ export interface State {
   sensor: number;
   amps: number;
   map_crc: number;
+  progressPct?: number;
+  progressMsg?: string;
 }
 
 export interface SensorSummary {
@@ -282,6 +284,13 @@ export enum ResponseDataType {
   ubxResponse,
   logExport,
   mowSettings,
+  operationProgress,
+}
+
+export interface OperationProgress {
+  operation: string;
+  progress: number;
+  message: string;
 }
 
 // Map data for WebSocket

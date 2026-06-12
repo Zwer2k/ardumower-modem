@@ -750,9 +750,11 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
 
 void UiSocketHandler::logToUiLoop()
 {
-  if (logToUi.hasData()) {
-    sendData(ResponseDataType::modemLog, NULL, logToUi, false);
-  }
+  if (!logToUi.hasData()) return;
+  uint32_t now = millis();
+  if (now - _lastLogSend < 50) return;
+  _lastLogSend = now;
+  sendData(ResponseDataType::modemLog, NULL, logToUi, false);
 }
 
 void UiSocketHandler::broadcastFlashProgress(size_t current, size_t total)
@@ -794,9 +796,19 @@ void UiSocketHandler::navigateTo(float x, float y) {
   Log(DBG, "%s navigateTo(%.2f, %.2f)", _LOG_, x, y);
 }
 
+void UiSocketHandler::sendProgress(String operation, int progress, String message) {
+  _progressOp = operation;
+  _progressPct = progress;
+  _progressMsg = message;
+}
+
 void UiSocketHandler::uploadMapToMower() {
+  sendProgress("upload", 0, "Uploading map...");
+  sendData(ResponseDataType::mowerState, NULL, true);
   _cmd.uploadMapToMower();
   Log(DBG, "%s uploadMapToMower", _LOG_);
+  sendProgress("upload", 100, "Upload complete");
+  sendData(ResponseDataType::mowerState, NULL, true);
 }
 
 void UiSocketHandler::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) {
@@ -823,6 +835,8 @@ void UiSocketHandler::sendWaypointsDirect(const std::vector<ArduMower::Domain::R
 }
 
 void UiSocketHandler::clearWaypoints() {
+  sendProgress("clear", 0, "Clearing waypoints...");
+  sendData(ResponseDataType::mowerState, NULL, true);
   using namespace ArduMower::Domain::Robot;
   auto map = _source.mowerMap();
   uint32_t ts = millis();
@@ -832,9 +846,13 @@ void UiSocketHandler::clearWaypoints() {
   sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
   Log(INFO, "%s clearWaypoints: waypoints cleared, map broadcast", _LOG_);
+  sendProgress("clear", 100, "Complete");
+  sendData(ResponseDataType::mowerState, NULL, true);
 }
 
 void UiSocketHandler::calculateWaypoints() {
+  sendProgress("calculate", 0, "Calculating waypoints...");
+  sendData(ResponseDataType::mowerState, NULL, true);
   using namespace ArduMower::Domain::Robot;
   auto map = _source.mowerMap();
   uint32_t ts = millis();
@@ -850,6 +868,8 @@ void UiSocketHandler::calculateWaypoints() {
   sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
   Log(INFO, "%s calculateWaypoints: %d waypoints generated, map broadcast", _LOG_, map.waypoints.size());
+  sendProgress("calculate", 100, "Complete");
+  sendData(ResponseDataType::mowerState, NULL, true);
 }
 
 void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
@@ -975,11 +995,22 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   DynamicJsonDocument doc(docSize);
   doc["type"] = dataType;
   data.marshal(doc.createNestedObject("data"));
-  
+
+  if (dataType == ResponseDataType::mowerState && !_progressOp.isEmpty()) {
+    doc["progressPct"] = _progressPct;
+    doc["progressMsg"] = _progressMsg;
+    doc["progressOp"] = _progressOp;
+    if (_progressPct >= 100) {
+      _progressPct = 0;
+      _progressOp = "";
+      _progressMsg = "";
+    }
+  }
+
   String stateStr;
   serializeJson(doc, stateStr);
   stateStr = sanitizeUtf8(stateStr);
-  
+
   if (sendTo != NULL) {
     sendTo->sendText(stateStr);
   } else {
@@ -992,6 +1023,10 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 
 bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &text)
 {
+  // Entferne verwaiste Clients (z.B. TCP tot aber WS-Status noch CONNECTED),
+  // bevor wir Nachrichten in deren interne Queue stellen.
+  ws->cleanupClients();
+
   bool anySent = false;
   int clientCount = 0;
   bool anyConnected = false;

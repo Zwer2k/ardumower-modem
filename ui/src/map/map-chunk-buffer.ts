@@ -34,6 +34,9 @@ export const dockpointsStore = writable<MapPoint[]>([]);
 export const waypointsStore = writable<MapPoint[]>([]);
 export const exclusionsStore = writable<MapPoint[][]>([]);
 
+// Progress during chunk reception (download from backend)
+export const mapChunkProgress = writable<{ received: number; total: number; label: string } | null>(null);
+
 export function handleMapChunk(chunk: MapChunk) {
   //console.log('[MapChunkBuffer] handleMapChunk received:', chunk);
   // Helper for shared logic, chunk is in closure
@@ -70,18 +73,29 @@ export function handleMapChunk(chunk: MapChunk) {
   }
 
   //console.log('[MapChunkBuffer] Handling chunk for pointType:', chunk.pointType);
+  let progressLabel = '';
   switch (chunk.pointType) {
     case MapPointType.Perimeter:
       [perimeterBuffer, perimeterTotal] = handleGeneric(perimeterBuffer, perimeterTotal, perimeterStore);
+      progressLabel = 'Perimeter';
       break;
     case MapPointType.Dockpoints:
       [dockpointsBuffer, dockpointsTotal] = handleGeneric(dockpointsBuffer, dockpointsTotal, dockpointsStore);
+      progressLabel = 'Dockpoints';
       break;
     case MapPointType.Waypoints:
       [waypointsBuffer, waypointsTotal] = handleGeneric(waypointsBuffer, waypointsTotal, waypointsStore);
+      progressLabel = 'Waypoints';
       break;
     default:
       console.warn('[MapChunkBuffer] Unbekannter pointType:', chunk.pointType);
+  }
+  if (progressLabel && chunk.total > 0) {
+    const received = Math.min(chunk.startIndex + chunk.points.length, chunk.total);
+    mapChunkProgress.set({ received, total: chunk.total, label: progressLabel });
+    if (received >= chunk.total) {
+      mapChunkProgress.set(null);
+    }
   }
 }
 

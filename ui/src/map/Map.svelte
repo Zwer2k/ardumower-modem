@@ -45,6 +45,11 @@
   let editEdge = false;
 
   // ─── Draw mode ───────────────────────────────────────────────────────────
+  $: opPct = $socketStore.state?.progressPct || 0;
+  $: opMsg = $socketStore.state?.progressMsg || '';
+  $: opActive = !!$socketStore.state?.progressOp;
+  $: busy = opActive && opPct < 100;
+
   let drawActive = false;
   let drawArea: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints' | null = null;
   let drawExclusionIndex: number | undefined = undefined;
@@ -656,6 +661,7 @@
             <Button
               kind="danger"
               size="small"
+              disabled={busy}
               icon={IconTrashCan}
               iconDescription="Clear waypoints"
               on:click={() => { socketService.sendClearWaypoints(); }}
@@ -665,6 +671,7 @@
             <Button
               kind="secondary"
               size="small"
+              disabled={busy}
               icon={IconMagicWand}
               iconDescription="Calculate waypoints"
               on:click={() => { socketService.sendCalculateWaypoints(); }}
@@ -674,6 +681,7 @@
             <Button
               kind="secondary"
               size="small"
+              disabled={busy}
               icon={IconUpload}
               iconDescription="Upload map to mower"
               on:click={() => { socketService.sendUploadMap(); }}
@@ -704,6 +712,12 @@
       </Column>
     </Row>
   </Grid>
+  {#if busy}
+    <div class="progress-bar-container">
+      <div class="progress-bar" style="width: {opPct}%"></div>
+      <span class="progress-label">{opPct}% {opMsg}</span>
+    </div>
+  {/if}
   <div class="map-canvas-wrapper">
     <Canvas on:mapclick={onMapClick} on:mousemove={onMouseMove}>
       {#if $MapStore && $MapStore.map}
@@ -873,5 +887,32 @@
     display: flex;
     flex-wrap: nowrap;
     gap: 0.25rem;
+  }
+
+  .progress-bar-container {
+    height: 24px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    margin: 2px 8px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: #4caf50;
+    transition: width 0.3s ease;
+    border-radius: 4px;
+  }
+
+  .progress-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.7em;
+    color: #333;
+    font-family: monospace;
+    white-space: nowrap;
   }
 </style>
