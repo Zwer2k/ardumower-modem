@@ -32,9 +32,10 @@ void Adapter::begin()
 void Adapter::metrics(AsyncWebServerRequest *request)
 {
   auto send = [&](ArduMower::Domain::Robot::Stats::Stats stats,
-                  ArduMower::Domain::Robot::State::State status)
+                  ArduMower::Domain::Robot::State::State status,
+                  bool stale)
   {
-    Log(DBG, "Prometheus::Adapter::metrics::send");
+    Log(DBG, "Prometheus::Adapter::metrics::send stale=%d", stale);
     unsigned int size = 1;
     auto &all = ArduMower::Modem::Prometheus::allMeasurements();
     for (auto it : all)
@@ -51,36 +52,27 @@ void Adapter::metrics(AsyncWebServerRequest *request)
       index += it->write(&buffer[index], size - index);
     }
     request->_tempObject = buffer;
-    request->send(200, "text/plain", (const unsigned char *)buffer, index);
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", (const unsigned char *)buffer, index);
+    if (stale)
+      response->addHeader("X-Prometheus-Stats-Stale", "true");
+    request->send(response);
   };
 
   auto status = _source.state();
-  const uint32_t timeout = millis() + 2000;
-  while (true)
+  auto stats = _source.stats();
+  const uint32_t now = millis();
+  const bool statsFresh = (now - stats.timestamp < 15000);
+
+  if (!statsFresh)
   {
-    const uint32_t now = millis();
-    if (now > timeout)
+    static uint32_t lastStatsRequest = 0;
+    if (now - lastStatsRequest >= 500)
     {
-      request->send(504, "text/plain", "refresh timeout");
-      return;
+      Log(DBG, "Prometheus::Adapter::metrics::request-refresh");
+      _cmd.requestStats();
+      lastStatsRequest = now;
     }
-
-    auto stats = _source.stats();
-    if (now - stats.timestamp < 15000)
-    {
-      send(stats, status);
-      return;
-    }
-
-    static uint32_t next_request = 0;
-    if (now < next_request)
-    {
-      delay(10);
-      continue;
-    }
-    next_request = now + 500;
-
-    Log(DBG, "Prometheus::Adapter::metrics::request-refresh");
-    _cmd.requestStats();
   }
+
+  send(stats, status, !statsFresh);
 }

@@ -1012,87 +1012,236 @@ String MowerAdapter::bytesToHexString(const String& byteString) {
 
 bool MowerAdapter::uploadMapToMower()
 {
-  int idx = 0;
-
-  auto sendPoints = [&](const std::vector<ArduMower::Domain::Robot::MapPoint> &pts, int &startIdx) -> bool {
-    for (size_t i = 0; i < pts.size(); i += 20) {
-      String cmd = "AT+W," + String(startIdx + i);
-      for (size_t j = i; j < pts.size() && j < i + 20; j++)
-        cmd += "," + String(pts[j].X, 6) + "," + String(pts[j].Y, 6);
-      String response;
-      int retries = 3;
-      bool ok = false;
-      for (int r = 0; r < retries; r++) {
-        delay(10);
-        response = "";
-        if (!sendCommandWithResponse(cmd, response, true, 5000)) {
-          Log(WARN, "%s AT+W chunk %d send failed (try %d/%d)", _LOG_, (int)(i / 20), r + 1, retries);
-          continue;
-        }
-        response.trim();
-        if (response.startsWith("W")) { ok = true; break; }
-        Log(WARN, "%s AT+W chunk %d unexpected: '%s' (try %d/%d)", _LOG_, (int)(i / 20), response.c_str(), r + 1, retries);
-      }
-      if (!ok) {
-        Log(ERR, "%s AT+W chunk %d failed after %d retries", _LOG_, (int)(i / 20), retries);
-        return false;
-      }
-    }
-    startIdx += pts.size();
-    return true;
-  };
-
-  if (!sendPoints(_map.perimeter, idx)) return false;
-  for (const auto &excl : _map.exclusions)
-    if (!sendPoints(excl, idx)) return false;
-  if (!sendPoints(_map.dockpoints, idx)) return false;
-  if (!sendPoints(_map.waypoints, idx)) return false;
-
-  // Calculate total exclusion points across all polygons
-  size_t totalExclPoints = 0;
-  for (const auto &excl : _map.exclusions)
-    totalExclPoints += excl.size();
-
-  // Send AT+N with counts: perimeter, total-exclusion-points, dock, mow-waypoints, free-space
-  // Must come before AT+X so exclusionPointsCount is set (prevents premature buffer free)
-  {
-    String cmd = "AT+N," + String(_map.perimeter.size()) + "," + String(totalExclPoints) + ","
-                + String(_map.dockpoints.size()) + "," + String(_map.waypoints.size()) + ",0";
-    String response;
-    if (!sendCommandWithResponse(cmd, response, true, 5000)) {
-      Log(ERR, "%s AT+N failed", _LOG_);
-      return false;
-    }
-    response.trim();
-    if (!response.startsWith("N")) {
-      Log(WARN, "%s AT+N unexpected response: %s", _LOG_, response.c_str());
-    }
+  if (_mapUploadState.active) {
+    Log(WARN, "%suploadMapToMower: upload already in progress", _LOG_);
+    return false;
   }
 
-  // Send AT+X for exclusion polygon sizes (extracts exclusion points from flat buffer)
-  for (size_t ex = 0; ex < _map.exclusions.size(); ex++) {
-    String cmd = "AT+X," + String(ex) + "," + String(_map.exclusions[ex].size());
-    String response;
-    if (!sendCommandWithResponse(cmd, response, true, 5000)) {
-      Log(ERR, "%s AT+X[%u] failed", _LOG_, ex);
-      return false;
-    }
-    response.trim();
-    if (!response.startsWith("X")) {
-      Log(WARN, "%s AT+X[%u] unexpected response: %s", _LOG_, ex, response.c_str());
-    }
-  }
+  _mapUploadState.active = true;
+  _mapUploadState.phase = MapUploadState::start;
+  _mapUploadState.polygonIdx = 0;
+  _mapUploadState.pointIdx = 0;
+  _mapUploadState.chunkRetry = 0;
+  _mapUploadState.totalPointsSent = 0;
+  _mapUploadState.lastResponse = "";
+  _mapUploadState.lastOk = false;
+  _mapUploadState.waitingForResponse = false;
 
-  // Wait a moment for Teensy to finalize
-  delay(50);
-
-  Log(INFO, "%s Map upload complete (%d perimeter, %d totalExclPoints, %d dockpoints, %d waypoints)",
-      _LOG_, _map.perimeter.size(), totalExclPoints, _map.dockpoints.size(), _map.waypoints.size());
+  Log(INFO, "%suploadMapToMower: started", _LOG_);
   return true;
+}
+
+bool MowerAdapter::sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot::MapPoint> &pts, int baseIdx)
+{
+  if (_mapUploadState.pointIdx >= pts.size())
+    return false;
+
+  String cmd = "AT+W," + String(baseIdx + _mapUploadState.pointIdx);
+  for (size_t j = _mapUploadState.pointIdx; j < pts.size() && j < _mapUploadState.pointIdx + 20; j++)
+    cmd += "," + String(pts[j].X, 6) + "," + String(pts[j].Y, 6);
+
+  bool queued = sendCommandWithResponseAsync(cmd, [&](String response, bool ok) {
+    _mapUploadState.lastResponse = response;
+    _mapUploadState.lastOk = ok;
+    _mapUploadState.waitingForResponse = false;
+  }, true, 5000);
+
+  if (!queued) {
+    Log(WARN, "%ssendMapChunkAsync: router busy, will retry", _LOG_);
+    return true; // stay in current phase, retry next loop
+  }
+
+  _mapUploadState.waitingForResponse = true;
+  return true;
+}
+
+static bool responseOkForPhase(int phase, const String &response)
+{
+  if (response.length() == 0) return true;
+  switch (phase) {
+    case ArduMower::Modem::MapUploadState::perimeter:
+    case ArduMower::Modem::MapUploadState::exclusions:
+    case ArduMower::Modem::MapUploadState::dockpoints:
+    case ArduMower::Modem::MapUploadState::waypoints:
+      return response.startsWith("W");
+    case ArduMower::Modem::MapUploadState::counts:
+      return response.startsWith("N");
+    case ArduMower::Modem::MapUploadState::exclusionSizes:
+      return response.startsWith("X");
+    default:
+      return true;
+  }
+}
+
+void MowerAdapter::processMapUpload()
+{
+  if (!_mapUploadState.active)
+    return;
+
+  if (_mapUploadState.waitingForResponse) {
+    processPendingCommand();
+    return;
+  }
+
+  using namespace ArduMower::Domain::Robot;
+
+  // Evaluate response of previous command (except for start phase)
+  if (_mapUploadState.phase != MapUploadState::start) {
+    _mapUploadState.lastResponse.trim();
+    bool responseValid = _mapUploadState.lastOk && responseOkForPhase(_mapUploadState.phase, _mapUploadState.lastResponse);
+    if (!responseValid) {
+      _mapUploadState.chunkRetry++;
+      Log(WARN, "%sprocessMapUpload: command failed in phase %d (retry %d/3)", _LOG_, _mapUploadState.phase, _mapUploadState.chunkRetry);
+      if (_mapUploadState.chunkRetry >= 3) {
+        Log(ERR, "%sprocessMapUpload: command failed in phase %d after 3 retries", _LOG_, _mapUploadState.phase);
+        _mapUploadState.phase = MapUploadState::error;
+        _mapUploadState.active = false;
+        return;
+      }
+      // Resend same chunk (pointIdx was not advanced)
+      _mapUploadState.lastResponse = "";
+    } else {
+      // Success: advance pointIdx for chunk phases
+      _mapUploadState.chunkRetry = 0;
+      switch (_mapUploadState.phase) {
+        case MapUploadState::perimeter:
+        case MapUploadState::dockpoints:
+        case MapUploadState::waypoints:
+          _mapUploadState.pointIdx += 20;
+          break;
+        case MapUploadState::exclusions:
+          _mapUploadState.pointIdx += 20;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  switch (_mapUploadState.phase) {
+    case MapUploadState::start:
+      Log(INFO, "%sprocessMapUpload: uploading map...", _LOG_);
+      _mapUploadState.phase = MapUploadState::perimeter;
+      _mapUploadState.pointIdx = 0;
+      _mapUploadState.chunkRetry = 0;
+      _mapUploadState.totalPointsSent = 0;
+      break;
+
+    case MapUploadState::perimeter:
+      if (_mapUploadState.pointIdx >= _map.perimeter.size()) {
+        _mapUploadState.totalPointsSent += _map.perimeter.size();
+        _mapUploadState.phase = MapUploadState::exclusions;
+        _mapUploadState.polygonIdx = 0;
+        _mapUploadState.pointIdx = 0;
+        _mapUploadState.chunkRetry = 0;
+        _mapUploadState.lastResponse = "";
+        break;
+      }
+      sendMapChunkAsync(_map.perimeter, _mapUploadState.totalPointsSent);
+      break;
+
+    case MapUploadState::exclusions:
+      if (_mapUploadState.polygonIdx >= _map.exclusions.size()) {
+        _mapUploadState.phase = MapUploadState::dockpoints;
+        _mapUploadState.pointIdx = 0;
+        _mapUploadState.chunkRetry = 0;
+        _mapUploadState.lastResponse = "";
+        break;
+      }
+      if (_mapUploadState.pointIdx >= _map.exclusions[_mapUploadState.polygonIdx].size()) {
+        _mapUploadState.totalPointsSent += _map.exclusions[_mapUploadState.polygonIdx].size();
+        _mapUploadState.polygonIdx++;
+        _mapUploadState.pointIdx = 0;
+        _mapUploadState.chunkRetry = 0;
+        _mapUploadState.lastResponse = "";
+        break;
+      }
+      sendMapChunkAsync(_map.exclusions[_mapUploadState.polygonIdx], _mapUploadState.totalPointsSent);
+      break;
+
+    case MapUploadState::dockpoints:
+      if (_mapUploadState.pointIdx >= _map.dockpoints.size()) {
+        _mapUploadState.totalPointsSent += _map.dockpoints.size();
+        _mapUploadState.phase = MapUploadState::waypoints;
+        _mapUploadState.pointIdx = 0;
+        _mapUploadState.chunkRetry = 0;
+        _mapUploadState.lastResponse = "";
+        break;
+      }
+      sendMapChunkAsync(_map.dockpoints, _mapUploadState.totalPointsSent);
+      break;
+
+    case MapUploadState::waypoints:
+      if (_mapUploadState.pointIdx >= _map.waypoints.size()) {
+        _mapUploadState.totalPointsSent += _map.waypoints.size();
+        _mapUploadState.phase = MapUploadState::counts;
+        _mapUploadState.lastResponse = "";
+        break;
+      }
+      sendMapChunkAsync(_map.waypoints, _mapUploadState.totalPointsSent);
+      break;
+
+    case MapUploadState::counts: {
+      size_t totalExclPoints = 0;
+      for (const auto &excl : _map.exclusions)
+        totalExclPoints += excl.size();
+      String cmd = "AT+N," + String(_map.perimeter.size()) + "," + String(totalExclPoints) + ","
+                  + String(_map.dockpoints.size()) + "," + String(_map.waypoints.size()) + ",0";
+      bool queued = sendCommandWithResponseAsync(cmd, [&](String response, bool ok) {
+        _mapUploadState.lastResponse = response;
+        _mapUploadState.lastOk = ok;
+        _mapUploadState.waitingForResponse = false;
+      }, true, 5000);
+      if (!queued) return;
+      _mapUploadState.waitingForResponse = true;
+      _mapUploadState.phase = MapUploadState::exclusionSizes;
+      _mapUploadState.polygonIdx = 0;
+      _mapUploadState.lastResponse = "";
+      break;
+    }
+
+    case MapUploadState::exclusionSizes:
+      if (_mapUploadState.polygonIdx >= _map.exclusions.size()) {
+        _mapUploadState.phase = MapUploadState::finalizing;
+        _mapUploadState.lastResponse = "";
+        break;
+      }
+      {
+        String cmd = "AT+X," + String(_mapUploadState.polygonIdx) + "," + String(_map.exclusions[_mapUploadState.polygonIdx].size());
+        bool queued = sendCommandWithResponseAsync(cmd, [&](String response, bool ok) {
+          _mapUploadState.lastResponse = response;
+          _mapUploadState.lastOk = ok;
+          _mapUploadState.waitingForResponse = false;
+        }, true, 5000);
+        if (!queued) return;
+        _mapUploadState.waitingForResponse = true;
+        _mapUploadState.polygonIdx++;
+        _mapUploadState.lastResponse = "";
+      }
+      break;
+
+    case MapUploadState::finalizing:
+      _mapUploadState.phase = MapUploadState::done;
+      _mapUploadState.active = false;
+      Log(INFO, "%sprocessMapUpload: Map upload complete (%d perimeter, %d exclusions, %d dockpoints, %d waypoints)",
+          _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size());
+      Log(INFO, "%sprocessMapUpload: upload complete", _LOG_);
+      break;
+
+    case MapUploadState::done:
+    case MapUploadState::error:
+    case MapUploadState::idle:
+    default:
+      _mapUploadState.active = false;
+      break;
+  }
 }
 
 void MowerAdapter::loop()
 {
+  processPendingCommand();
+  processMapUpload();
+
   uint32_t now = millis();
   if (_lastStateRequest == 0 || now - _lastStateRequest >= 5000) {
     _lastStateRequest = now ? now : 1;
@@ -1122,8 +1271,13 @@ bool MowerAdapter::sendCommand(String command, bool encrypt)
   return result;
 }
 
-bool MowerAdapter::sendCommandWithResponse(String command, String &response, bool encrypt, int timeoutMs)
+bool MowerAdapter::sendCommandWithResponseAsync(String command, std::function<void(String, bool)> callback, bool encrypt, int timeoutMs)
 {
+  if (_pendingCommand.active) {
+    Log(WARN, "%ssendCommandWithResponseAsync: already busy", _LOG_);
+    return false;
+  }
+
   Checksum chk;
   chk.update(command);
 
@@ -1134,25 +1288,77 @@ bool MowerAdapter::sendCommandWithResponse(String command, String &response, boo
   if (encrypt)
     enc.encrypt(buffer, strlen(buffer));
 
-  bool done = false;
-  bool ok = router.send(buffer, [&](String resp, XferError error) {
-    response = resp;
-    done = true;
-    ok = (error == XferError::SUCCESS);
+  _pendingCommand.callback = callback;
+  _pendingCommand.startTime = millis();
+  _pendingCommand.timeoutMs = timeoutMs;
+  _pendingCommand.response = "";
+  _pendingCommand.ok = false;
+  _pendingCommand.active = true;
+  _pendingCommand.done = false;
+  _pendingCommand.command = command;
+
+  bool queued = router.send(buffer, [&](String resp, XferError error) {
+    _pendingCommand.response = resp;
+    _pendingCommand.ok = (error == XferError::SUCCESS);
+    _pendingCommand.done = true;
   });
   free(buffer);
+
+  if (!queued) {
+    _pendingCommand.active = false;
+    return false;
+  }
+
+  return true;
+}
+
+void MowerAdapter::processPendingCommand()
+{
+  if (!_pendingCommand.active)
+    return;
+
+  router.loop();
+
+  if (!_pendingCommand.done) {
+    if ((int)(millis() - _pendingCommand.startTime) >= _pendingCommand.timeoutMs) {
+      Log(WARN, "%sprocessPendingCommand timeout for: %s", _LOG_, _pendingCommand.command.c_str());
+      _pendingCommand.ok = false;
+      _pendingCommand.done = true;
+    }
+    return;
+  }
+
+  auto callback = _pendingCommand.callback;
+  String response = _pendingCommand.response;
+  bool ok = _pendingCommand.ok;
+  _pendingCommand.active = false;
+  _pendingCommand.callback = nullptr;
+
+  if (callback)
+    callback(response, ok);
+}
+
+bool MowerAdapter::sendCommandWithResponse(String command, String &response, bool encrypt, int timeoutMs)
+{
+  bool done = false;
+  bool ok = sendCommandWithResponseAsync(command, [&](String resp, bool success) {
+    response = resp;
+    done = true;
+    ok = success;
+  }, encrypt, timeoutMs);
 
   if (!ok) return false;
 
   uint32_t start = millis();
   while (!done && (int)(millis() - start) < timeoutMs) {
-    router.loop();
-    delay(1);
-    yield();
+    processPendingCommand();
+    vTaskDelay(1 / portTICK_PERIOD_MS);
   }
 
   if (!done) {
     Log(WARN, "%ssendCommandWithResponse timeout for: %s", _LOG_, command.c_str());
+    _pendingCommand.active = false;
+    _pendingCommand.callback = nullptr;
     return false;
   }
 

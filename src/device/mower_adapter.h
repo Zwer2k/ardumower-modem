@@ -11,6 +11,41 @@ namespace ArduMower
 {
   namespace Modem
   {
+    struct PendingCommand {
+      String command;
+      std::function<void(String response, bool ok)> callback;
+      uint32_t startTime = 0;
+      int timeoutMs = 0;
+      bool active = false;
+      bool done = false;
+      String response;
+      bool ok = false;
+    };
+
+    struct MapUploadState {
+      bool active = false;
+      enum Phase {
+        idle,
+        start,
+        perimeter,
+        exclusions,
+        dockpoints,
+        waypoints,
+        counts,
+        exclusionSizes,
+        finalizing,
+        done,
+        error
+      } phase = idle;
+      size_t polygonIdx = 0;
+      size_t pointIdx = 0;
+      int chunkRetry = 0;
+      int totalPointsSent = 0;
+      String lastResponse;
+      bool lastOk = false;
+      bool waitingForResponse = false;
+    };
+
     class MowerAdapter : public RxDrain, public TxDrain, public ArduMower::Domain::Robot::StateSource, public ArduMower::Domain::Robot::CommandExecutor {
     private:
       Settings::Settings &settings;
@@ -28,6 +63,8 @@ namespace ArduMower
       ArduMower::Domain::Robot::MowSettings _mowSettings;
       uint32_t _lastStateRequest = 0;
       uint32_t _lastStatsRequest = 0;
+      PendingCommand _pendingCommand;
+      MapUploadState _mapUploadState;
       // Cache für rohe Antwort-Strings (mit Checksumme) – für HTTP-Cache-Serving
       String _cachedRawState;
       String _cachedRawStats;
@@ -52,6 +89,10 @@ namespace ArduMower
 
       bool sendCommand(String command, bool encrypt = true);
       bool sendCommandWithResponse(String command, String &response, bool encrypt = true, int timeoutMs = 3000);
+      bool sendCommandWithResponseAsync(String command, std::function<void(String, bool)> callback, bool encrypt = true, int timeoutMs = 3000);
+      void processPendingCommand();
+      void processMapUpload();
+      bool sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot::MapPoint> &pts, int baseIdx);
       bool assertSendIsInitialized();
       int containsNonUTF8(const String& input);
       String bytesToHexString(const String& byteString);

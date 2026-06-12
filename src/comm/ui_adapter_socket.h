@@ -137,6 +137,7 @@ namespace ArduMower
         void setMowSettings(const ArduMower::Domain::Robot::MowSettings &s);
         void clearWaypoints();
         void calculateWaypoints();
+        void processCalculateWaypoints();
         void abortMapChunkSend();
         void sendWaypointsDirect(const std::vector<ArduMower::Domain::Robot::MapPoint> &waypoints, uint32_t timestamp);
 #ifdef MOWER_TERMINAL
@@ -179,6 +180,12 @@ namespace ArduMower
         String _progressOp;
         String _progressMsg;
         uint32_t _lastLogSend = 0;
+
+        bool _calculateWaypointsPending = false;
+        bool _calculateWaypointsRunning = false;
+        uint32_t _calculateWaypointsTimestamp = 0;
+        ArduMower::Domain::Robot::MowerMap _calculateWaypointsMap;
+        ArduMower::Domain::Robot::MowSettings _calculateWaypointsSettings;
 
   #ifdef MOWER_TERMINAL
   Terminal &_terminal;

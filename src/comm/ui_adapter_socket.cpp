@@ -377,30 +377,33 @@ void UiSocketHandler::loop()
       processMapChunkSend();
       break;
     case 6:
-      sendData(ResponseDataType::map);
+      processCalculateWaypoints();
       break;
     case 7:
-      logToUiLoop();
+      sendData(ResponseDataType::map);
       break;
     case 8:
-      sensorRequestLoop();
+      logToUiLoop();
       break;
     case 9:
+      sensorRequestLoop();
+      break;
+    case 10:
       if (_source.sensorSummary().timestamp > 0) {
         sendData(ResponseDataType::sensorSummary);
       }
       break;
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
-    case 10:
+    case 11:
       gpsRequestLoop();
       if (gpsDetailsActive) ubxPollLoop();
       break;
-    case 11:
+    case 12:
       if (_source.gpsDetails().timestamp > 0) {
         sendData(ResponseDataType::gpsDetails);
       }
       break;
-    case 12:
+    case 13:
       // Send UBX response immediately when available (no deduplication – frontend handles that)
       if (ubxResponseActive && _source.ubxResponse().timestamp > 0) {
         sendData(ResponseDataType::ubxResponse, NULL, true); // force=true: bypass oldDataTimestamp
@@ -411,7 +414,7 @@ void UiSocketHandler::loop()
 #endif
     }
     loopCase++;
-    if (loopCase > 12) loopCase = 0;
+    if (loopCase > 13) loopCase = 0;
   yield();
   
   //pingClients();
@@ -851,15 +854,43 @@ void UiSocketHandler::clearWaypoints() {
 }
 
 void UiSocketHandler::calculateWaypoints() {
+  if (_calculateWaypointsPending || _calculateWaypointsRunning) {
+    Log(INFO, "%s calculateWaypoints: already queued or running", _LOG_);
+    sendProgress("calculate", 0, "Calculation already in progress");
+    return;
+  }
+  _calculateWaypointsPending = true;
+  _calculateWaypointsTimestamp = millis();
+  _calculateWaypointsMap = _source.mowerMap();
+  _calculateWaypointsSettings = _source.mowSettings();
   sendProgress("calculate", 0, "Calculating waypoints...");
   sendData(ResponseDataType::mowerState, NULL, true);
+  Log(INFO, "%s calculateWaypoints: queued", _LOG_);
+}
+
+void UiSocketHandler::processCalculateWaypoints() {
+  if (!_calculateWaypointsPending || _calculateWaypointsRunning)
+    return;
+
+  _calculateWaypointsRunning = true;
+  _calculateWaypointsPending = false;
+
   using namespace ArduMower::Domain::Robot;
-  auto map = _source.mowerMap();
-  uint32_t ts = millis();
-  auto settings = _source.mowSettings();
+  auto map = _calculateWaypointsMap;
+  uint32_t ts = _calculateWaypointsTimestamp;
+
   map.waypoints.clear();
 #ifdef ENABLE_MAP
-  auto waypoints = ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings);
+  auto settings = _calculateWaypointsSettings;
+  decltype(ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings)) waypoints;
+  try {
+    waypoints = ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings);
+  } catch (...) {
+    Log(ERR, "%s processCalculateWaypoints: exception during calculation", _LOG_);
+    sendProgress("calculate", 100, "Failed");
+    _calculateWaypointsRunning = false;
+    return;
+  }
   for (const auto &wp : waypoints)
     map.waypoints.push_back(wp);
 #endif
@@ -867,9 +898,10 @@ void UiSocketHandler::calculateWaypoints() {
   abortMapChunkSend();
   sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
-  Log(INFO, "%s calculateWaypoints: %d waypoints generated, map broadcast", _LOG_, map.waypoints.size());
+  Log(INFO, "%s processCalculateWaypoints: %d waypoints generated, map broadcast", _LOG_, map.waypoints.size());
   sendProgress("calculate", 100, "Complete");
   sendData(ResponseDataType::mowerState, NULL, true);
+  _calculateWaypointsRunning = false;
 }
 
 void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
