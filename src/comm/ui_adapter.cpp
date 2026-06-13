@@ -23,25 +23,25 @@ UiAdapter::~UiAdapter()
 void UiAdapter::begin()
 {
   
-  _server.on("/api/modem/info", HTTP_GET, std::bind(&UiAdapter::handleApiGetModemInfo, this, std::placeholders::_1));
-  _server.on("/api/modem/status", HTTP_GET, std::bind(&UiAdapter::handleApiGetModemStatus, this, std::placeholders::_1));
+  _server.on("/api/modem/info", HTTP_GET, [this](AsyncWebServerRequest* request) { handleApiGetModemInfo(request); });
+  _server.on("/api/modem/status", HTTP_GET, [this](AsyncWebServerRequest* request) { handleApiGetModemStatus(request); });
 
-  _server.on("/api/modem/settings", HTTP_GET, std::bind(&UiAdapter::handleApiGetModemSettings, this, std::placeholders::_1));
-  _server.on("/api/modem/settings/reset", HTTP_POST, std::bind(&UiAdapter::handleApiResetModemSettings, this, std::placeholders::_1));
+  _server.on("/api/modem/settings", HTTP_GET, [this](AsyncWebServerRequest* request) { handleApiGetModemSettings(request); });
+  _server.on("/api/modem/settings/reset", HTTP_POST, [this](AsyncWebServerRequest* request) { handleApiResetModemSettings(request); });
   // free happens in ~AsyncWebServer
   auto settingsHandler = new AsyncCallbackJsonWebHandler("/api/modem/settings", std::bind(&UiAdapter::handleApiPostModemSettings, this, std::placeholders::_1, std::placeholders::_2));
   settingsHandler->setMethod(HTTP_POST);
   _server.addHandler(settingsHandler);
 
-  _server.on("/api/modem/bluetooth/reset", HTTP_POST, std::bind(&UiAdapter::handleApiResetModemBluetoothPairings, this, std::placeholders::_1));
+  _server.on("/api/modem/bluetooth/reset", HTTP_POST, [this](AsyncWebServerRequest* request) { handleApiResetModemBluetoothPairings(request); });
 
-  _server.on("/api/robot/desired_state", HTTP_GET, std::bind(&UiAdapter::handleApiGetRobotDesiredState, this, std::placeholders::_1));
+  _server.on("/api/robot/desired_state", HTTP_GET, [this](AsyncWebServerRequest* request) { handleApiGetRobotDesiredState(request); });
 
   auto commandHandler = new AsyncCallbackJsonWebHandler("/api/robot/command", std::bind(&UiAdapter::handleApiPostRobotCommand, this, std::placeholders::_1, std::placeholders::_2));
   commandHandler->setMethod(HTTP_POST);
   _server.addHandler(commandHandler);
  
-  _server.onNotFound(std::bind(&UiAdapter::handleRequest, this, std::placeholders::_1));
+  _server.onNotFound([this](AsyncWebServerRequest* request) { handleRequest(request); });
 }
 
 void UiAdapter::loop()

@@ -230,8 +230,18 @@ class SocketService {
                   newState.liveMapEnabled = !!(jsonData.data as any).liveMapEnabled;
                   newState.gpsDashboardEnabled = !!(jsonData.data as any).gpsDashboardEnabled;
                   break;
-                case ResponseDataType.mowerState:
-                  newState.state = jsonData.data as State;
+                case ResponseDataType.mowerState: {
+                  const st = (jsonData.data as State) || null;
+                  if (st) {
+                    if (jsonData.progressPct !== undefined) st.progressPct = jsonData.progressPct;
+                    if (jsonData.progressMsg !== undefined) st.progressMsg = jsonData.progressMsg;
+                    // progressOp is sent as a top-level field by the backend but is
+                    // not part of the `State` TS type. Preserve it on the object
+                    // for the UI by assigning to `any` so Map.svelte can read it.
+                    if (jsonData.progressOp !== undefined) (st as any).progressOp = jsonData.progressOp;
+                  }
+                  newState.state = st;
+                }
                   break;
                 case ResponseDataType.mowerStats:
                   newState.stats = jsonData.data as Stats;

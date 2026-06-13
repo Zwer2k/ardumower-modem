@@ -228,6 +228,9 @@ bool UiSocketItem::sendText(String text)
   if (_client == NULL || _client->status() == WS_DISCONNECTED)
     return false;
 
+  if (!_client->canSend())
+    return false;
+
   for (int attempt = 0; attempt < 3; ++attempt) {
     try {
       if (_client->text(text.c_str())) {
@@ -237,7 +240,7 @@ bool UiSocketItem::sendText(String text)
       return false;
     }
     yield();
-    vTaskDelay(1 / portTICK_PERIOD_MS); // nur 1ms statt 10ms
+    vTaskDelay(1 / portTICK_PERIOD_MS);
   }
   return false;
 }
@@ -569,24 +572,24 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   switch (dataType) {
     case ResponseDataType::mowerState: {
       auto state = _source.state();
-      // Wenn der Mäher lädt (negativer Strom), befindet er sich in der Docking-Station.
-      // In diesem Fall hat er oft keinen GPS-Fix und meldet Position 0/0. Sunray setzt
-      // den gemeldeten Roboter-Position dann auf den letzten Punkt der Dock-Linie
-      // (Home-Position). Dieses Verhalten wird hier nachgebildet.
-      if (state.amps < 0) {
-        auto map = _source.mowerMap();
-        if (map.dockpoints.size() > 0) {
-          const auto &home = map.dockpoints.back();
-          state.position.x = home.X;
-          state.position.y = home.Y;
-          // Orientierung aus der Dock-Linie ableiten (Vektor vom vorletzten zum letzten Punkt)
-          if (map.dockpoints.size() >= 2) {
-            const auto &prev = map.dockpoints[map.dockpoints.size() - 2];
-            state.position.delta = atan2(home.Y - prev.Y, home.X - prev.X);
-          }
-          Log(DBG, "%s sendData: docked (amps=%.2f), overriding position with home/dock (%.2f, %.2f)",
-              _LOG_, state.amps, state.position.x, state.position.y);
+      // Position nur überschreiben, wenn der Mäher tatsächlich angedockt ist
+      // (job == charge) oder gerade neu gestartet wurde und noch keine GPS-Position hat.
+      // Nur amps < 0 ist zu unzuverlässig, da es zu oft vorkommt.
+      bool dockedCharging = (state.job == 2);
+      bool recentlyRestarted = (state.timestamp > 0 && state.timestamp < 30000);
+      bool noPosition = (state.position.x == 0.0f && state.position.y == 0.0f);
+      auto map = _source.mowerMap();
+      if ((dockedCharging || (recentlyRestarted && noPosition)) && map.dockpoints.size() > 0) {
+        const auto &home = map.dockpoints.back();
+        state.position.x = home.X;
+        state.position.y = home.Y;
+        // Orientierung aus der Dock-Linie ableiten (Vektor vom vorletzten zum letzten Punkt)
+        if (map.dockpoints.size() >= 2) {
+          const auto &prev = map.dockpoints[map.dockpoints.size() - 2];
+          state.position.delta = atan2(home.Y - prev.Y, home.X - prev.X);
         }
+        Log(DBG, "%s sendData: docked/restarted (job=%d ts=%u amps=%.2f), overriding position with home/dock (%.2f, %.2f)",
+            _LOG_, state.job, state.timestamp, state.amps, state.position.x, state.position.y);
       }
       sendData(dataType, sendTo, state, force);
       break;
@@ -779,7 +782,13 @@ void UiSocketHandler::logToUiLoop()
 {
   if (!logToUi.hasData()) return;
   uint32_t now = millis();
-  if (now - _lastLogSend < 50) return;
+  if (now - _lastLogSend < 100) return;
+
+  for (auto &c : _ws->getClients()) {
+    if (c.status() == WS_CONNECTED && !c.canSend())
+      return;
+  }
+
   _lastLogSend = now;
   sendData(ResponseDataType::modemLog, NULL, logToUi, false);
 }
@@ -1043,6 +1052,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       case ResponseDataType::mowerStats:     minInterval = 5000;  break;
       case ResponseDataType::desiredState:   minInterval = 2000;  break;
       case ResponseDataType::sensorSummary:  minInterval = 1000;  break;
+      case ResponseDataType::modemLog:       minInterval = 100;   break;
       default:                               minInterval = 0;     break;
     }
     if (minInterval > 0 && (now - lastSentTimestamp[dataType]) < minInterval)
@@ -1116,6 +1126,8 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
       if (status != WS_CONNECTED)
         continue;
       anyConnected = true;
+      if (!client.canSend())
+        continue;
       try {
         if (client.text(text.c_str())) {
           anySent = true;
@@ -1169,6 +1181,10 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
   if(type == WS_EVT_CONNECT){
     //client connected
     Log(INFO, "%s ws[%s][%u] connect\n", _LOG_, server->url(), client->id());
+
+    // Nicht bei Queue-Überlauf trennen – sonst erzeugt jeder Log-Sturm
+    // eine Reconnect-Schleife. Lieber Nachrichten verwerfen.
+    client->setCloseClientOnQueueFull(false);
     
     DynamicJsonDocument doc(1024);
     doc["type"] = ResponseDataType::responseHello;

@@ -34,10 +34,10 @@ void HttpAdapter::begin()
   commandRequestHandler->onBody(std::bind(&HttpAdapter::handleCommandRequestBody, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
   _server.addHandler(commandRequestHandler);
 
-  _server.on("/", HTTP_OPTIONS, std::bind(&HttpAdapter::handleCORSPreflightRequest, this, std::placeholders::_1));
-  _server.on("/api/modem/reboot", HTTP_POST, std::bind(&HttpAdapter::apiReboot, this, std::placeholders::_1));
-  _server.on("/api/mower/reboot", HTTP_POST, std::bind(&HttpAdapter::apiMowerReboot, this, std::placeholders::_1));
-  _server.on("/api/mower/rebootGps", HTTP_POST, std::bind(&HttpAdapter::apiMowerRebootGps, this, std::placeholders::_1));
+  _server.on("/", HTTP_OPTIONS, [this](AsyncWebServerRequest* request) { handleCORSPreflightRequest(request); });
+  _server.on("/api/modem/reboot", HTTP_POST, [this](AsyncWebServerRequest* request) { apiReboot(request); });
+  _server.on("/api/mower/reboot", HTTP_POST, [this](AsyncWebServerRequest* request) { apiMowerReboot(request); });
+  _server.on("/api/mower/rebootGps", HTTP_POST, [this](AsyncWebServerRequest* request) { apiMowerRebootGps(request); });
 }
 
 void HttpAdapter::loop()

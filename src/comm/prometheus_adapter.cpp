@@ -26,7 +26,7 @@ void Adapter::begin()
   registerRobotState(state);
   registerRobotStatistics(statistics);
 
-  _server.on("/metrics", HTTP_GET, std::bind(&Adapter::metrics, this, std::placeholders::_1));
+  _server.on("/metrics", HTTP_GET, [this](AsyncWebServerRequest* request) { metrics(request); });
 }
 
 void Adapter::metrics(AsyncWebServerRequest *request)
