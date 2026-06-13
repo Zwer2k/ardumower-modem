@@ -181,6 +181,7 @@ namespace ArduMower
         String _progressOp;
         String _progressMsg;
         uint32_t _lastLogSend = 0;
+        bool _dockOverrideActive = false;
 
         volatile bool _uploadToMowerPending = false;
         volatile bool _calculateWaypointsPending = false;

@@ -579,7 +579,8 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       bool recentlyRestarted = (state.timestamp > 0 && state.timestamp < 30000);
       bool noPosition = (state.position.x == 0.0f && state.position.y == 0.0f);
       auto map = _source.mowerMap();
-      if ((dockedCharging || (recentlyRestarted && noPosition)) && map.dockpoints.size() > 0) {
+      bool overrideActive = (dockedCharging || (recentlyRestarted && noPosition)) && map.dockpoints.size() > 0;
+      if (overrideActive) {
         const auto &home = map.dockpoints.back();
         state.position.x = home.X;
         state.position.y = home.Y;
@@ -588,8 +589,18 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
           const auto &prev = map.dockpoints[map.dockpoints.size() - 2];
           state.position.delta = atan2(home.Y - prev.Y, home.X - prev.X);
         }
-        Log(DBG, "%s sendData: docked/restarted (job=%d ts=%u amps=%.2f), overriding position with home/dock (%.2f, %.2f)",
-            _LOG_, state.job, state.timestamp, state.amps, state.position.x, state.position.y);
+        // Nur beim Übergang in den Override-Zustand loggen, nicht dauernd währenddessen
+        if (!_dockOverrideActive) {
+          Log(DBG, "%s sendData: docked/restarted (job=%d ts=%u amps=%.2f), overriding position with home/dock (%.2f, %.2f)",
+              _LOG_, state.job, state.timestamp, state.amps, state.position.x, state.position.y);
+          _dockOverrideActive = true;
+        }
+      } else {
+        if (_dockOverrideActive) {
+          Log(DBG, "%s sendData: left dock/restart window (job=%d ts=%u amps=%.2f)",
+              _LOG_, state.job, state.timestamp, state.amps);
+          _dockOverrideActive = false;
+        }
       }
       sendData(dataType, sendTo, state, force);
       break;
