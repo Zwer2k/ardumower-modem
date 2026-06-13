@@ -1,6 +1,5 @@
 #pragma once
 
-//#include <Arduino.h>
 #include <NimBLEDevice.h>
 #include "api.h"
 #include "prometheus.h"
@@ -27,7 +26,7 @@ namespace ArduMower
 {
   namespace Modem
   {
-    class BleAdapter : public BLEServerCallbacks, public BLECharacteristicCallbacks, public ArduMower::Modem::Api::Bluetooth
+    class BleAdapter : public NimBLEServerCallbacks, public NimBLECharacteristicCallbacks, public ArduMower::Modem::Api::Bluetooth
     {
     private:
       Settings::Settings &settings;
@@ -35,7 +34,7 @@ namespace ArduMower
       unsigned int count;
       ArduMower::Modem::Prometheus::CallbackMeasurement *countMetric;
 
-      BLECharacteristic *chr;
+      NimBLECharacteristic *chr;
       int status;
       int expectNotify;
 
@@ -52,7 +51,6 @@ namespace ArduMower
 
       unsigned int writeCount(char *buffer, unsigned int size);
 
-      //bool initBluetooth();
       char *bda2str(const uint8_t* bda, char *str, size_t size);
       
     public:
@@ -62,17 +60,16 @@ namespace ArduMower
       void loop();
       virtual void clearPairings() override;
 
-      // BLEServerCallbacks
-      virtual void onConnect(BLEServer *s, ble_gap_conn_desc *p) override;
-      virtual void onDisconnect(BLEServer *s) override;
-      virtual uint32_t onPassKeyRequest() override;
-      virtual bool onConfirmPIN(uint32_t pin) override;
-      virtual void onMTUChange(uint16_t MTU, ble_gap_conn_desc* desc) override;
-      virtual void onAuthenticationComplete(ble_gap_conn_desc* desc) override;
+      // NimBLEServerCallbacks
+      virtual void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) override;
+      virtual void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) override;
+      virtual uint32_t onPassKeyDisplay() override;
+      virtual void onConfirmPassKey(NimBLEConnInfo& connInfo, uint32_t pin) override;
+      virtual void onMTUChange(uint16_t MTU, NimBLEConnInfo& connInfo) override;
+      virtual void onAuthenticationComplete(NimBLEConnInfo& connInfo) override;
 
-      // BLECharacteristicCallbacks
-      virtual void onNotify(NimBLECharacteristic* pCharacteristic) override;
-      virtual void onWrite(BLECharacteristic *c) override;
+      // NimBLECharacteristicCallbacks
+      virtual void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override;
     };
   }
 
