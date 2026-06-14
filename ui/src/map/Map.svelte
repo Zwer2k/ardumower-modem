@@ -57,6 +57,47 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   let showManage = false;
   let showCalculate = false;
 
+  function closePanels() {
+    showManage = false;
+    edit = false;
+    showCalculate = false;
+    stopDraw();
+  }
+
+  function toggleManage() {
+    if (showManage) {
+      closePanels();
+    } else {
+      showManage = true;
+      edit = false;
+      showCalculate = false;
+      stopDraw();
+      isRenameMode = false;
+    }
+  }
+
+  function toggleEdit() {
+    if (edit) {
+      closePanels();
+    } else {
+      stopDraw();
+      edit = true;
+      showManage = false;
+      showCalculate = false;
+    }
+  }
+
+  function toggleCalculate() {
+    if (showCalculate) {
+      closePanels();
+    } else {
+      showCalculate = true;
+      showManage = false;
+      edit = false;
+      stopDraw();
+    }
+  }
+
   $: mapOptions = $socketStore.maps.map((m) => ({
     id: m.id,
     text: `${m.name} (${m.area.toFixed(1)} m²)`,
@@ -758,22 +799,22 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   <div class="map-toolbar-wrap">
     <Grid class="map-toolbar">
       <Row class="map-toolbar-main">
-        <Column sm={3} md={4} lg={5}>
-          {#if isRenameMode}
-            <TextInput
-              placeholder="Map name"
-              bind:value={pendingName}
-            />
-          {:else}
-            <Dropdown
-              placeholder="Select map"
-              items={mapOptions}
-              selectedId={$socketStore.activeMapId || ""}
-              on:select={onSelectMap}
-            />
-          {/if}
-        </Column>
-        <Column style="flex-shrink: 0;">
+        <div class="toolbar-main-group">
+          <div class="toolbar-dropdown">
+            {#if isRenameMode}
+              <TextInput
+                placeholder="Map name"
+                bind:value={pendingName}
+              />
+            {:else}
+              <Dropdown
+                placeholder="Select map"
+                items={mapOptions}
+                selectedId={$socketStore.activeMapId || ""}
+                on:select={onSelectMap}
+              />
+            {/if}
+          </div>
           <div class="toolbar-btn-row">
             {#if isRenameMode}
               <Button
@@ -801,48 +842,63 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                 size="small"
                 icon={IconTools}
                 iconDescription="Manage maps"
-                on:click={() => showManage = !showManage}
+                on:click={toggleManage}
               />
               <Button
                 kind={edit ? "primary" : "secondary"}
                 size="small"
                 icon={IconEdit}
                 iconDescription="Edit map"
-                on:click={() => {
-                  stopDraw();
-                  edit = !edit;
-                }}
+                on:click={toggleEdit}
               />
               <Button
                 kind={showCalculate ? "primary" : "secondary"}
                 size="small"
                 icon={IconMagicWand}
                 iconDescription="Calculate waypoints"
-                on:click={() => showCalculate = !showCalculate}
+                on:click={toggleCalculate}
               />
             {/if}
           </div>
-        </Column>
-        <Column>
-          {#if hasMap}
-            {#if targetSet}
-              <span class="goto-badge">
-                {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
-              </span>
-              {#if isDriving}
-                <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
+        </div>
+        {#if !showManage && !edit && !showCalculate}
+          <div class="toolbar-goto-group">
+            {#if hasMap}
+              {#if targetSet}
+                <span class="goto-badge">
+                  {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
+                </span>
+                {#if isDriving}
+                  <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
+                {:else}
+                  <button class="goto-btn drive" on:click={startDrive}>Drive</button>
+                {/if}
+                <button class="goto-btn clear" on:click={clearTarget}>✕</button>
               {:else}
-                <button class="goto-btn drive" on:click={startDrive}>Drive</button>
+                <span class="goto-hint">Click map to set target</span>
               {/if}
-              <button class="goto-btn clear" on:click={clearTarget}>✕</button>
-            {:else if !edit}
-              <span class="goto-hint">Click map to set target</span>
+            {:else}
+              <span class="goto-hint">No map loaded</span>
             {/if}
-          {:else if !edit}
-            <span class="goto-hint">No map loaded</span>
-          {/if}
-        </Column>
+          </div>
+        {/if}
       </Row>
+
+      {#if !showManage && !edit && !showCalculate && hasMap && targetSet}
+        <Row class="goto-row">
+          <Column>
+            <span class="goto-badge">
+              {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
+            </span>
+            {#if isDriving}
+              <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
+            {:else}
+              <button class="goto-btn drive" on:click={startDrive}>Drive</button>
+            {/if}
+            <button class="goto-btn clear" on:click={clearTarget}>✕</button>
+          </Column>
+        </Row>
+      {/if}
 
       {#if showManage}
         <Row class="map-mgmt-row">
@@ -862,6 +918,8 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                 kind="secondary"
                 size="small"
                 disabled={!canRename || isRenameMode}
+                icon={IconPen}
+                iconDescription="Rename map"
                 on:click={startRename}
               >
                 <span class="btn-label">Rename</span>
@@ -876,6 +934,14 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               >
                 <span class="btn-label">Del</span>
               </Button>
+              <Button
+                kind="secondary"
+                size="small"
+                disabled={busy}
+                icon={IconUpload}
+                iconDescription="Upload map to mower"
+                on:click={() => { socketService.sendUploadMap(); }}
+              />
             </div>
           </Column>
         </Row>
@@ -883,7 +949,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
 
       {#if edit}
         <Row class="map-edit-row">
-          <Column>
+          <div class="edit-combo">
             <ComboBox
               disabled={!edit}
               placeholder="Select item to edit"
@@ -893,8 +959,8 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               on:clear={clearEditItem}
               {shouldFilterItem}
             />
-          </Column>
-          <Column style="flex-shrink: 0;">
+          </div>
+          <div class="edit-actions">
             <div class="action-btns">
               <Button
                 kind={drawActive ? "primary" : "tertiary"}
@@ -938,7 +1004,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                 iconDescription="Delete"
               />
             </div>
-          </Column>
+          </div>
         </Row>
       {/if}
 
@@ -972,16 +1038,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                 on:click={() => { socketService.sendCalculateWaypoints(); }}
               >
                 <span class="btn-label">Calculate</span>
-              </Button>
-              <Button
-                kind="secondary"
-                size="small"
-                disabled={busy}
-                icon={IconUpload}
-                iconDescription="Upload map to mower"
-                on:click={() => { socketService.sendUploadMap(); }}
-              >
-                <span class="btn-label">Upload</span>
               </Button>
             </div>
           </Column>
@@ -1169,7 +1225,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   }
 
   :global(.map-toolbar .bx--row) {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
   }
   :global(.map-toolbar .bx--list-box) {
@@ -1183,15 +1239,51 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     top: 32px;
   }
 
+  .toolbar-main-group {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+  .toolbar-dropdown {
+    flex: 1 1 auto;
+    min-width: 8rem;
+  }
+  .toolbar-dropdown :global(.bx--dropdown),
+  .toolbar-dropdown :global(.bx--text-input) {
+    width: 100%;
+  }
+  .toolbar-btn-row {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+  }
+  .toolbar-goto-group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    margin-left: auto;
+  }
+
   .action-btns {
     display: flex;
     flex-wrap: nowrap;
   }
 
-  .toolbar-btn-row {
-    display: flex;
-    flex-wrap: nowrap;
+  .map-edit-row {
+    align-items: center;
     gap: 0.25rem;
+  }
+  .edit-combo {
+    flex: 1 1 auto;
+    min-width: 10rem;
+  }
+  .edit-actions {
+    flex: 0 1 auto;
   }
 
   .map-mgmt-row {
@@ -1199,12 +1291,24 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     align-items: flex-end;
   }
 
+  .goto-row {
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
   @container (max-width: 800px) {
     .btn-label {
       display: none;
     }
-    .goto-hint, .goto-badge, .goto-btn {
+    .toolbar-main-group {
+      width: 100%;
+    }
+    .toolbar-goto-group {
       display: none;
+    }
+    .goto-row {
+      display: flex;
     }
     .toolbar-btn-row :global(.bx--btn) {
       width: 2rem;
@@ -1214,6 +1318,17 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     .toolbar-btn-row :global(.bx--btn .bx--btn__icon) {
       position: static;
       margin: 0;
+    }
+    .map-edit-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .edit-combo,
+    .edit-actions {
+      width: 100%;
+    }
+    .action-btns {
+      justify-content: flex-end;
     }
   }
 
