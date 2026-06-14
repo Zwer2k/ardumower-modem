@@ -30,8 +30,15 @@ void MowerAdapter::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
   }
   _map = map;
   _map.timestamp = millis();
-  Log(INFO, "%ssetMap: perimeter=%d exclusions=%d dockpoints=%d waypoints=%d",
-      _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size());
+  updateCurrentMapMeta();
+  Log(INFO, "%ssetMap: perimeter=%d exclusions=%d dockpoints=%d waypoints=%d hash=%s area=%.1f",
+      _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size(),
+      _currentMapHash.c_str(), _currentMapArea);
+}
+
+void MowerAdapter::updateCurrentMapMeta() {
+  _currentMapHash = _mapManager.computeHash(_map);
+  _currentMapArea = _mapManager.computeArea(_map);
 }
 
 void MowerAdapter::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) {
@@ -39,6 +46,79 @@ void MowerAdapter::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s
   _mowSettings.timestamp = millis();
   Log(INFO, "%ssetMowSettings: pattern=%d width=%.2f angle=%d distToBorder=%d laps=%d",
       _LOG_, s.pattern, s.width, s.angle, s.distanceToBorder, s.borderLaps);
+}
+
+std::vector<ArduMower::Domain::Robot::MapInfo> MowerAdapter::mapList() {
+  std::vector<ArduMower::Domain::Robot::MapInfo> result;
+  if (!_mapManager.begin()) return result;
+  for (const auto &m : _mapManager.list()) {
+    ArduMower::Domain::Robot::MapInfo info;
+    info.id = m.id;
+    info.name = m.name;
+    info.area = m.area;
+    info.hash = m.hash;
+    info.timestamp = m.timestamp;
+    result.push_back(info);
+  }
+  return result;
+}
+
+bool MowerAdapter::mapListDirty() {
+  return _mapListDirty;
+}
+
+void MowerAdapter::clearMapListDirty() {
+  _mapListDirty = false;
+}
+
+String MowerAdapter::saveMap(const String &name) {
+  if (_map.isReading()) {
+    Log(WARN, "%ssaveMap: Map-Lesevorgang läuft, speichern abgelehnt", _LOG_);
+    return "";
+  }
+  String id = _mapManager.save(_map, name);
+  if (id.length() > 0) {
+    _mapListDirty = true;
+    Log(INFO, "%ssaveMap: Karte gespeichert als %s", _LOG_, id.c_str());
+  }
+  return id;
+}
+
+bool MowerAdapter::loadMap(const String &id) {
+  if (_map.isReading()) {
+    Log(WARN, "%sloadMap: Map-Lesevorgang läuft, laden abgelehnt", _LOG_);
+    return false;
+  }
+  ArduMower::Domain::Robot::MowerMap loaded;
+  if (!_mapManager.load(id, loaded)) return false;
+  if (!_mapManager.setActive(id)) return false;
+  _map = loaded;
+  updateCurrentMapMeta();
+  _mapListDirty = true;
+  Log(INFO, "%sloadMap: Karte %s geladen", _LOG_, id.c_str());
+  return true;
+}
+
+bool MowerAdapter::renameMap(const String &id, const String &name) {
+  if (!_mapManager.rename(id, name)) return false;
+  _mapListDirty = true;
+  Log(INFO, "%srenameMap: Karte %s umbenannt in '%s'", _LOG_, id.c_str(), name.c_str());
+  return true;
+}
+
+bool MowerAdapter::deleteMap(const String &id) {
+  if (!_mapManager.remove(id)) return false;
+  _mapListDirty = true;
+  Log(INFO, "%sdeleteMap: Karte %s gelöscht", _LOG_, id.c_str());
+  return true;
+}
+
+String MowerAdapter::currentMapHash() {
+  return _currentMapHash;
+}
+
+double MowerAdapter::currentMapArea() {
+  return _currentMapArea;
 }
 
 // ===== SPIFFS-Persistenz (vorbereitet, aber noch nicht aktiv) =====
@@ -53,6 +133,21 @@ void MowerAdapter::begin()
   enc.setPassword(settings.general.password);
   router.sniffRx(this);
   router.sniffTx(this);
+
+  // Persistierte Kartenverwaltung initialisieren und aktive Karte laden
+  if (_mapManager.begin()) {
+    ArduMower::Domain::Robot::MowerMap loaded;
+    if (_mapManager.loadActive(loaded)) {
+      _map = loaded;
+      updateCurrentMapMeta();
+      Log(INFO, "%s begin: aktive Karte '%s' aus SPIFFS geladen (%.1f m²)",
+          _LOG_, _mapManager.activeId().c_str(), _currentMapArea);
+    } else if (_mapManager.activeId().length() > 0) {
+      // Aktive ID verweist auf nicht mehr vorhandene Datei -> Index bereinigen
+      _mapManager.setActive("");
+    }
+    _mapListDirty = true;
+  }
 }
 
 void MowerAdapter::drainRx(String line, bool &stop)
@@ -268,6 +363,18 @@ void MowerAdapter::parseATNCommand(String line) {
   }
   Log(DBG, "%sparseATNCommand: Map vollständig, sende an Client", _LOG_);
   _map.timestamp = millis();
+  updateCurrentMapMeta();
+
+  // Abgefangene Karte anhand des Hashes mit gespeicherten Karten abgleichen
+  String existingId = _mapManager.findByHash(_currentMapHash);
+  if (existingId.length() > 0) {
+    _mapManager.setActive(existingId);
+    Log(INFO, "%sparseATNCommand: abgefangene Karte passt zu gespeicherter ID %s", _LOG_, existingId.c_str());
+  } else {
+    _mapManager.setActive("");
+    Log(INFO, "%sparseATNCommand: abgefangene Karte unbekannt (hash=%s), keine Auswahl", _LOG_, _currentMapHash.c_str());
+  }
+  _mapListDirty = true;
   tempWaypointsBuffer.clear();
 }
 

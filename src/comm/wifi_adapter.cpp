@@ -8,6 +8,15 @@ using namespace ArduMower::Modem::Wifi;
 static const uint32_t staAbortTimeout = 1 * 60 * 1000;
 static const uint32_t offStopTimeout = 5 * 60 * 1000;
 
+void Adapter::reconnect()
+{
+  if (_mode != Mode::STA)
+    return;
+
+  Log(INFO, "WiFi::Adapter::reconnect");
+  WiFi.reconnect();
+}
+
 void Adapter::begin()
 {
   _mode = mode();

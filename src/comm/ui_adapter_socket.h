@@ -35,6 +35,11 @@ namespace ArduMower
         requestMowSettings,
         clearWaypoints,
         calculateWaypoints,
+        listMaps,
+        loadMap,
+        saveMap,
+        renameMap,
+        deleteMap,
         requestDataTypeLength
       };
 
@@ -52,6 +57,7 @@ namespace ArduMower
         logExport,
         mowSettings,
         operationProgress,
+        mapList,
         responseDataTypeLength
       };
 
@@ -93,6 +99,8 @@ namespace ArduMower
         size_t exclusionIdx = 0;
         size_t idx = 0;
         ArduMower::Domain::Robot::MowerMap snapshot;  // Einmalige Kopie der Map beim Start
+        String metaHash;
+        double metaArea = 0.0;
       };
 
       class UiSocketHandler
@@ -122,6 +130,7 @@ namespace ArduMower
         void logToUiLoop();
         bool cmdToMower(String cmd);
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo = NULL, bool force = false);
+        void sendMapList(UiSocketItem *sendTo = NULL);
         void broadcastFlashProgress(size_t current, size_t total);
         void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
@@ -144,6 +153,10 @@ namespace ArduMower
         void abortMapChunkSend();
         void sendWaypointsDirect(const std::vector<ArduMower::Domain::Robot::MapPoint> &waypoints, uint32_t timestamp);
         size_t clientCount() { return countConnectedClients(); }
+        uint32_t lastClientActivity() const { return _lastClientActivity; }
+        uint32_t lastWsConnectionEvent() const { return _lastWsConnectionEvent; }
+        void markClientActivity() { _lastClientActivity = millis(); }
+        void markWsConnectionEvent() { _lastWsConnectionEvent = millis(); }
 #ifdef MOWER_TERMINAL
         void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
 #endif
@@ -185,6 +198,8 @@ namespace ArduMower
         String _progressOp;
         String _progressMsg;
         uint32_t _lastLogSend = 0;
+        uint32_t _lastClientActivity = 0;
+        uint32_t _lastWsConnectionEvent = 0;
         bool _dockOverrideActive = false;
 
         volatile bool _uploadToMowerPending = false;

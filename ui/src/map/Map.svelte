@@ -3,6 +3,8 @@
     Button,
     ButtonSet,
     ComboBox,
+    Dropdown,
+    TextInput,
     Slider,
     Row,
     Column,
@@ -15,6 +17,10 @@
   import IconCut from "carbon-icons-svelte/lib/Cut.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import IconUpload from "carbon-icons-svelte/lib/Upload.svelte";
+  import IconSave from "carbon-icons-svelte/lib/Save.svelte";
+import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
+  import IconCheckmark from "carbon-icons-svelte/lib/Checkmark.svelte";
+  import IconClose from "carbon-icons-svelte/lib/Close.svelte";
   import IconSettings from "carbon-icons-svelte/lib/Settings.svelte";
   import IconMagicWand from "carbon-icons-svelte/lib/MagicWand.svelte";
   import { onMount } from "svelte";
@@ -44,6 +50,62 @@
 
   let editPoint = false;
   let editEdge = false;
+
+  // ─── Map management ────────────────────────────────────────────────────────
+  let isRenameMode = false;
+  let pendingName = "";
+  let showManage = false;
+  let showCalculate = false;
+
+  $: mapOptions = $socketStore.maps.map((m) => ({
+    id: m.id,
+    text: `${m.name} (${m.area.toFixed(1)} m²)`,
+  }));
+  $: activeMap = $socketStore.maps.find((m) => m.id === $socketStore.activeMapId);
+  $: activeMapName = activeMap?.name || "";
+  $: currentHash = $socketStore.currentMapMeta?.hash || "";
+  $: geometryDirty = currentHash !== "" && currentHash !== $socketStore.activeMapId;
+  $: nameDirty = pendingName !== "" && pendingName !== activeMapName;
+  $: isDirty = geometryDirty || nameDirty;
+  $: canRename = ($MapStore.map?.perimeter.points.length ?? 0) >= 3;
+
+  onMount(() => {
+    socketService.sendListMaps();
+  });
+
+  function onSelectMap(e: CustomEvent) {
+    const id = e.detail?.selectedId;
+    if (id) socketService.sendLoadMap(id);
+  }
+
+  function onSaveMap() {
+    const name = pendingName || activeMapName || `Karte ${$socketStore.maps.length + 1}`;
+    socketService.sendSaveMap(name);
+    pendingName = "";
+  }
+
+  function startRename() {
+    pendingName = activeMapName;
+    isRenameMode = true;
+  }
+
+  function confirmRename() {
+    isRenameMode = false;
+  }
+
+  function cancelRename() {
+    pendingName = activeMapName;
+    isRenameMode = false;
+  }
+
+  function onDeleteMap() {
+    const activeId = $socketStore.activeMapId;
+    if (!activeId) return;
+    if (confirm("Karte wirklich löschen?")) {
+      socketService.sendDeleteMap(activeId);
+      pendingName = "";
+    }
+  }
 
   // ─── Draw mode ───────────────────────────────────────────────────────────
   $: opPct = $socketStore.state?.progressPct || 0;
@@ -695,20 +757,132 @@
 <div class="map-dashboard">
   <div class="map-toolbar-wrap">
     <Grid class="map-toolbar">
-      <Row>
-        <Column sm={1} md={1} lg={1}>
-          <Button
-            kind={edit ? "primary" : "secondary"}
-            size="small"
-            icon={IconEdit}
-            iconDescription="Editor"
-            on:click={() => {
-              stopDraw();
-              edit = !edit;
-            }}
-          />
+      <Row class="map-toolbar-main">
+        <Column sm={3} md={4} lg={5}>
+          {#if isRenameMode}
+            <TextInput
+              placeholder="Map name"
+              bind:value={pendingName}
+            />
+          {:else}
+            <Dropdown
+              placeholder="Select map"
+              items={mapOptions}
+              selectedId={$socketStore.activeMapId || ""}
+              on:select={onSelectMap}
+            />
+          {/if}
         </Column>
-        {#if edit}
+        <Column style="flex-shrink: 0;">
+          <div class="toolbar-btn-row">
+            {#if isRenameMode}
+              <Button
+                kind="primary"
+                size="small"
+                disabled={!pendingName || pendingName === activeMapName}
+                on:click={confirmRename}
+                icon={IconCheckmark}
+                iconDescription="Confirm rename"
+              >
+                <span class="btn-label">OK</span>
+              </Button>
+              <Button
+                kind="secondary"
+                size="small"
+                on:click={cancelRename}
+                icon={IconClose}
+                iconDescription="Cancel rename"
+              >
+                <span class="btn-label">Cancel</span>
+              </Button>
+            {:else}
+              <Button
+                kind={showManage ? "primary" : "secondary"}
+                size="small"
+                icon={IconTools}
+                iconDescription="Manage maps"
+                on:click={() => showManage = !showManage}
+              />
+              <Button
+                kind={edit ? "primary" : "secondary"}
+                size="small"
+                icon={IconEdit}
+                iconDescription="Edit map"
+                on:click={() => {
+                  stopDraw();
+                  edit = !edit;
+                }}
+              />
+              <Button
+                kind={showCalculate ? "primary" : "secondary"}
+                size="small"
+                icon={IconMagicWand}
+                iconDescription="Calculate waypoints"
+                on:click={() => showCalculate = !showCalculate}
+              />
+            {/if}
+          </div>
+        </Column>
+        <Column>
+          {#if hasMap}
+            {#if targetSet}
+              <span class="goto-badge">
+                {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
+              </span>
+              {#if isDriving}
+                <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
+              {:else}
+                <button class="goto-btn drive" on:click={startDrive}>Drive</button>
+              {/if}
+              <button class="goto-btn clear" on:click={clearTarget}>✕</button>
+            {:else if !edit}
+              <span class="goto-hint">Click map to set target</span>
+            {/if}
+          {:else if !edit}
+            <span class="goto-hint">No map loaded</span>
+          {/if}
+        </Column>
+      </Row>
+
+      {#if showManage}
+        <Row class="map-mgmt-row">
+          <Column style="flex-shrink: 0;">
+            <div class="toolbar-btn-row">
+              <Button
+                kind="primary"
+                size="small"
+                disabled={!isDirty}
+                on:click={onSaveMap}
+                icon={IconSave}
+                iconDescription="Save map"
+              >
+                <span class="btn-label">Save</span>
+              </Button>
+              <Button
+                kind="secondary"
+                size="small"
+                disabled={!canRename || isRenameMode}
+                on:click={startRename}
+              >
+                <span class="btn-label">Rename</span>
+              </Button>
+              <Button
+                kind="danger"
+                size="small"
+                disabled={!$socketStore.activeMapId}
+                on:click={onDeleteMap}
+                icon={IconTrashCan}
+                iconDescription="Delete map"
+              >
+                <span class="btn-label">Del</span>
+              </Button>
+            </div>
+          </Column>
+        </Row>
+      {/if}
+
+      {#if edit}
+        <Row class="map-edit-row">
           <Column>
             <ComboBox
               disabled={!edit}
@@ -765,7 +939,11 @@
               />
             </div>
           </Column>
-        {:else}
+        </Row>
+      {/if}
+
+      {#if showCalculate}
+        <Row class="map-calc-row">
           <Column>
             <div class="toolbar-btn-row">
               <Button
@@ -807,27 +985,8 @@
               </Button>
             </div>
           </Column>
-        {/if}
-        <Column>
-          {#if hasMap}
-            {#if targetSet}
-              <span class="goto-badge">
-                {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
-              </span>
-              {#if isDriving}
-                <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
-              {:else}
-                <button class="goto-btn drive" on:click={startDrive}>Drive</button>
-              {/if}
-              <button class="goto-btn clear" on:click={clearTarget}>✕</button>
-            {:else if !edit}
-              <span class="goto-hint">Click map to set target</span>
-            {/if}
-          {:else if !edit}
-            <span class="goto-hint">No map loaded</span>
-          {/if}
-        </Column>
-      </Row>
+        </Row>
+      {/if}
     </Grid>
     {#if busy}
       <div class="progress-bar-container" title="{opMsg}">
@@ -847,6 +1006,7 @@
         </svg>
       </button>
       <div class="map-point-counts">
+        <div><strong>Area:</strong> {($socketStore.currentMapMeta?.area ?? 0).toFixed(1)} m²</div>
         <div><strong>Perimeter:</strong> {perimeterPoints}</div>
         {#each exclusionPoints as ep, i}
           <div><strong>Excl #{i}:</strong> {ep}</div>
@@ -1032,6 +1192,11 @@
     display: flex;
     flex-wrap: nowrap;
     gap: 0.25rem;
+  }
+
+  .map-mgmt-row {
+    margin-bottom: 0.5rem;
+    align-items: flex-end;
   }
 
   @container (max-width: 800px) {

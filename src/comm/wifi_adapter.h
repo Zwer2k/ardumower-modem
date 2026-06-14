@@ -41,6 +41,7 @@ namespace ArduMower
 
         void begin();
         void loop();
+        void reconnect();
       };
     }
   }

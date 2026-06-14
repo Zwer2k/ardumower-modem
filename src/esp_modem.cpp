@@ -184,34 +184,55 @@ void setup() {
   looptime.add("wifi_health", [&]() {
     static enum { INIT, IDLE, ACTIVE } state = INIT;
     static uint32_t lastChange = 0;
-    static uint32_t lastReqs = 0;
     uint32_t now = millis();
+
+    // Do not force a reconnect while a firmware flash is in progress
+    if (Ota::MowerUpdater::isFlashing()) {
+      state = ACTIVE;
+      lastChange = now;
+      return;
+    }
+
     if (state == INIT) {
-      lastReqs = httpAdapter.requestCount();
       lastChange = now;
       state = IDLE;
       return;
     }
-    size_t wsClients = socketHandler.clientCount();
+
     bool mqttOk = mqttAdapter.connected();
-    uint32_t reqs = httpAdapter.requestCount();
-    bool anyActivity = (wsClients > 0) || mqttOk || (reqs != lastReqs);
-    lastReqs = reqs;
+    uint32_t lastWs = socketHandler.lastClientActivity();
+
+    // Only monitor the link when there actually are WebSocket clients or
+    // recent connect/disconnect/error events. Otherwise an idle modem with no
+    // open UI would be forced to reconnect every 5 minutes.
+    bool hasWsContext = (socketHandler.clientCount() > 0) ||
+                        (socketHandler.lastWsConnectionEvent() > 0 &&
+                         (now - socketHandler.lastWsConnectionEvent()) < 300000);
+    if (!hasWsContext) {
+      state = ACTIVE;
+      lastChange = now;
+      return;
+    }
+
+    bool anyActivity = mqttOk || (lastWs > lastChange);
+
     if (anyActivity) {
       state = ACTIVE;
       lastChange = now;
       return;
     }
+
     if (state == ACTIVE) {
       state = IDLE;
       lastChange = now;
       return;
     }
+
     // state == IDLE: no activity for at least one full interval
     if (now - lastChange < 300000) return;
-    Log(WARN, "wifi_health: idle for 5min (ws=%zu mqtt=%d reqs=%u), forcing reconnect",
-        wsClients, mqttOk, reqs);
-    WiFi.reconnect();
+    Log(WARN, "wifi_health: idle for 5min (mqtt=%d lastWs=%u ws=%zu), forcing reconnect",
+        mqttOk, lastWs, socketHandler.clientCount());
+    wifiAdapter.reconnect();
     lastChange = now;
   });
   

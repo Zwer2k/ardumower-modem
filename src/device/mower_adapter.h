@@ -3,6 +3,7 @@
 
 #include "domain.h"
 #include "mower_map.h"
+#include "map_manager.h"
 #include "router.h"
 #include "encrypt.h"
 #include "settings.h"
@@ -62,11 +63,17 @@ namespace ArduMower
       ArduMower::Domain::Robot::UbxResponse _ubxResponse;
       ArduMower::Domain::Robot::MowerMap _map;
       ArduMower::Domain::Robot::MowSettings _mowSettings;
+      ArduMower::Modem::MapManager _mapManager;
       uint32_t _lastStateRequest = 0;
       uint32_t _lastStatsRequest = 0;
       PendingCommand _pendingCommand;
       MapUploadState _mapUploadState;
       volatile bool _mapUploadPending = false;
+      bool _mapListDirty = true;
+      String _currentMapHash;
+      double _currentMapArea = 0.0;
+
+      void updateCurrentMapMeta();
       // Cache für rohe Antwort-Strings (mit Checksumme) – für HTTP-Cache-Serving
       String _cachedRawState;
       String _cachedRawStats;
@@ -119,6 +126,19 @@ namespace ArduMower
       virtual ArduMower::Domain::Robot::MowerMap mowerMap() { return _map; }
       virtual ArduMower::Domain::Robot::MowSettings mowSettings() { return _mowSettings; }
       virtual ArduMower::Domain::Robot::MowSettings *mowSettingsP() { return &_mowSettings; }
+
+      // Karten-Verwaltung
+      virtual std::vector<ArduMower::Domain::Robot::MapInfo> mapList() override;
+      virtual String activeMapId() override { return _mapManager.activeId(); }
+      virtual bool mapListDirty() override;
+      virtual void clearMapListDirty() override;
+      virtual String saveMap(const String &name) override;
+      virtual bool loadMap(const String &id) override;
+      virtual bool renameMap(const String &id, const String &name) override;
+      virtual bool deleteMap(const String &id) override;
+      virtual String currentMapHash() override;
+      virtual double currentMapArea() override;
+
       // Zugriff auf gecachte rohe Antworten (für HTTP-Cache)
       virtual String cachedRawState() { return _cachedRawState; }
       virtual String cachedRawStats() { return _cachedRawStats; }

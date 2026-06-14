@@ -29,6 +29,8 @@ UiSocketItem::UiSocketItem(
   yield();
   _socketHandler->sendData(ResponseDataType::map, this, true);
   yield();
+  _socketHandler->sendMapList(this);
+  yield();
   _socketHandler->sendBufferedLogTo(this, 5);
 #ifdef MOWER_TERMINAL
   _socketHandler->sendBufferedTerminalTo(this, 5);
@@ -214,6 +216,45 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
     _socketHandler->calculateWaypoints();
     break;
 
+   case RequestDataType::listMaps:
+    _socketHandler->sendMapList(this);
+    break;
+
+   case RequestDataType::loadMap: {
+    String id = jsonData["id"] | "";
+    if (_source.loadMap(id)) {
+      _socketHandler->abortMapChunkSend();
+      _socketHandler->sendData(ResponseDataType::map, NULL, true);
+      _socketHandler->sendMapList(NULL);
+    }
+    break;
+  }
+
+   case RequestDataType::saveMap: {
+    String name = jsonData["name"] | "";
+    if (_source.saveMap(name).length() > 0) {
+      _socketHandler->sendMapList(NULL);
+    }
+    break;
+  }
+
+   case RequestDataType::renameMap: {
+    String id = jsonData["id"] | "";
+    String name = jsonData["name"] | "";
+    if (_source.renameMap(id, name)) {
+      _socketHandler->sendMapList(NULL);
+    }
+    break;
+  }
+
+   case RequestDataType::deleteMap: {
+    String id = jsonData["id"] | "";
+    if (_source.deleteMap(id)) {
+      _socketHandler->sendMapList(NULL);
+    }
+    break;
+  }
+
   default:
     break;
   }
@@ -242,6 +283,7 @@ bool UiSocketItem::sendText(String text)
   for (int attempt = 0; attempt < 3; ++attempt) {
     try {
       if (_client->text(text.c_str())) {
+        _socketHandler->markClientActivity();
         return true;
       }
     } catch (...) {
@@ -359,6 +401,13 @@ void UiSocketHandler::begin()
 void UiSocketHandler::loop()
 {
   _ws->cleanupClients();
+
+  // Kartenliste bei Änderungen broadcasten, sobald mindestens ein Client verbunden ist
+  if (_source.mapListDirty() && countConnectedClients() > 0) {
+    _source.clearMapListDirty();
+    sendMapList(NULL);
+  }
+
   if (countConnectedClients() == 0)
     return;
 
@@ -652,6 +701,9 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   map.beginRead();
   // Snapshot einmalig speichern - verhindert Race Condition waehrend Chunk-Versand
   mapChunkSendState.snapshot = map;
+  // Metadaten des aktuellen Karteninhalts für alle Chunks merken
+  mapChunkSendState.metaHash = _source.currentMapHash();
+  mapChunkSendState.metaArea = _source.currentMapArea();
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
   mapChunkSendState.active = true;
   mapChunkSendState.clientId = sendTo ? sendTo->clientId() : 0;
@@ -750,6 +802,11 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
   dataObj["pointType"] = static_cast<int>(pointType);
   if (pointType == MapPointType::Exclusion) {
     dataObj["exclusionIdx"] = exclusionIdx;
+  }
+  if (mapChunkSendState.metaHash.length() > 0) {
+    auto metaObj = dataObj["meta"].to<JsonObject>();
+    metaObj["hash"] = mapChunkSendState.metaHash;
+    metaObj["area"] = mapChunkSendState.metaArea;
   }
   auto arr = dataObj["points"].to<JsonArray>();
   size_t measured = measureJson(doc);
@@ -1137,6 +1194,40 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
   }
 }
 
+void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
+{
+  auto list = _source.mapList();
+  String activeId = _source.activeMapId();
+
+  JsonDocument doc;
+  doc["type"] = ResponseDataType::mapList;
+  doc["timestamp"] = millis();
+  auto dataObj = doc["data"].to<JsonObject>();
+  dataObj["activeId"] = activeId;
+  auto mapsArr = dataObj["maps"].to<JsonArray>();
+  for (const auto &m : list) {
+    JsonObject obj = mapsArr.add<JsonObject>();
+    obj["id"] = m.id;
+    obj["name"] = m.name;
+    obj["area"] = m.area;
+    obj["hash"] = m.hash;
+    obj["timestamp"] = m.timestamp;
+  }
+
+  String json;
+  serializeJson(doc, json);
+  json = sanitizeUtf8(json);
+
+  if (sendTo != NULL) {
+    sendTo->sendText(json);
+  } else {
+    if (countConnectedClients() == 0) return;
+    if (!sendTextAllWithRetry(_ws, json)) {
+      _ws->cleanupClients();
+    }
+  }
+}
+
 bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &text)
 {
   // Entferne verwaiste Clients (z.B. TCP tot aber WS-Status noch CONNECTED),
@@ -1167,6 +1258,7 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
   } catch (...) {
     return false;
   }
+  if (anySent) markClientActivity();
   if (!anyConnected) return true;
   return anySent;
 }
@@ -1208,6 +1300,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
 {
   if(type == WS_EVT_CONNECT){
     //client connected
+    markWsConnectionEvent();
     Log(INFO, "%s ws[%s][%u] connect\n", _LOG_, server->url(), client->id());
 
     // Nicht bei Queue-Überlauf trennen – sonst erzeugt jeder Log-Sturm
@@ -1258,6 +1351,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
 
     _ws->cleanupClients(); // cleanup disconnected clients
   } else if(type == WS_EVT_ERROR){
+    markWsConnectionEvent();
     Log(ERR, "%s ws[%s][%u] error(%u): %s\n", _LOG_, server->url(), client->id(), *((uint16_t*)arg), (char*)data);
     _frameBuffer.erase(client->id());
     if (itemMap.find(client->id()) != itemMap.end()) {
@@ -1279,6 +1373,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     }
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
+    markWsConnectionEvent();
     Log(INFO, "%s ws[%s][%u] disconnect\n", _LOG_, server->url(), client->id());
     _frameBuffer.erase(client->id());
     if (itemMap.find(client->id()) != itemMap.end()) {
@@ -1302,10 +1397,12 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     //error was received from the other end
     Log(ERR, "%s ws[%s][%u] error(%u): %s\n", _LOG_, server->url(), client->id(), *((uint16_t*)arg), (char*)data);
   } else if(type == WS_EVT_PONG){
+    markClientActivity();
     //pong message was received (in response to a ping request maybe)
     Log(DBG, "%s ws[%s][%u] pong[%u]: %s\n", _LOG_, server->url(), client->id(), len, (len)?(char*)data:"");
   } else if(type == WS_EVT_DATA){
     //data packet
+    markClientActivity();
     AwsFrameInfo * info = (AwsFrameInfo*)arg;
     if(info->final && info->index == 0 && info->len == len){
       //the whole message is in a single frame and we got all of it's data

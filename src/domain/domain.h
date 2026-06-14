@@ -298,6 +298,14 @@ namespace ArduMower
         void marshal(JsonObject o) const;
       };
 
+      struct MapInfo {
+        String id;
+        String name;
+        double area = 0.0;
+        String hash;
+        uint32_t timestamp = 0;
+      };
+
       class StateSource
       {
       public:
@@ -322,6 +330,18 @@ namespace ArduMower
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
         virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map) = 0;
         virtual void setMowSettings(const MowSettings &s) = 0;
+
+        // Karten-Verwaltung (optional, Standardimplementierungen liefern leere Werte)
+        virtual std::vector<MapInfo> mapList() { return {}; }
+        virtual String activeMapId() { return ""; }
+        virtual bool mapListDirty() { return false; }
+        virtual void clearMapListDirty() {}
+        virtual String saveMap(const String &name) { (void)name; return ""; }
+        virtual bool loadMap(const String &id) { (void)id; return false; }
+        virtual bool renameMap(const String &id, const String &name) { (void)id; (void)name; return false; }
+        virtual bool deleteMap(const String &id) { (void)id; return false; }
+        virtual String currentMapHash() { return ""; }
+        virtual double currentMapArea() { return 0.0; }
       };
 
       class CommandExecutor

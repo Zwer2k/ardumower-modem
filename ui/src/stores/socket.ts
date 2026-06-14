@@ -12,6 +12,8 @@ import type {
   ConsoleLine,
   ConsoleResponseData,
   MapRaw,
+  MapMeta,
+  MapListData,
   SensorSummary,
   GpsDetails,
   UbxResponse,
@@ -39,6 +41,9 @@ export interface SocketState {
   mapEnabled: boolean;
   liveMapEnabled: boolean;
   gpsDashboardEnabled: boolean;
+  maps: MapMeta[];
+  activeMapId: string;
+  currentMapMeta: { hash: string; area: number } | null;
 }
 
 const initialState: SocketState = {
@@ -58,6 +63,9 @@ const initialState: SocketState = {
   mapEnabled: false,
   liveMapEnabled: false,
   gpsDashboardEnabled: false,
+  maps: [],
+  activeMapId: "",
+  currentMapMeta: null,
 };
 
 export const socketStore = writable<SocketState>(initialState);
@@ -66,6 +74,7 @@ export const socketStore = writable<SocketState>(initialState);
  *  ist NICHT von clearConsoleLines() betroffen (vermeidet Race Condition
  *  mit dem Terminal, das sofort nach Empfang der Lines cleart). */
 export const motorPlotStore = writable<ConsoleLine[]>([]);
+export const mapMetaStore = writable<{ hash: string; area: number } | null>(null);
 
 export function clearMotorPlotStore() {
   motorPlotStore.set([]);
@@ -274,16 +283,29 @@ class SocketService {
                     ...incomingLines,
                   ]);
                   break;
-                case ResponseDataType.map:
+                case ResponseDataType.map: {
+                  const data = jsonData.data as any;
+                  if (data && data.meta) {
+                    const meta = { hash: data.meta.hash, area: data.meta.area };
+                    newState.currentMapMeta = meta;
+                    mapMetaStore.set(meta);
+                  }
                   // Map-Chunk-Logik: Chunks sammeln, MapStore wird im Buffer gesetzt
                   if (
-                    jsonData.data &&
-                    jsonData.data.startIndex !== undefined &&
-                    jsonData.data.points
+                    data &&
+                    data.startIndex !== undefined &&
+                    data.points
                   ) {
-                    handleMapChunk(jsonData.data);
+                    handleMapChunk(data);
                   }
                   break;
+                }
+                case ResponseDataType.mapList: {
+                  const listData = jsonData.data as MapListData;
+                  newState.maps = listData.maps || [];
+                  newState.activeMapId = listData.activeId || "";
+                  break;
+                }
                 case ResponseDataType.sensorSummary:
                   newState.sensorSummary = jsonData.data as SensorSummary;
                   break;
@@ -482,6 +504,46 @@ class SocketService {
     };
     this.sendMessage(req);
     resetMapChunkBuffer();
+  }
+
+  sendListMaps() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.listMaps,
+      data: {},
+    };
+    this.sendMessage(req);
+  }
+
+  sendLoadMap(id: string) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.loadMap,
+      data: { id },
+    };
+    this.sendMessage(req);
+  }
+
+  sendSaveMap(name: string) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.saveMap,
+      data: { name },
+    };
+    this.sendMessage(req);
+  }
+
+  sendRenameMap(id: string, name: string) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.renameMap,
+      data: { id, name },
+    };
+    this.sendMessage(req);
+  }
+
+  sendDeleteMap(id: string) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.deleteMap,
+      data: { id },
+    };
+    this.sendMessage(req);
   }
 
   disconnect() {

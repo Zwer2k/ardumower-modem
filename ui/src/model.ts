@@ -285,6 +285,7 @@ export enum ResponseDataType {
   logExport,
   mowSettings,
   operationProgress,
+  mapList,
 }
 
 export interface OperationProgress {
@@ -306,9 +307,22 @@ export interface MapRaw {
   dockpoints?: MapPoint[];
 }
 
+export interface MapMeta {
+  id: string;
+  name: string;
+  area: number;
+  hash: string;
+  timestamp: number;
+}
+
+export interface MapListData {
+  activeId: string;
+  maps: MapMeta[];
+}
+
 export interface ResponseSocketMessage {
   type: ResponseDataType;
-  data: State | DesiredState | ModemLog | ConsoleResponseData | MapRaw | MowSettings;
+  data: State | DesiredState | ModemLog | ConsoleResponseData | MapRaw | MowSettings | MapListData;
 }
 
 export enum RequestDataType {
@@ -329,6 +343,11 @@ export enum RequestDataType {
   requestMowSettings,
   clearWaypoints,
   calculateWaypoints,
+  listMaps,
+  loadMap,
+  saveMap,
+  renameMap,
+  deleteMap,
 }
 
 export interface MowSettingsData {
