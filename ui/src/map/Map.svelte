@@ -8,6 +8,7 @@
     Column,
     Grid,
   } from "carbon-components-svelte";
+  import IconAdd from "carbon-icons-svelte/lib/Add.svelte";
   import IconEdit from "carbon-icons-svelte/lib/Edit.svelte";
   import IconPen from "carbon-icons-svelte/lib/Pen.svelte";
   import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
@@ -56,6 +57,13 @@
   $: dockpointsPoints = $MapStore.map?.dockpoints.points.length ?? 0;
   $: waypointsPoints = $MapStore.map?.waypoints.points.length ?? 0;
   $: totalPoints = perimeterPoints + dockpointsPoints + waypointsPoints + exclusionPoints.reduce((a, b) => a + b, 0);
+
+  $: nearPos = mowerPos && mowerPos.x !== 0 && mowerPos.y !== 0
+    && $MapStore.map?.perimeter.points.some(pt => {
+        const dx = pt.x - mowerPos.x;
+        const dy = pt.y + mowerPos.y;
+        return dx * dx + dy * dy < 0.0025; // 5cm
+      });
 
   let drawActive = false;
   let drawArea: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints' | null = null;
@@ -237,6 +245,64 @@
     const newPointId = prefix + "-point-" + (edgeIndex + 1);
     editItemId = newPointId;
     selectedId = newPointId;
+    updateButtonAvailability();
+  }
+
+  function findNearestEdgeIdx(pt: Point, pts: Point[]): number {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const ax = pts[i].x, ay = pts[i].y;
+      const bx = pts[j].x, by = pts[j].y;
+      const dx = bx - ax, dy = by - ay;
+      const len2 = dx * dx + dy * dy;
+      if (len2 < 1e-6) continue;
+      let t = ((pt.x - ax) * dx + (pt.y - ay) * dy) / len2;
+      t = Math.max(0, Math.min(1, t));
+      const px = ax + t * dx;
+      const py = ay + t * dy;
+      const d = (pt.x - px) * (pt.x - px) + (pt.y - py) * (pt.y - py);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    return bestIdx;
+  }
+
+  function onAddClick() {
+    if (!mowerPos) return;
+    const gpsPt: Point = { x: mowerPos.x, y: -mowerPos.y };
+    const pts = $MapStore.map.perimeter.points;
+    let newIdx: number;
+
+    if (pts.length === 0) {
+      $MapStore.map.perimeter = { points: [gpsPt] };
+      newIdx = 0;
+    } else {
+      if (editEdge && editItemId) {
+        const edgeMatch = editItemId.match(/^(.*)-edge-([0-9]+)$/);
+        if (edgeMatch && edgeMatch[1].includes("-perimeter")) {
+          const edgeIndex = parseInt(edgeMatch[2]);
+          pts.splice(edgeIndex + 1, 0, gpsPt);
+          $MapStore.map.perimeter = $MapStore.map.perimeter;
+          newIdx = edgeIndex + 1;
+          selectNewPoint(newIdx);
+          return;
+        }
+      }
+      const idx = findNearestEdgeIdx(gpsPt, pts);
+      pts.splice(idx + 1, 0, gpsPt);
+      $MapStore.map.perimeter = $MapStore.map.perimeter;
+      newIdx = idx + 1;
+    }
+    selectNewPoint(newIdx);
+  }
+
+  function selectNewPoint(index: number) {
+    const id = `map-0-perimeter-point-${index}`;
+    uiEditId = id;
+    editItemId = id;
+    selectedId = id;
     updateButtonAvailability();
   }
 
@@ -679,6 +745,16 @@
                 icon={IconCut}
                 iconDescription="Cut"
               />
+              <Button
+                kind="tertiary"
+                size="small"
+                disabled={!mowerPos || nearPos}
+                icon={IconAdd}
+                iconDescription="Add"
+                on:click={onAddClick}
+              >
+                <span class="btn-label">Add</span>
+              </Button>
               <Button
                 kind="danger"
                 size="small"
