@@ -169,6 +169,52 @@ void setup() {
   looptime.add("ps4_controller", [&](){ if (!Ota::MowerUpdater::isFlashing()) ps4ControllerAdapter.loop(); });
 #endif
   
+  looptime.add("heartbeat", [&]() {
+    static uint32_t last = 0;
+    uint32_t now = millis();
+    if (now - last < 60000) return;
+    last = now;
+    wl_status_t ws = WiFi.status();
+    int rssi = WiFi.RSSI();
+    Log(INFO, "heartbeat: up=%lus heap=%u wifi=%d rssi=%d ws=%zu http_queue=%zu http_reqs=%u",
+        now / 1000, ESP.getFreeHeap(), (int)ws, rssi, socketHandler.clientCount(),
+        httpAdapter.queueSize(), httpAdapter.requestCount());
+  });
+
+  looptime.add("wifi_health", [&]() {
+    static enum { INIT, IDLE, ACTIVE } state = INIT;
+    static uint32_t lastChange = 0;
+    static uint32_t lastReqs = 0;
+    uint32_t now = millis();
+    if (state == INIT) {
+      lastReqs = httpAdapter.requestCount();
+      lastChange = now;
+      state = IDLE;
+      return;
+    }
+    size_t wsClients = socketHandler.clientCount();
+    bool mqttOk = mqttAdapter.connected();
+    uint32_t reqs = httpAdapter.requestCount();
+    bool anyActivity = (wsClients > 0) || mqttOk || (reqs != lastReqs);
+    lastReqs = reqs;
+    if (anyActivity) {
+      state = ACTIVE;
+      lastChange = now;
+      return;
+    }
+    if (state == ACTIVE) {
+      state = IDLE;
+      lastChange = now;
+      return;
+    }
+    // state == IDLE: no activity for at least one full interval
+    if (now - lastChange < 300000) return;
+    Log(WARN, "wifi_health: idle for 5min (ws=%zu mqtt=%d reqs=%u), forcing reconnect",
+        wsClients, mqttOk, reqs);
+    WiFi.reconnect();
+    lastChange = now;
+  });
+  
 #ifdef ESP_MODEM_SIM
   #if CONFIG_IDF_TARGET_ESP32S3
     Serial1.begin(115200, SERIAL_8N1); // loop to Serial2

@@ -9,13 +9,14 @@
   export let perimiterId: string;
   export let edit: boolean = false;
   export let editItemId: null | string = null;
+
+  const lineWidth = 0.025;
 </script>
 
 <polygon
   fill="green"
   stroke="red"
-  stroke-width="0.025"
-  marker-mid="url(#arrow-perimeter)"
+  stroke-width={lineWidth}
   points={pointsForPolygon(value.points)}
 />
 

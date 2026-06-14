@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { pointsToEdges } from "./geometry";
+  import { pointsToEdges, edgeArrowPath } from "./geometry";
   import type { Waypoints as WaypointsModel } from "./model";
   import Point from "./Point.svelte";
   import Edge from "./Edge.svelte";
@@ -8,23 +8,26 @@
   export let waypointsId: string;
   export let edit: boolean = false;
   export let editItemId: null | string = null;
+
+  const arrowSize = 0.06;
+  const arrowHw = 0.03;
+  const lineWidth = 0.015;
+  $: arrowD = edgeArrowPath(value.points, arrowSize, arrowHw);
 </script>
 
 {#if value.points.length > 1}
   <polyline
     fill="none"
     stroke="blue"
-    stroke-width="0.015"
-    marker-mid="url(#arrow-waypoints)"
-    marker-end="url(#arrow-waypoints)"
+    stroke-width={lineWidth}
     points={value.points.map(p => `${p.x},${p.y}`).join(" ")}
   />
+
+  <path d={arrowD} stroke="blue" stroke-width={lineWidth} fill="none" stroke-linecap="round" stroke-linejoin="round" />
 {/if}
 
 {#each value.points as point, index}
-  {@const s = 0.05}
-  <line x1={point.x - s} y1={point.y} x2={point.x + s} y2={point.y} stroke="blue" stroke-width="0.015" />
-  <line x1={point.x} y1={point.y - s} x2={point.x} y2={point.y + s} stroke="blue" stroke-width="0.015" />
+  <circle cx={point.x} cy={point.y} r="0.02" fill="blue" />
 {/each}
 
 {#if edit}

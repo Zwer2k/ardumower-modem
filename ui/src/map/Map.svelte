@@ -674,7 +674,7 @@
                 iconDescription="Clear waypoints"
                 on:click={() => { socketService.sendClearWaypoints(); }}
               >
-                Clear WP
+                <span class="btn-label">Clear WP</span>
               </Button>
               <Button
                 kind="secondary"
@@ -684,7 +684,7 @@
                 iconDescription="Calculate waypoints"
                 on:click={() => { socketService.sendCalculateWaypoints(); }}
               >
-                Calculate
+                <span class="btn-label">Calculate</span>
               </Button>
               <Button
                 kind="secondary"
@@ -694,7 +694,7 @@
                 iconDescription="Upload map to mower"
                 on:click={() => { socketService.sendUploadMap(); }}
               >
-                Upload
+                <span class="btn-label">Upload</span>
               </Button>
             </div>
           </Column>
@@ -726,16 +726,16 @@
       </div>
     {/if}
   </div>
-  <div class="map-point-counts">
-    <strong>Perimeter:</strong> {perimeterPoints}
-    {#each exclusionPoints as ep, i}
-      &nbsp;| <strong>Excl #{i}:</strong> {ep}
-    {/each}
-    &nbsp;| <strong>Dock:</strong> {dockpointsPoints}
-    &nbsp;| <strong>Way:</strong> {waypointsPoints}
-    &nbsp;| <strong>Total:</strong> {totalPoints}
-  </div>
   <div class="map-canvas-wrapper">
+    <div class="map-point-counts">
+      <strong>Perimeter:</strong> {perimeterPoints}
+      {#each exclusionPoints as ep, i}
+        &nbsp;| <strong>Excl #{i}:</strong> {ep}
+      {/each}
+      &nbsp;| <strong>Dock:</strong> {dockpointsPoints}
+      &nbsp;| <strong>Way:</strong> {waypointsPoints}
+      &nbsp;| <strong>Total:</strong> {totalPoints}
+    </div>
     <Canvas on:mapclick={onMapClick} on:mousemove={onMouseMove}>
       {#if $MapStore && $MapStore.map}
         <Perimeter
@@ -837,8 +837,10 @@
   .map-toolbar-wrap {
     position: relative;
     flex-shrink: 0;
+    container-type: inline-size;
   }
   .map-canvas-wrapper {
+    position: relative;
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -888,6 +890,7 @@
 
   :global(.map-toolbar .bx--row) {
     flex-wrap: nowrap;
+    align-items: center;
   }
   :global(.map-toolbar .bx--list-box) {
     height: 32px;
@@ -911,15 +914,34 @@
     gap: 0.25rem;
   }
 
+  @container (max-width: 800px) {
+    .btn-label {
+      display: none;
+    }
+    .goto-hint, .goto-badge, .goto-btn {
+      display: none;
+    }
+    .toolbar-btn-row :global(.bx--btn) {
+      width: 2rem;
+      padding: 0 !important;
+      justify-content: center;
+    }
+    .toolbar-btn-row :global(.bx--btn .bx--btn__icon) {
+      position: static;
+      margin: 0;
+    }
+  }
+
   .progress-bar-container {
     position: absolute;
-    bottom: 0;
+    bottom: -1px;
     left: 0;
     right: 0;
-    height: 3px;
+    height: 6px;
     margin: 0;
     background: #e0e0e0;
     overflow: hidden;
+    z-index: 10;
   }
 
   .progress-bar {
@@ -930,14 +952,15 @@
   }
 
   .progress-bar.indeterminate {
-    width: 30% !important;
-    position: relative;
+    width: 100% !important;
+    background: linear-gradient(90deg, transparent, #66bb6a, #4caf50, #66bb6a, transparent);
+    background-size: 200% 100%;
     animation: progress-indeterminate 1.5s ease-in-out infinite;
   }
 
   @keyframes progress-indeterminate {
-    0%   { left: -30%; }
-    100% { left: 100%; }
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 
   .progress-label {

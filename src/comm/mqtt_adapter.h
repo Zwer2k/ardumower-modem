@@ -71,6 +71,7 @@ namespace ArduMower
 
       void begin();
       void loop(const uint32_t now);
+      bool connected() { return client.connected(); }
     };
   }
 }

@@ -85,7 +85,6 @@ namespace ArduMower
       void enqueueRequest(Http::CommandRequest *req);
       bool queueIsFull();
       void processQueue();
-      size_t queueSize();
       void processRequest(Http::CommandRequest *req);
       void handleRouterResponse(const uint32_t id, String response);
 
@@ -95,6 +94,8 @@ namespace ArduMower
 
       void begin();
       void loop();
+      size_t queueSize();
+      uint32_t requestCount() { return requestId; }
     };
   }
 }
