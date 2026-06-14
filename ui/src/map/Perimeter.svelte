@@ -15,6 +15,7 @@
   fill="green"
   stroke="red"
   stroke-width="0.025"
+  marker-mid="url(#arrow-perimeter)"
   points={pointsForPolygon(value.points)}
 />
 

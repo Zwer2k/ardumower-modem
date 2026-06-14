@@ -75,17 +75,19 @@ namespace ArduMower
         bool sendText(String text);
         void ping();
         AwsClientStatus status();
+        uint32_t clientId() { return _clientId; }
         ~UiSocketItem();
       
       private:
         UiSocketHandler *_socketHandler;
         AsyncWebSocketClient *_client;
+        uint32_t _clientId;
         ArduMower::Domain::Robot::StateSource &_source;
       };
 
       struct MapChunkSendState {
         bool active = false;
-        UiSocketItem* sendTo = nullptr;
+        uint32_t clientId = 0;
         uint32_t timestamp = 0;
         int phase = 0;
         size_t exclusionIdx = 0;
@@ -144,6 +146,7 @@ namespace ArduMower
 #ifdef MOWER_TERMINAL
         void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
 #endif
+        AsyncWebSocketClient* wsClient(uint32_t clientId) { return _ws->client(clientId); }
 
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
         bool gpsDetailsActive = false;
@@ -165,7 +168,7 @@ namespace ArduMower
       private:
         void startMapChunkSend(UiSocketItem* sendTo, bool force);
         void processMapChunkSend();
-        bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem* sendTo, int exclusionIdx, size_t startIdx, size_t blockSize);
+        bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize);
         AsyncWebSocket *_ws;
 
         uint32_t lastVersionRequestTimestamp = 0;

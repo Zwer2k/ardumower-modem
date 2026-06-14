@@ -15,6 +15,8 @@
     fill="none"
     stroke="blue"
     stroke-width="0.015"
+    marker-mid="url(#arrow-waypoints)"
+    marker-end="url(#arrow-waypoints)"
     points={value.points.map(p => `${p.x},${p.y}`).join(" ")}
   />
 {/if}

@@ -21,7 +21,7 @@ UiSocketItem::UiSocketItem(
   UiSocketHandler *socketHandler,
   AsyncWebSocketClient *client, 
   ArduMower::Domain::Robot::StateSource &source) 
-  : _socketHandler(socketHandler), _client(client), _source(source) 
+  : _socketHandler(socketHandler), _client(client), _clientId(client->id()), _source(source) 
 {
   _socketHandler->sendData(ResponseDataType::mowerState, this, true);
   yield();
@@ -225,6 +225,14 @@ UiSocketItem::~UiSocketItem()
 
 bool UiSocketItem::sendText(String text)
 {
+  auto* liveClient = _socketHandler->wsClient(_clientId);
+  if (liveClient == nullptr) {
+    _client = nullptr;
+    return false;
+  }
+  if (liveClient != _client) {
+    _client = liveClient;
+  }
   if (_client == NULL || _client->status() == WS_DISCONNECTED)
     return false;
 
@@ -646,7 +654,7 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   mapChunkSendState.snapshot = map;
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
   mapChunkSendState.active = true;
-  mapChunkSendState.sendTo = sendTo;
+  mapChunkSendState.clientId = sendTo ? sendTo->clientId() : 0;
   mapChunkSendState.timestamp = map.timestamp;
   mapChunkSendState.phase = 0;
   mapChunkSendState.exclusionIdx = 0;
@@ -656,6 +664,13 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
 // Pro loop() einen Chunk versenden – Snapshot aus mapChunkSendState verwenden
 void UiSocketHandler::processMapChunkSend() {
   if (!mapChunkSendState.active) return;
+  // Keine Clients → Chunk-Versand abbrechen
+  if (countConnectedClients() == 0) {
+    Log(DBG, "%s processMapChunkSend: no connected clients, aborting", _LOG_);
+    mapChunkSendState.active = false;
+    mapChunkSendState.snapshot.endRead();
+    return;
+  }
   // Snapshot verwenden: einmalig beim Start gespeichert, bleibt konsistent
   auto& map = mapChunkSendState.snapshot;
   const size_t blockSize = 30;
@@ -664,7 +679,7 @@ void UiSocketHandler::processMapChunkSend() {
   switch (mapChunkSendState.phase) {
     case 0: // Perimeter
       if (map.perimeter.size() > 0 && mapChunkSendState.idx < map.perimeter.size()) {
-        chunkSent = sendMapChunk(MapPointType::Perimeter, map.perimeter, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
+        chunkSent = sendMapChunk(MapPointType::Perimeter, map.perimeter, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
           break;
         }
@@ -677,7 +692,7 @@ void UiSocketHandler::processMapChunkSend() {
       if (map.exclusions.size() > 0 && mapChunkSendState.exclusionIdx < map.exclusions.size()) {
         const auto& excl = map.exclusions[mapChunkSendState.exclusionIdx];
         if (excl.size() > 0 && mapChunkSendState.idx < excl.size()) {
-          chunkSent = sendMapChunk(MapPointType::Exclusion, excl, mapChunkSendState.timestamp, mapChunkSendState.sendTo, (int)mapChunkSendState.exclusionIdx, mapChunkSendState.idx, blockSize);
+          chunkSent = sendMapChunk(MapPointType::Exclusion, excl, mapChunkSendState.timestamp, mapChunkSendState.clientId, (int)mapChunkSendState.exclusionIdx, mapChunkSendState.idx, blockSize);
           if (!chunkSent) {
             break;
           }
@@ -690,7 +705,7 @@ void UiSocketHandler::processMapChunkSend() {
       // fallthrough
     case 2: // Dockpoints
       if (map.dockpoints.size() > 0 && mapChunkSendState.idx < map.dockpoints.size()) {
-        chunkSent = sendMapChunk(MapPointType::Dockpoints, map.dockpoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
+        chunkSent = sendMapChunk(MapPointType::Dockpoints, map.dockpoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
           break;
         }
@@ -701,7 +716,7 @@ void UiSocketHandler::processMapChunkSend() {
       // fallthrough
     case 3: // Waypoints
       if (map.waypoints.size() > 0 && mapChunkSendState.idx < map.waypoints.size()) {
-        chunkSent = sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, mapChunkSendState.idx, blockSize);
+        chunkSent = sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
           break;
         }
@@ -709,7 +724,7 @@ void UiSocketHandler::processMapChunkSend() {
         if (mapChunkSendState.idx >= map.waypoints.size()) { mapChunkSendState.phase = 4; mapChunkSendState.idx = 0; }
         break;
       } else {
-        sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.sendTo, -1, 0, 0);
+        sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, 0, 0);
         mapChunkSendState.phase = 4; mapChunkSendState.idx = 0;
       }
       // fallthrough
@@ -722,7 +737,7 @@ void UiSocketHandler::processMapChunkSend() {
 }
 
 // Hilfsfunktion: Sende einen Chunk eines MapPoint-Vektors
-bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, UiSocketItem* sendTo, int exclusionIdx, size_t startIdx, size_t blockSize) {
+bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize) {
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
   if (startIdx > total || (startIdx == total && total > 0)) return false;
@@ -773,8 +788,17 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
     Log(ERR, "%s serializeJson failed", _LOG_);
     return false;
   }
-  if (sendTo != NULL) {
-    if (!sendTo->sendText(stateStr)) {
+  if (clientId > 0) {
+    auto it = itemMap.find(clientId);
+    if (it == itemMap.end()) {
+      // client disconnected while transfer was in-flight – fall back to broadcast
+      Log(DBG, "%s sendMapChunk: client %u gone, broadcasting", _LOG_, clientId);
+      if (!sendTextAllWithRetry(_ws, stateStr)) {
+        Log(ERR, "%s sendData failed", _LOG_);
+        _ws->cleanupClients();
+        return false;
+      }
+    } else if (!it->second->sendText(stateStr)) {
       Log(ERR, "%s sendData failed", _LOG_);
       _ws->cleanupClients();
       return false;
@@ -983,9 +1007,9 @@ void UiSocketHandler::abortMapChunkSend() {
 
 static bool sendJsonDoc(UiSocketItem *item, JsonDocument &doc)
 {
-  if (doc.memoryUsage() == 0) return false;
   String stateStr;
   serializeJson(doc, stateStr);
+  if (stateStr.length() == 0) return false;
   stateStr = sanitizeUtf8(stateStr);
   return item->sendText(stateStr);
 }
@@ -997,7 +1021,6 @@ void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks)
   const uint16_t chunkSize = 20;
   while (chunks < maxChunks) {
     JsonDocument doc;
-    if (doc.memoryUsage() == 0) break;
     doc["type"] = ResponseDataType::modemLog;
     uint16_t sent = logToUi.marshalBatch(doc["data"].to<JsonObject>(), offset, chunkSize);
     if (sent == 0 || doc.overflowed()) break;
@@ -1017,7 +1040,6 @@ void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChu
   const uint16_t chunkSize = 20;
   while (chunks < maxChunks) {
     JsonDocument doc;
-    if (doc.memoryUsage() == 0) break;
     doc["type"] = ResponseDataType::mowerConsole;
     uint16_t sent = _terminal.marshalBatch(doc["data"].to<JsonObject>(), offset, chunkSize);
     if (sent == 0 || doc.overflowed()) break;
@@ -1086,11 +1108,6 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
       break;
   }
 
-#if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
-  const size_t docSize = (dataType == ResponseDataType::gpsDetails || dataType == ResponseDataType::ubxResponse) ? 8192 : 4096;
-#else
-  const size_t docSize = 4096;
-#endif
   JsonDocument doc;
   doc["type"] = dataType;
   auto _j = doc["data"].to<JsonObject>(); data.marshal(_j);
@@ -1244,8 +1261,8 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     Log(ERR, "%s ws[%s][%u] error(%u): %s\n", _LOG_, server->url(), client->id(), *((uint16_t*)arg), (char*)data);
     _frameBuffer.erase(client->id());
     if (itemMap.find(client->id()) != itemMap.end()) {
-      if (mapChunkSendState.sendTo == itemMap[client->id()])
-        mapChunkSendState.sendTo = nullptr;
+      if (mapChunkSendState.clientId == client->id())
+        mapChunkSendState.clientId = 0;
       delete itemMap[client->id()];
       itemMap.erase(client->id());
     }
@@ -1265,8 +1282,8 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     Log(INFO, "%s ws[%s][%u] disconnect\n", _LOG_, server->url(), client->id());
     _frameBuffer.erase(client->id());
     if (itemMap.find(client->id()) != itemMap.end()) {
-      if (mapChunkSendState.sendTo == itemMap[client->id()])
-        mapChunkSendState.sendTo = nullptr;
+      if (mapChunkSendState.clientId == client->id())
+        mapChunkSendState.clientId = 0;
       delete itemMap[client->id()];
       itemMap.erase(client->id());
     }
@@ -1367,19 +1384,17 @@ void UiSocketHandler::handleData(uint32_t clientId, char *data)
 
   if (itemMap.find(clientId) != itemMap.end())
   {
-    const size_t dataSize = doc["data"].memoryUsage();
     const size_t rawLen = strlen(data);
-    Log(DBG, "%s handleData type=%d dataSize=%u rawLen=%u", _LOG_, (int)doc["type"], (unsigned)dataSize, (unsigned)rawLen);
-    const size_t jsonCapacity = (dataSize > 0 ? dataSize * 2 : rawLen) + 1024;
+    Log(DBG, "%s handleData type=%d rawLen=%u", _LOG_, (int)doc["type"], (unsigned)rawLen);
     JsonDocument jsonData;
     if (!jsonData.set(doc["data"])) {
-      Log(ERR, "%s handleData: jsonData.set() failed (capacity=%u dataSize=%u)", _LOG_, (unsigned)jsonData.memoryUsage(), (unsigned)dataSize);
+      Log(ERR, "%s handleData: jsonData.set() failed", _LOG_);
       return;
     }
     itemMap[clientId]->handleData(doc["type"], jsonData);
   } 
   else 
   {
-    Log(ERR, "%s client with id ", _LOG_, clientId, " don't exists");
+    Log(ERR, "%s client with id %u doesn't exist", _LOG_, clientId);
   }
 }

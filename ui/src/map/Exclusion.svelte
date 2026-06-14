@@ -14,6 +14,7 @@
   fill="red"
   stroke="black"
   stroke-width="0.1"
+  marker-mid="url(#arrow-exclusion)"
   points={pointsForPolygon(value.points)}
 />
 

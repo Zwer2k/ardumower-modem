@@ -50,6 +50,13 @@
   $: opActive = !!$socketStore.state?.progressOp;
   $: busy = opActive && opPct < 100;
 
+  // ─── Point counts per segment ─────────────────────────────────────────────
+  $: perimeterPoints = $MapStore.map?.perimeter.points.length ?? 0;
+  $: exclusionPoints = $MapStore.map?.exclusions.map(e => e.points.length) ?? [];
+  $: dockpointsPoints = $MapStore.map?.dockpoints.points.length ?? 0;
+  $: waypointsPoints = $MapStore.map?.waypoints.points.length ?? 0;
+  $: totalPoints = perimeterPoints + dockpointsPoints + waypointsPoints + exclusionPoints.reduce((a, b) => a + b, 0);
+
   let drawActive = false;
   let drawArea: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints' | null = null;
   let drawExclusionIndex: number | undefined = undefined;
@@ -587,137 +594,147 @@
 </script>
 
 <div class="map-dashboard">
-  <Grid class="map-toolbar">
-    <Row>
-      <Column sm={1} md={1} lg={1}>
-        <Button
-          kind={edit ? "primary" : "secondary"}
-          size="small"
-          icon={IconEdit}
-          iconDescription="Editor"
-          on:click={() => {
-            stopDraw();
-            edit = !edit;
-          }}
-        />
-      </Column>
-      {#if edit}
-        <Column>
-          <ComboBox
-            disabled={!edit}
-            placeholder="Select item to edit"
-            items={editItems}
-            bind:selectedId
-            on:select={selectEditItem}
-            on:clear={clearEditItem}
-            {shouldFilterItem}
+  <div class="map-toolbar-wrap">
+    <Grid class="map-toolbar">
+      <Row>
+        <Column sm={1} md={1} lg={1}>
+          <Button
+            kind={edit ? "primary" : "secondary"}
+            size="small"
+            icon={IconEdit}
+            iconDescription="Editor"
+            on:click={() => {
+              stopDraw();
+              edit = !edit;
+            }}
           />
         </Column>
-        <Column style="flex-shrink: 0;">
-          <div class="action-btns">
-            <Button
-              kind={drawActive ? "primary" : "tertiary"}
-              size="small"
-              disabled={!drawActive && !editEdge}
-              icon={IconPen}
-              iconDescription="Draw"
-              on:click={onDrawClick}
+        {#if edit}
+          <Column>
+            <ComboBox
+              disabled={!edit}
+              placeholder="Select item to edit"
+              items={editItems}
+              bind:selectedId
+              on:select={selectEditItem}
+              on:clear={clearEditItem}
+              {shouldFilterItem}
             />
-            <Button
-              kind="tertiary"
-              size="small"
-              disabled={!editEdge}
-              icon={IconSplit}
-              iconDescription="Split"
-              on:click={onSplitClick}
-            />
-            <Button
-              kind="tertiary"
-              size="small"
-              disabled={!editEdge}
-              icon={IconCut}
-              iconDescription="Cut"
-            />
-            <Button
-              kind="danger"
-              size="small"
-              disabled={!edit || !editPoint}
-              on:click={onDeleteClick}
-              icon={IconTrashCan}
-              iconDescription="Delete"
-            />
-          </div>
-        </Column>
-      {:else}
-        <Column>
-          <div class="toolbar-btn-row">
-            <Button
-              kind="secondary"
-              size="small"
-              icon={IconSettings}
-              iconDescription="Mow settings"
-              on:click={() => { showMowSettings = true; }}
-            />
-            <Button
-              kind="danger"
-              size="small"
-              disabled={busy}
-              icon={IconTrashCan}
-              iconDescription="Clear waypoints"
-              on:click={() => { socketService.sendClearWaypoints(); }}
-            >
-              Clear WP
-            </Button>
-            <Button
-              kind="secondary"
-              size="small"
-              disabled={busy}
-              icon={IconMagicWand}
-              iconDescription="Calculate waypoints"
-              on:click={() => { socketService.sendCalculateWaypoints(); }}
-            >
-              Calculate
-            </Button>
-            <Button
-              kind="secondary"
-              size="small"
-              disabled={busy}
-              icon={IconUpload}
-              iconDescription="Upload map to mower"
-              on:click={() => { socketService.sendUploadMap(); }}
-            >
-              Upload
-            </Button>
-          </div>
-        </Column>
-      {/if}
-      <Column>
-        {#if hasMap}
-          {#if targetSet}
-            <span class="goto-badge">
-              {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
-            </span>
-            {#if isDriving}
-              <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
-            {:else}
-              <button class="goto-btn drive" on:click={startDrive}>Drive</button>
-            {/if}
-            <button class="goto-btn clear" on:click={clearTarget}>✕</button>
-          {:else if !edit}
-            <span class="goto-hint">Click map to set target</span>
-          {/if}
-        {:else if !edit}
-          <span class="goto-hint">No map loaded</span>
+          </Column>
+          <Column style="flex-shrink: 0;">
+            <div class="action-btns">
+              <Button
+                kind={drawActive ? "primary" : "tertiary"}
+                size="small"
+                disabled={!drawActive && !editEdge}
+                icon={IconPen}
+                iconDescription="Draw"
+                on:click={onDrawClick}
+              />
+              <Button
+                kind="tertiary"
+                size="small"
+                disabled={!editEdge}
+                icon={IconSplit}
+                iconDescription="Split"
+                on:click={onSplitClick}
+              />
+              <Button
+                kind="tertiary"
+                size="small"
+                disabled={!editEdge}
+                icon={IconCut}
+                iconDescription="Cut"
+              />
+              <Button
+                kind="danger"
+                size="small"
+                disabled={!edit || !editPoint}
+                on:click={onDeleteClick}
+                icon={IconTrashCan}
+                iconDescription="Delete"
+              />
+            </div>
+          </Column>
+        {:else}
+          <Column>
+            <div class="toolbar-btn-row">
+              <Button
+                kind="secondary"
+                size="small"
+                icon={IconSettings}
+                iconDescription="Mow settings"
+                on:click={() => { showMowSettings = true; }}
+              />
+              <Button
+                kind="danger"
+                size="small"
+                disabled={busy}
+                icon={IconTrashCan}
+                iconDescription="Clear waypoints"
+                on:click={() => { socketService.sendClearWaypoints(); }}
+              >
+                Clear WP
+              </Button>
+              <Button
+                kind="secondary"
+                size="small"
+                disabled={busy}
+                icon={IconMagicWand}
+                iconDescription="Calculate waypoints"
+                on:click={() => { socketService.sendCalculateWaypoints(); }}
+              >
+                Calculate
+              </Button>
+              <Button
+                kind="secondary"
+                size="small"
+                disabled={busy}
+                icon={IconUpload}
+                iconDescription="Upload map to mower"
+                on:click={() => { socketService.sendUploadMap(); }}
+              >
+                Upload
+              </Button>
+            </div>
+          </Column>
         {/if}
-      </Column>
-    </Row>
-  </Grid>
-  {#if busy}
-    <div class="progress-bar-container">
-      <div class="progress-bar" style="width: {opPct}%"></div>
-      <span class="progress-label">{opPct}% {opMsg}</span>
-    </div>
-  {/if}
+        <Column>
+          {#if hasMap}
+            {#if targetSet}
+              <span class="goto-badge">
+                {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
+              </span>
+              {#if isDriving}
+                <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
+              {:else}
+                <button class="goto-btn drive" on:click={startDrive}>Drive</button>
+              {/if}
+              <button class="goto-btn clear" on:click={clearTarget}>✕</button>
+            {:else if !edit}
+              <span class="goto-hint">Click map to set target</span>
+            {/if}
+          {:else if !edit}
+            <span class="goto-hint">No map loaded</span>
+          {/if}
+        </Column>
+      </Row>
+    </Grid>
+    {#if busy}
+      <div class="progress-bar-container" title="{opMsg}">
+        <div class="progress-bar {opPct === 0 ? 'indeterminate' : ''}" style="width: {opPct > 0 ? opPct + '%' : '0%'}"></div>
+      </div>
+    {/if}
+  </div>
+  <div class="map-point-counts">
+    <strong>Perimeter:</strong> {perimeterPoints}
+    {#each exclusionPoints as ep, i}
+      &nbsp;| <strong>Excl #{i}:</strong> {ep}
+    {/each}
+    &nbsp;| <strong>Dock:</strong> {dockpointsPoints}
+    &nbsp;| <strong>Way:</strong> {waypointsPoints}
+    &nbsp;| <strong>Total:</strong> {totalPoints}
+  </div>
   <div class="map-canvas-wrapper">
     <Canvas on:mapclick={onMapClick} on:mousemove={onMouseMove}>
       {#if $MapStore && $MapStore.map}
@@ -808,6 +825,7 @@
 
 <style>
   .map-dashboard {
+    position: relative;
     width: 100%;
     height: 100%;
     padding-top: 48px;
@@ -815,6 +833,10 @@
     flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
+  }
+  .map-toolbar-wrap {
+    position: relative;
+    flex-shrink: 0;
   }
   .map-canvas-wrapper {
     flex: 1;
@@ -890,29 +912,50 @@
   }
 
   .progress-bar-container {
-    height: 24px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    margin: 0;
     background: #e0e0e0;
-    border-radius: 4px;
-    margin: 2px 8px;
-    position: relative;
     overflow: hidden;
   }
 
   .progress-bar {
     height: 100%;
     background: #4caf50;
-    transition: width 0.3s ease;
-    border-radius: 4px;
+    transition: width 0.5s ease;
+    border-radius: 0;
+  }
+
+  .progress-bar.indeterminate {
+    width: 30% !important;
+    position: relative;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+  }
+
+  @keyframes progress-indeterminate {
+    0%   { left: -30%; }
+    100% { left: 100%; }
   }
 
   .progress-label {
+    display: none;
+  }
+
+  .map-point-counts {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    top: 8px;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 4px 8px;
     font-size: 0.7em;
-    color: #333;
     font-family: monospace;
-    white-space: nowrap;
+    color: #333;
+    z-index: 10;
+    pointer-events: none;
   }
 </style>
