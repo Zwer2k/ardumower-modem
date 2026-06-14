@@ -101,6 +101,7 @@ namespace ArduMower
         ArduMower::Domain::Robot::MowerMap snapshot;  // Einmalige Kopie der Map beim Start
         String metaHash;
         double metaArea = 0.0;
+        double metaRotation = 0.0;
       };
 
       class UiSocketHandler

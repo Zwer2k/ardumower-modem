@@ -12,6 +12,7 @@ namespace ArduMower {
             obj["name"] = name;
             obj["area"] = area;
             obj["hash"] = hash;
+            obj["rotation"] = rotation;
             obj["timestamp"] = timestamp;
             obj["file"] = file;
         }
@@ -21,6 +22,7 @@ namespace ArduMower {
             name = obj["name"] | "";
             area = obj["area"] | 0.0;
             hash = obj["hash"] | "";
+            rotation = obj["rotation"] | 0.0;
             timestamp = obj["timestamp"] | 0u;
             file = obj["file"] | "";
         }
@@ -170,7 +172,7 @@ namespace ArduMower {
             return md5.toString();
         }
 
-        String MapManager::save(const ArduMower::Domain::Robot::MowerMap &map, const String &name) {
+        String MapManager::save(const ArduMower::Domain::Robot::MowerMap &map, const String &name, double rotation) {
             if (!_initialized && !begin()) return "";
 
             if (!isMapValid(map)) {
@@ -188,33 +190,57 @@ namespace ArduMower {
             String displayName = name;
             if (displayName.length() == 0) displayName = generateDefaultName();
 
-            MapMeta *existing = findMeta(hash);
+            MapMeta *meta = nullptr;
             String fileName;
-            if (existing) {
-                // Gleiche Geometrie: Name/Fläche/Timestamp aktualisieren
-                fileName = existing->file;
-                existing->name = displayName;
-                existing->area = area;
-                existing->timestamp = millis();
-                Log(INFO, "%s save: existierende Karte '%s' aktualisiert", _LOG_, displayName.c_str());
+
+            // Wenn eine Karte aktiv ist, wird diese überschrieben (stabiler Slot).
+            if (_index.activeId.length() > 0) {
+                meta = findMeta(_index.activeId);
+            }
+
+            if (meta) {
+                fileName = meta->file;
+                meta->hash = hash;
+                meta->area = area;
+                meta->rotation = rotation;
+                meta->timestamp = millis();
+                if (name.length() > 0) meta->name = displayName;
+                Log(INFO, "%s save: Karte '%s' (%s) aktualisiert", _LOG_, meta->name.c_str(), meta->id.c_str());
             } else {
-                fileName = allocateFileName();
-                MapMeta meta;
-                meta.id = hash;
-                meta.name = displayName;
-                meta.area = area;
-                meta.hash = hash;
-                meta.timestamp = millis();
-                meta.file = fileName;
-                _index.maps.push_back(meta);
-                Log(INFO, "%s save: neue Karte '%s' (%s, %.1f m²)", _LOG_, displayName.c_str(), hash.c_str(), area);
+                // Keine aktive Karte: prüfen, ob gleiche Geometrie bereits existiert
+                for (auto &m : _index.maps) {
+                    if (m.hash == hash) {
+                        meta = &m;
+                        break;
+                    }
+                }
+                if (meta) {
+                    fileName = meta->file;
+                    meta->name = displayName;
+                    meta->area = area;
+                    meta->rotation = rotation;
+                    meta->timestamp = millis();
+                    Log(INFO, "%s save: existierende Karte '%s' aktualisiert", _LOG_, displayName.c_str());
+                } else {
+                    fileName = allocateFileName();
+                    MapMeta newMeta;
+                    newMeta.id = hash;
+                    newMeta.name = displayName;
+                    newMeta.area = area;
+                    newMeta.hash = hash;
+                    newMeta.rotation = rotation;
+                    newMeta.timestamp = millis();
+                    newMeta.file = fileName;
+                    _index.maps.push_back(newMeta);
+                    meta = &_index.maps.back();
+                    Log(INFO, "%s save: neue Karte '%s' (%s, %.1f m²)", _LOG_, displayName.c_str(), hash.c_str(), area);
+                }
             }
 
             // JSON-Dokumente vorab bauen, um Speicherbedarf prüfen zu können
             JsonDocument mapDoc;
             JsonObject mapRoot = mapDoc.to<JsonObject>();
             JsonObject metaObj = mapRoot["meta"].to<JsonObject>();
-            MapMeta *meta = findMeta(hash);
             if (meta) meta->marshal(metaObj);
             JsonObject mapObj = mapRoot["map"].to<JsonObject>();
             map.marshalGeometry(mapObj);
@@ -246,10 +272,10 @@ namespace ArduMower {
             file.close();
 
             // Aktiv setzen und Index speichern
-            _index.activeId = hash;
+            if (meta) _index.activeId = meta->id;
             saveIndex();
 
-            return hash;
+            return meta ? meta->id : "";
         }
 
         bool MapManager::load(const String &id, ArduMower::Domain::Robot::MowerMap &out) {
@@ -272,6 +298,7 @@ namespace ArduMower {
                 return false;
             }
             out.unmarshal(doc.as<JsonObject>());
+            out.rotation = meta->rotation;
             out.timestamp = millis();
             return true;
         }
@@ -328,8 +355,10 @@ namespace ArduMower {
         }
 
         String MapManager::findByHash(const String &hash) const {
-            const MapMeta *meta = findMeta(hash);
-            return meta ? meta->id : "";
+            for (const auto &m : _index.maps) {
+                if (m.hash == hash) return m.id;
+            }
+            return "";
         }
 
         bool MapManager::setActive(const String &id) {

@@ -7,14 +7,32 @@
     import IconJoystick from "carbon-icons-svelte/lib/GameConsole.svelte";
 
     let open = $state(false);
+    let overlayOpen = $state(false);
+    let isSmallScreen = $state(false);
     let wrapperRef: HTMLDivElement | null = $state(null);
 
+    function updateSmallScreen() {
+        if (!browser) return;
+        isSmallScreen = window.matchMedia('(max-width: 640px)').matches;
+    }
+
     function toggle() {
-        open = !open;
+        if (!open && !overlayOpen) {
+            open = true;
+            return;
+        }
+        if (open && isSmallScreen && !overlayOpen) {
+            open = false;
+            overlayOpen = true;
+            return;
+        }
+        open = false;
+        overlayOpen = false;
     }
 
     function close() {
         open = false;
+        overlayOpen = false;
     }
 
     // Close when clicking outside the wrapper
@@ -34,9 +52,14 @@
 
     $effect(() => {
         if (!browser) return;
+        updateSmallScreen();
+        const mq = window.matchMedia('(max-width: 640px)');
+        const onMqChange = () => updateSmallScreen();
+        mq.addEventListener('change', onMqChange);
         document.addEventListener('click', onDocClick);
         document.addEventListener('keydown', onKeyDown);
         return () => {
+            mq.removeEventListener('change', onMqChange);
             document.removeEventListener('click', onDocClick);
             document.removeEventListener('keydown', onKeyDown);
         };
@@ -69,6 +92,12 @@
                 <ControlButtons desiredState={$socketStore.desiredState} />
             </div>
         </div>
+    </div>
+    {/if}
+
+    {#if overlayOpen}
+    <div class="rc-joystick-overlay" aria-label="Joystick overlay">
+        <Joystick size={220} showReadout={false} />
     </div>
     {/if}
 </div>
@@ -188,6 +217,20 @@
     .rc-controls-col {
         flex: 1;
         min-width: 0;
+    }
+
+    .rc-joystick-overlay {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        padding: 12px;
+        z-index: 9999;
+        background: transparent;
+        pointer-events: none;
+    }
+
+    .rc-joystick-overlay :global(*) {
+        pointer-events: auto;
     }
 
     /* ─── Smartphone / narrow screens ────────────────────────────────────── */

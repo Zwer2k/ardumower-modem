@@ -3,7 +3,7 @@
     import { socketService } from '../../../stores/socket';
 
     // ─── Props ──────────────────────────────────────────────────────────────
-    let { size = 200 }: { size?: number } = $props();
+    let { size = 200, showReadout = true }: { size?: number; showReadout?: boolean } = $props();
 
     // ─── Constants ──────────────────────────────────────────────────────────
     const MAX_FORCE = 0.5;          // max speed (m/s)
@@ -265,10 +265,12 @@
         role="img"
         aria-label="Joystick remote control"
     ></canvas>
+    {#if showReadout}
     <div class="joystick-readout">
         <span class="joystick-label">{formatLabel('Lin', linearSpeed)}</span>
         <span class="joystick-label">{formatLabel('Ang', angularSpeed)}</span>
     </div>
+    {/if}
 </div>
 
 <style lang="scss">

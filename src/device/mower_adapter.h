@@ -132,12 +132,13 @@ namespace ArduMower
       virtual String activeMapId() override { return _mapManager.activeId(); }
       virtual bool mapListDirty() override;
       virtual void clearMapListDirty() override;
-      virtual String saveMap(const String &name) override;
+      virtual String saveMap(const String &name, double rotation = 0.0) override;
       virtual bool loadMap(const String &id) override;
       virtual bool renameMap(const String &id, const String &name) override;
       virtual bool deleteMap(const String &id) override;
       virtual String currentMapHash() override;
       virtual double currentMapArea() override;
+      virtual double currentMapRotation() override { return _map.rotation; }
 
       // Zugriff auf gecachte rohe Antworten (für HTTP-Cache)
       virtual String cachedRawState() { return _cachedRawState; }

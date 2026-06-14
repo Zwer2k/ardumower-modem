@@ -303,6 +303,7 @@ namespace ArduMower
         String name;
         double area = 0.0;
         String hash;
+        double rotation = 0.0;
         uint32_t timestamp = 0;
       };
 
@@ -336,12 +337,13 @@ namespace ArduMower
         virtual String activeMapId() { return ""; }
         virtual bool mapListDirty() { return false; }
         virtual void clearMapListDirty() {}
-        virtual String saveMap(const String &name) { (void)name; return ""; }
+        virtual String saveMap(const String &name, double rotation = 0.0) { (void)name; (void)rotation; return ""; }
         virtual bool loadMap(const String &id) { (void)id; return false; }
         virtual bool renameMap(const String &id, const String &name) { (void)id; (void)name; return false; }
         virtual bool deleteMap(const String &id) { (void)id; return false; }
         virtual String currentMapHash() { return ""; }
         virtual double currentMapArea() { return 0.0; }
+        virtual double currentMapRotation() { return 0.0; }
       };
 
       class CommandExecutor

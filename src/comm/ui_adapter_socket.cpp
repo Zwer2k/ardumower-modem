@@ -177,8 +177,9 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
       for (JsonObject p : waypoints) {
         map.waypoints.push_back(readPoint(p));
       }
-      Log(DBG, "%s setMap: parsed perimeter=%d exclusions=%d dockpoints=%d waypoints=%d", _LOG_,
-          map.perimeter.size(), map.exclusions.size(), map.dockpoints.size(), map.waypoints.size());
+      map.rotation = jsonData["rotation"] | 0.0;
+      Log(DBG, "%s setMap: parsed perimeter=%d exclusions=%d dockpoints=%d waypoints=%d rotation=%.1f", _LOG_,
+          map.perimeter.size(), map.exclusions.size(), map.dockpoints.size(), map.waypoints.size(), map.rotation);
       _socketHandler->setMap(map);
       // Aktualisierte Karte sofort an alle verbundenen Clients senden.
       // Laufenden Chunk-Versand abbrechen, damit die neue Karte übertragen wird.
@@ -232,7 +233,8 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
 
    case RequestDataType::saveMap: {
     String name = jsonData["name"] | "";
-    if (_source.saveMap(name).length() > 0) {
+    double rotation = jsonData["rotation"] | 0.0;
+    if (_source.saveMap(name, rotation).length() > 0) {
       _socketHandler->sendMapList(NULL);
     }
     break;
@@ -704,6 +706,7 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   // Metadaten des aktuellen Karteninhalts für alle Chunks merken
   mapChunkSendState.metaHash = _source.currentMapHash();
   mapChunkSendState.metaArea = _source.currentMapArea();
+  mapChunkSendState.metaRotation = _source.currentMapRotation();
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
   mapChunkSendState.active = true;
   mapChunkSendState.clientId = sendTo ? sendTo->clientId() : 0;
@@ -807,6 +810,7 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
     auto metaObj = dataObj["meta"].to<JsonObject>();
     metaObj["hash"] = mapChunkSendState.metaHash;
     metaObj["area"] = mapChunkSendState.metaArea;
+    metaObj["rotation"] = mapChunkSendState.metaRotation;
   }
   auto arr = dataObj["points"].to<JsonArray>();
   size_t measured = measureJson(doc);
@@ -1211,6 +1215,7 @@ void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
     obj["name"] = m.name;
     obj["area"] = m.area;
     obj["hash"] = m.hash;
+    obj["rotation"] = m.rotation;
     obj["timestamp"] = m.timestamp;
   }
 

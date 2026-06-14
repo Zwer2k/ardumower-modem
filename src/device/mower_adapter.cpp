@@ -57,6 +57,7 @@ std::vector<ArduMower::Domain::Robot::MapInfo> MowerAdapter::mapList() {
     info.name = m.name;
     info.area = m.area;
     info.hash = m.hash;
+    info.rotation = m.rotation;
     info.timestamp = m.timestamp;
     result.push_back(info);
   }
@@ -71,12 +72,13 @@ void MowerAdapter::clearMapListDirty() {
   _mapListDirty = false;
 }
 
-String MowerAdapter::saveMap(const String &name) {
+String MowerAdapter::saveMap(const String &name, double rotation) {
   if (_map.isReading()) {
     Log(WARN, "%ssaveMap: Map-Lesevorgang läuft, speichern abgelehnt", _LOG_);
     return "";
   }
-  String id = _mapManager.save(_map, name);
+  _map.rotation = rotation;
+  String id = _mapManager.save(_map, name, rotation);
   if (id.length() > 0) {
     _mapListDirty = true;
     Log(INFO, "%ssaveMap: Karte gespeichert als %s", _LOG_, id.c_str());

@@ -42,6 +42,9 @@ namespace ArduMower {
                 std::vector<MapPoint> waypoints;
                 std::vector<MapPoint> dockpoints;
 
+                // Kartenausrichtung in Grad (0 = Norden/oben), nicht Teil des Geometrie-Hashes
+                double rotation = 0.0;
+
                 // Flag, ob aktuell ein Lesevorgang läuft (z.B. für Map-Transfer)
                 bool reading = false;
 

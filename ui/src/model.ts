@@ -312,6 +312,7 @@ export interface MapMeta {
   name: string;
   area: number;
   hash: string;
+  rotation: number;
   timestamp: number;
 }
 
@@ -384,6 +385,7 @@ export interface MapSetData {
   exclusions: { x: number; y: number }[][];
   dockpoints: { x: number; y: number }[];
   waypoints: { x: number; y: number }[];
+  rotation: number;
 }
 
 export interface RequestSocketMessage {

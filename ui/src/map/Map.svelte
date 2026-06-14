@@ -105,9 +105,11 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   $: activeMap = $socketStore.maps.find((m) => m.id === $socketStore.activeMapId);
   $: activeMapName = activeMap?.name || "";
   $: currentHash = $socketStore.currentMapMeta?.hash || "";
-  $: geometryDirty = currentHash !== "" && currentHash !== $socketStore.activeMapId;
+  $: activeMapHash = activeMap?.hash || "";
+  $: geometryDirty = currentHash !== "" && currentHash !== activeMapHash;
+  $: rotationDirty = !!activeMap && compassRotation !== activeMap.rotation;
   $: nameDirty = pendingName !== "" && pendingName !== activeMapName;
-  $: isDirty = geometryDirty || nameDirty;
+  $: isDirty = geometryDirty || rotationDirty || nameDirty;
   $: canRename = ($MapStore.map?.perimeter.points.length ?? 0) >= 3;
 
   onMount(() => {
@@ -121,7 +123,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
 
   function onSaveMap() {
     const name = pendingName || activeMapName || `Karte ${$socketStore.maps.length + 1}`;
-    socketService.sendSaveMap(name);
+    socketService.sendSaveMap(name, compassRotation);
     pendingName = "";
   }
 
@@ -692,6 +694,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
       exclusions: m.exclusions.map((e) => e.points),
       dockpoints: m.dockpoints.points,
       waypoints: m.waypoints.points,
+      rotation: compassRotation,
     });
   } else if (edit) {
     wasEditing = true;
@@ -762,7 +765,18 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   }
 
   let compassRotation = 0;
+  let rotationManuallySet = false;
+  let lastRotationMapId: string | null = null;
+  $: if ($socketStore.activeMapId !== lastRotationMapId) {
+    lastRotationMapId = $socketStore.activeMapId;
+    rotationManuallySet = false;
+  }
+  $: if (!rotationManuallySet && $socketStore.currentMapMeta?.rotation !== undefined) {
+    const r = $socketStore.currentMapMeta.rotation;
+    if (compassRotation !== r) compassRotation = r;
+  }
   function onCompassDown(event: MouseEvent) {
+    rotationManuallySet = true;
     event.preventDefault();
     const btn = event.currentTarget as HTMLElement;
     const rect = btn.getBoundingClientRect();
@@ -838,6 +852,14 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               </Button>
             {:else}
               <Button
+                kind="secondary"
+                size="small"
+                disabled={busy}
+                icon={IconUpload}
+                iconDescription="Upload map to mower"
+                on:click={() => { socketService.sendUploadMap(); }}
+              />
+              <Button
                 kind={showManage ? "primary" : "secondary"}
                 size="small"
                 icon={IconTools}
@@ -907,7 +929,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="primary"
                 size="small"
-                disabled={!isDirty}
+                disabled={!isDirty || isRenameMode}
                 on:click={onSaveMap}
                 icon={IconSave}
                 iconDescription="Save map"
@@ -927,21 +949,13 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="danger"
                 size="small"
-                disabled={!$socketStore.activeMapId}
+                disabled={!$socketStore.activeMapId || isRenameMode}
                 on:click={onDeleteMap}
                 icon={IconTrashCan}
                 iconDescription="Delete map"
               >
                 <span class="btn-label">Del</span>
               </Button>
-              <Button
-                kind="secondary"
-                size="small"
-                disabled={busy}
-                icon={IconUpload}
-                iconDescription="Upload map to mower"
-                on:click={() => { socketService.sendUploadMap(); }}
-              />
             </div>
           </Column>
         </Row>
@@ -1174,6 +1188,9 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     position: relative;
     flex-shrink: 0;
     container-type: inline-size;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
   }
   .map-canvas-wrapper {
     position: relative;
@@ -1222,6 +1239,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     font-size: 0.75em;
     color: #888;
     font-style: italic;
+    padding-left: 0.5rem;
   }
 
   :global(.map-toolbar .bx--row) {
@@ -1267,6 +1285,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     justify-content: flex-end;
     gap: 0.25rem;
     margin-left: auto;
+    padding-left: 0.75rem;
   }
 
   .action-btns {
@@ -1277,13 +1296,18 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   .map-edit-row {
     align-items: center;
     gap: 0.25rem;
+    flex-wrap: nowrap !important;
   }
   .edit-combo {
     flex: 1 1 auto;
-    min-width: 10rem;
+    min-width: 0;
+  }
+  .edit-combo :global(.bx--combo-box) {
+    width: 100%;
+    min-width: 0;
   }
   .edit-actions {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
   }
 
   .map-mgmt-row {
@@ -1292,9 +1316,10 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   }
 
   .goto-row {
-    display: none;
+    display: none !important;
     align-items: center;
     gap: 0.25rem;
+    padding-left: 0.75rem;
   }
 
   @container (max-width: 800px) {
@@ -1305,10 +1330,10 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
       width: 100%;
     }
     .toolbar-goto-group {
-      display: none;
+      display: none !important;
     }
     .goto-row {
-      display: flex;
+      display: flex !important;
     }
     .toolbar-btn-row :global(.bx--btn) {
       width: 2rem;
@@ -1319,16 +1344,14 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
       position: static;
       margin: 0;
     }
-    .map-edit-row {
-      flex-direction: column;
-      align-items: stretch;
+    .action-btns :global(.bx--btn) {
+      width: 2rem;
+      padding: 0 !important;
+      justify-content: center;
     }
-    .edit-combo,
-    .edit-actions {
-      width: 100%;
-    }
-    .action-btns {
-      justify-content: flex-end;
+    .action-btns :global(.bx--btn .bx--btn__icon) {
+      position: static;
+      margin: 0;
     }
   }
 

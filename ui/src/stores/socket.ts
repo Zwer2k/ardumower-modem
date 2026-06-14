@@ -43,7 +43,7 @@ export interface SocketState {
   gpsDashboardEnabled: boolean;
   maps: MapMeta[];
   activeMapId: string;
-  currentMapMeta: { hash: string; area: number } | null;
+  currentMapMeta: { hash: string; area: number; rotation: number } | null;
 }
 
 const initialState: SocketState = {
@@ -74,7 +74,7 @@ export const socketStore = writable<SocketState>(initialState);
  *  ist NICHT von clearConsoleLines() betroffen (vermeidet Race Condition
  *  mit dem Terminal, das sofort nach Empfang der Lines cleart). */
 export const motorPlotStore = writable<ConsoleLine[]>([]);
-export const mapMetaStore = writable<{ hash: string; area: number } | null>(null);
+export const mapMetaStore = writable<{ hash: string; area: number; rotation: number } | null>(null);
 
 export function clearMotorPlotStore() {
   motorPlotStore.set([]);
@@ -286,7 +286,7 @@ class SocketService {
                 case ResponseDataType.map: {
                   const data = jsonData.data as any;
                   if (data && data.meta) {
-                    const meta = { hash: data.meta.hash, area: data.meta.area };
+                    const meta = { hash: data.meta.hash, area: data.meta.area, rotation: data.meta.rotation || 0 };
                     newState.currentMapMeta = meta;
                     mapMetaStore.set(meta);
                   }
@@ -522,10 +522,10 @@ class SocketService {
     this.sendMessage(req);
   }
 
-  sendSaveMap(name: string) {
+  sendSaveMap(name: string, rotation: number = 0) {
     const req: RequestSocketMessage = {
       type: RequestDataType.saveMap,
-      data: { name },
+      data: { name, rotation },
     };
     this.sendMessage(req);
   }
