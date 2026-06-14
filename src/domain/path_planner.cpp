@@ -218,49 +218,6 @@ static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
     return result;
 }
 
-// ── Lines pattern (zigzag clipped to polygon via Clipper2 Intersection) ──
-Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow,
-    double width, double angleDeg, const Point &startNear)
-{
-    Log(DBG, "%scalculateLinesPattern width=%.3f angle=%.1f", _LOG_, width, angleDeg);
-    if (areaToMow.size() < 3 || width < 0.001) return {};
-
-    // Build zigzag path bounded to areaToMow's bounding box + margin
-    // (the web app uses -20000 to +20000, but that's too many points for ESP32)
-    double minX, minY, maxX, maxY;
-    boundingBox(areaToMow, minX, minY, maxX, maxY);
-    double margin = width * 2;
-    double xRange = std::max(std::abs(minX), std::abs(maxX)) + margin;
-
-    double lastX = -xRange;
-    Polygon zigzag;
-    int iterCount = 0;
-    for (double y = minY - margin; y <= maxY + margin || iterCount % 2 == 1; y += width) {
-        zigzag.push_back({lastX, y});
-        zigzag.push_back({-lastX, y});
-        lastX = -lastX;
-        iterCount++;
-    }
-
-    // Clip zigzag to areaToMow using Clipper2 Intersection with open paths
-    // (web app uses ctDifference which for open paths clips to OUTSIDE;
-    //  we need INSIDE, so use ctIntersection with AddOpenSubject so the zigzag
-    //  is not improperly treated as a closed polygon)
-    std::vector<Polygon> polys = clipIntersectOpen(std::vector<Polygon>{zigzag}, areaToMow);
-    if (polys.empty()) return {};
-
-    // sortSolutionPolygonsByDistance (matches web app)
-    Point startPt = rotatePoint(startNear, -angleDeg);
-    sortSolutionPolygonsByDistance(polys, startPt);
-
-    // Connect polys into a single route (matches web app connectPolysUsingPathFinding)
-    Polygon route;
-    connectPolysUsingPathFinding(route, polys, perimeter);
-    route = pruneOutside(route, perimeter);
-    Log(DBG, "%scalculateLinesPattern done: %d points", _LOG_, route.size());
-    return route;
-}
-
 // ── Rings pattern (BFS queue + Clipper2 InflatePaths) ──
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
     double width, const Point &startNear)
@@ -408,6 +365,21 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
     solution = sorted;
 }
 
+// Check if line segment from→to crosses any perimeter edge (exits the polygon).
+// Uses exact line-segment intersection — unlike point-sampling, this cannot miss
+// short dips outside the perimeter.
+static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter) {
+    for (size_t i = 0; i < perimeter.size(); i++) {
+        size_t j = (i + 1) % perimeter.size();
+        double o1 = crossProduct(perimeter[i], perimeter[j], from);
+        double o2 = crossProduct(perimeter[i], perimeter[j], to);
+        double o3 = crossProduct(from, to, perimeter[i]);
+        double o4 = crossProduct(from, to, perimeter[j]);
+        if (o1 * o2 < 0 && o3 * o4 < 0) return true;
+    }
+    return false;
+}
+
 // ── Connect sorted polys into a single waypoint path ──
 void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon> &polys,
     const Polygon &perimeter) {
@@ -421,18 +393,7 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
             const Point &from = waypoints.back();
             const Point &to = poly[0];
             double d = distance(from, to);
-            // Only walk perimeter if direct line crosses outside the perimeter
-            // (endpoints on the boundary are treated as inside)
-            bool needWalk = false;
-            if (d > 0.1) {
-                for (double t = 0.1; t < 1.0; t += 0.15) {
-                    Point mid = lerp(from, to, t);
-                    if (!pointInPolygon(mid, perimeter)) {
-                        needWalk = true;
-                        break;
-                    }
-                }
-            }
+            bool needWalk = d > 0.1 && lineExitsPerimeter(from, to, perimeter);
             if (needWalk) {
                 Polygon conn = walkPerimeter(perimeter, from, to);
                 for (size_t k = 0; k < conn.size(); k++)
@@ -482,46 +443,63 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
     }
 
     if (settings.mowArea) {
-        // Compute pattern for each area polygon independently
-        std::vector<Polygon> areaPatterns;
-        for (const auto &area : areasToMow) {
-            Polygon areaPattern;
-            if (settings.pattern == 2) {
-                areaPattern = calculateRingsPattern(perimeter, area, settings.width, startNear);
-            } else if (settings.pattern == 1) {
-                Polygon p1 = calculateLinesPattern(perimeter, area, settings.width, settings.angle, startNear);
-                Polygon p2 = calculateLinesPattern(perimeter, area, settings.width, settings.angle + 90.0,
-                    p1.empty() ? startNear : p1.back());
-                areaPattern.reserve(p1.size() + p2.size());
-                areaPattern.insert(areaPattern.end(), p1.begin(), p1.end());
-                if (!p1.empty() && !p2.empty()) {
-                    Polygon conn = walkPerimeter(perimeter, p1.back(), p2[0]);
-                    for (size_t k = 0; k < conn.size(); k++)
-                        if (distance(areaPattern.back(), conn[k]) > 0.01)
-                            areaPattern.push_back(conn[k]);
-                }
-                areaPattern.insert(areaPattern.end(), p2.begin(), p2.end());
-            } else {
-                areaPattern = calculateLinesPattern(perimeter, area, settings.width, settings.angle, startNear);
+        std::vector<Polygon> allSegments;
+
+        if (settings.pattern == 2) {
+            // Rings pattern: per-area (each area gets its own concentric rings)
+            for (const auto &area : areasToMow) {
+                Polygon ar = calculateRingsPattern(perimeter, area, settings.width, startNear);
+                if (!ar.empty()) allSegments.push_back(ar);
             }
-            if (!areaPattern.empty())
-                areaPatterns.push_back(areaPattern);
+        } else {
+            // Lines pattern: one zigzag across combined bounding box of ALL areas,
+            // clipped to each area → uniform track width across area boundaries
+            int passes = (settings.pattern == 1) ? 2 : 1;
+            for (int pass = 0; pass < passes; pass++) {
+                double angleDeg = settings.angle + (pass == 1 ? 90.0 : 0.0);
+
+                // Rotate areas by -angle so zigzag runs along Y
+                auto rotatedAreas = rotatePolygons(areasToMow, -angleDeg);
+
+                // Combined bounding box of all rotated areas
+                double rMinX, rMinY, rMaxX, rMaxY;
+                boundingBox(rotatedAreas[0], rMinX, rMinY, rMaxX, rMaxY);
+                for (size_t ai = 1; ai < rotatedAreas.size(); ai++) {
+                    double ax, ay, bx, by;
+                    boundingBox(rotatedAreas[ai], ax, ay, bx, by);
+                    if (ax < rMinX) rMinX = ax;
+                    if (ay < rMinY) rMinY = ay;
+                    if (bx > rMaxX) rMaxX = bx;
+                    if (by > rMaxY) rMaxY = by;
+                }
+
+                // Zigzag in rotated space
+                double margin = settings.width * 2;
+                double xRange = std::max(std::abs(rMinX), std::abs(rMaxX)) + margin;
+                double lastX = -xRange;
+                Polygon zigzag;
+                for (double y = rMinY - margin; y <= rMaxY + margin; y += settings.width) {
+                    zigzag.push_back({lastX, y});
+                    zigzag.push_back({-lastX, y});
+                    lastX = -lastX;
+                }
+
+                // Clip to each rotated area and rotate back
+                for (const auto &ra : rotatedAreas) {
+                    auto clipped = clipIntersectOpen({zigzag}, ra);
+                    auto rotated = rotatePolygons(clipped, angleDeg);
+                    allSegments.insert(allSegments.end(), rotated.begin(), rotated.end());
+                }
+            }
         }
-        // Sort and connect all area patterns into a single route
-        if (!areaPatterns.empty()) {
-            sortSolutionPolygonsByDistance(areaPatterns, startNear);
+
+        // Sort and connect all segments into a single route
+        if (!allSegments.empty()) {
+            sortSolutionPolygonsByDistance(allSegments, startNear);
             Polygon pattern;
-            for (size_t ai = 0; ai < areaPatterns.size(); ai++) {
-                if (ai > 0) {
-                    Polygon conn = walkPerimeter(perimeter, pattern.back(), areaPatterns[ai][0]);
-                    for (size_t k = 0; k < conn.size(); k++)
-                        if (distance(pattern.back(), conn[k]) > 0.01)
-                            pattern.push_back(conn[k]);
-                }
-                for (const auto &p : areaPatterns[ai])
-                    if (pattern.empty() || distance(pattern.back(), p) > 0.01)
-                        pattern.push_back(p);
-            }
+            connectPolysUsingPathFinding(pattern, allSegments, perimeter);
+            pattern = pruneOutside(pattern, perimeter);
+
             if (!route.empty() && !pattern.empty()) {
                 Polygon conn = walkPerimeter(perimeter, route.back(), pattern[0]);
                 for (size_t k = 0; k < conn.size(); k++)

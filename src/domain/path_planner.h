@@ -30,8 +30,6 @@ std::vector<Intersection> intersectRayWithPolygon(double y, const Polygon &poly)
 
 std::vector<Polygon> offsetPolygonInward(const Polygon &poly, double distance);
 
-Polygon calculateLinesPattern(const Polygon &perimeter, const Polygon &areaToMow,
-    double width, double angleDeg, const Point &startNear);
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
     double width, const Point &startNear);
 Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,

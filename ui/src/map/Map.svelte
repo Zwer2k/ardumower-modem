@@ -771,13 +771,13 @@
         </svg>
       </button>
       <div class="map-point-counts">
-        <strong>Perimeter:</strong> {perimeterPoints}
+        <div><strong>Perimeter:</strong> {perimeterPoints}</div>
         {#each exclusionPoints as ep, i}
-          &nbsp;| <strong>Excl #{i}:</strong> {ep}
+          <div><strong>Excl #{i}:</strong> {ep}</div>
         {/each}
-        &nbsp;| <strong>Dock:</strong> {dockpointsPoints}
-        &nbsp;| <strong>Way:</strong> {waypointsPoints}
-        &nbsp;| <strong>Total:</strong> {totalPoints}
+        <div><strong>Dock:</strong> {dockpointsPoints}</div>
+        <div><strong>Way:</strong> {waypointsPoints}</div>
+        <div><strong>Total:</strong> {totalPoints}</div>
       </div>
     </div>
     <Canvas compassRotation={compassRotation} on:mapclick={onMapClick} on:mousemove={onMouseMove}>
