@@ -116,11 +116,11 @@ std::vector<Intersection> intersectRayWithPolygon(double y, const Polygon &poly)
     return result;
 }
 
-Polygon offsetPolygonInward(const Polygon &poly, double dist) {
-    if (dist <= 0.001 || poly.size() < 3) return poly;
+std::vector<Polygon> offsetPolygonInward(const Polygon &poly, double dist) {
+    if (dist <= 0.001 || poly.size() < 3) return {poly};
     auto result = clipOffset(poly, -dist);
     if (result.empty()) return {};
-    return result[0];
+    return result;
 }
 
 // Walk along the perimeter from `from` to `to`, following polygon edges exactly.
@@ -302,16 +302,18 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
             if (route.empty() || distance(route.back(), p) > 0.01)
                 route.push_back(p);
 
-        // Shrink inward using Clipper2
+        // Shrink inward using Clipper2 — push ALL resulting branches to BFS queue
         auto nextList = clipOffset(currentArea, -width);
-        if (nextList.empty() || nextList[0].size() < 3) continue;
-
-        Polygon next = nextList[0];
-        double nextAreaVal = std::abs(polygonArea(next));
         double curAreaVal = std::abs(polygonArea(currentArea));
-        if (nextAreaVal < 0.001 || nextAreaVal >= curAreaVal - 0.001) continue;
-
-        queue.push_back(next);
+        bool anyAdded = false;
+        for (const auto &next : nextList) {
+            if (next.size() < 3) continue;
+            double nextAreaVal = std::abs(polygonArea(next));
+            if (nextAreaVal < 0.001 || nextAreaVal >= curAreaVal - 0.001) continue;
+            queue.push_back(next);
+            anyAdded = true;
+        }
+        if (!anyAdded) continue;
     }
 
     route = pruneOutside(route, perimeter);
@@ -462,13 +464,16 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
     Polygon route;
     Point startNear = perimeter[0];
 
-    Polygon areaToMow;
+    // Collect all area polygons (inward offset may split at bottlenecks)
+    std::vector<Polygon> areasToMow;
     if (settings.distanceToBorder > 0 && settings.width > 0.001) {
         double offsetDist = settings.distanceToBorder * settings.width;
-        Polygon offset = offsetPolygonInward(perimeter, offsetDist);
-        if (offset.size() >= 3) areaToMow = offset;
+        areasToMow = offsetPolygonInward(perimeter, offsetDist);
     }
-    if (areaToMow.size() < 3) areaToMow = perimeter;
+    if (areasToMow.empty()) areasToMow = {perimeter};
+    for (auto it = areasToMow.begin(); it != areasToMow.end(); )
+        if (it->size() < 3) it = areasToMow.erase(it); else ++it;
+    if (areasToMow.empty()) return {};
 
     if (settings.borderLaps > 0 && settings.mowBorderCcw) {
         Polygon borderLaps = addBorderLaps(perimeter, settings.borderLaps, true, startNear, settings.width);
@@ -476,34 +481,56 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
         if (!route.empty()) startNear = route.back();
     }
 
-    if (settings.mowArea && areaToMow.size() >= 3) {
-        Polygon pattern;
-        if (settings.pattern == 2) {
-            pattern = calculateRingsPattern(perimeter, areaToMow, settings.width, startNear);
-        } else if (settings.pattern == 1) {
-            Polygon p1 = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle, startNear);
-            Polygon p2 = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle + 90.0,
-                p1.empty() ? startNear : p1.back());
-            pattern.reserve(p1.size() + p2.size());
-            pattern.insert(pattern.end(), p1.begin(), p1.end());
-            if (!p1.empty() && !p2.empty()) {
-                Polygon conn = walkPerimeter(perimeter, p1.back(), p2[0]);
-                for (size_t k = 0; k < conn.size(); k++)
-                    if (distance(pattern.back(), conn[k]) > 0.01)
-                        pattern.push_back(conn[k]);
+    if (settings.mowArea) {
+        // Compute pattern for each area polygon independently
+        std::vector<Polygon> areaPatterns;
+        for (const auto &area : areasToMow) {
+            Polygon areaPattern;
+            if (settings.pattern == 2) {
+                areaPattern = calculateRingsPattern(perimeter, area, settings.width, startNear);
+            } else if (settings.pattern == 1) {
+                Polygon p1 = calculateLinesPattern(perimeter, area, settings.width, settings.angle, startNear);
+                Polygon p2 = calculateLinesPattern(perimeter, area, settings.width, settings.angle + 90.0,
+                    p1.empty() ? startNear : p1.back());
+                areaPattern.reserve(p1.size() + p2.size());
+                areaPattern.insert(areaPattern.end(), p1.begin(), p1.end());
+                if (!p1.empty() && !p2.empty()) {
+                    Polygon conn = walkPerimeter(perimeter, p1.back(), p2[0]);
+                    for (size_t k = 0; k < conn.size(); k++)
+                        if (distance(areaPattern.back(), conn[k]) > 0.01)
+                            areaPattern.push_back(conn[k]);
+                }
+                areaPattern.insert(areaPattern.end(), p2.begin(), p2.end());
+            } else {
+                areaPattern = calculateLinesPattern(perimeter, area, settings.width, settings.angle, startNear);
             }
-            pattern.insert(pattern.end(), p2.begin(), p2.end());
-        } else {
-            pattern = calculateLinesPattern(perimeter, areaToMow, settings.width, settings.angle, startNear);
+            if (!areaPattern.empty())
+                areaPatterns.push_back(areaPattern);
         }
-        if (!route.empty() && !pattern.empty()) {
-            Polygon conn = walkPerimeter(perimeter, route.back(), pattern[0]);
-            for (size_t k = 0; k < conn.size(); k++)
-                if (distance(route.back(), conn[k]) > 0.01)
-                    route.push_back(conn[k]);
+        // Sort and connect all area patterns into a single route
+        if (!areaPatterns.empty()) {
+            sortSolutionPolygonsByDistance(areaPatterns, startNear);
+            Polygon pattern;
+            for (size_t ai = 0; ai < areaPatterns.size(); ai++) {
+                if (ai > 0) {
+                    Polygon conn = walkPerimeter(perimeter, pattern.back(), areaPatterns[ai][0]);
+                    for (size_t k = 0; k < conn.size(); k++)
+                        if (distance(pattern.back(), conn[k]) > 0.01)
+                            pattern.push_back(conn[k]);
+                }
+                for (const auto &p : areaPatterns[ai])
+                    if (pattern.empty() || distance(pattern.back(), p) > 0.01)
+                        pattern.push_back(p);
+            }
+            if (!route.empty() && !pattern.empty()) {
+                Polygon conn = walkPerimeter(perimeter, route.back(), pattern[0]);
+                for (size_t k = 0; k < conn.size(); k++)
+                    if (distance(route.back(), conn[k]) > 0.01)
+                        route.push_back(conn[k]);
+            }
+            route.insert(route.end(), pattern.begin(), pattern.end());
+            if (!route.empty()) startNear = route.back();
         }
-        route.insert(route.end(), pattern.begin(), pattern.end());
-        if (!route.empty()) startNear = route.back();
     }
 
     if (settings.borderLaps > 0 && !settings.mowBorderCcw) {

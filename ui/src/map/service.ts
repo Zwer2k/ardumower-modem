@@ -62,7 +62,7 @@ const calculatePresentation = (
   m: Map,
   p: PresentationTuningParameters = presentationParameterTuning,
 ): MapPresentation => {
-  const rotation = calculateRotation(m);
+  const rotation = 0;
   const pointsRotated: Point[] = rotatePointsAroundOrigin(
     allMapPoints(m),
     deg2rad(rotation),

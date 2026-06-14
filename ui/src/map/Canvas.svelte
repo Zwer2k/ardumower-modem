@@ -3,15 +3,22 @@
   import { zoom } from "d3-zoom";
   import { select, pointer } from "d3-selection";
 
-  import type { MapPresentation } from "./model";
   import { MapStore } from "./service";
   import { createEventDispatcher } from "svelte";
 
   const dispatch = createEventDispatcher();
 
-  function transform(p: MapPresentation): string {
-    return `rotate(${p.rotation})`;
-  }
+  export let compassRotation = 0;
+
+  $: vb = $MapStore.presentation.viewBox.split(' ').map(Number);
+  $: vx = vb[0] || 0;
+  $: vy = vb[1] || 0;
+  $: vw = vb[2] || 1;
+  $: vh = vb[3] || 1;
+  $: cx = vx + vw / 2;
+  $: cy = vy + vh / 2;
+
+  $: transformStr = `rotate(${$MapStore.presentation.rotation + compassRotation}, ${cx}, ${cy})`;
 
   let svg: SVGSVGElement;
   let g: SVGGElement;
@@ -58,7 +65,7 @@
     onmousemove={handleMouseMove}
   >
     <g bind:this={g}>
-      <g bind:this={contentGroup} transform={transform($MapStore.presentation)}>
+      <g bind:this={contentGroup} transform={transformStr}>
         <slot />
       </g>
     </g>

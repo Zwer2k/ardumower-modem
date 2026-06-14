@@ -591,6 +591,39 @@
     targetDist = 0;
     targetBearing = 0;
   }
+
+  let compassRotation = 0;
+  function onCompassDown(event: MouseEvent) {
+    event.preventDefault();
+    const btn = event.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const startAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180 / Math.PI;
+    let lastAngle = startAngle;
+    let didDrag = false;
+
+    function onMove(e: MouseEvent) {
+      didDrag = true;
+      const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+      let delta = angle - lastAngle;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      compassRotation = ((compassRotation + delta) % 360 + 360) % 360;
+      lastAngle = angle;
+    }
+
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (!didDrag) {
+        compassRotation = ((compassRotation + 90) % 360 + 360) % 360;
+      }
+    }
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
 </script>
 
 <div class="map-dashboard">
@@ -727,16 +760,27 @@
     {/if}
   </div>
   <div class="map-canvas-wrapper">
-    <div class="map-point-counts">
-      <strong>Perimeter:</strong> {perimeterPoints}
-      {#each exclusionPoints as ep, i}
-        &nbsp;| <strong>Excl #{i}:</strong> {ep}
-      {/each}
-      &nbsp;| <strong>Dock:</strong> {dockpointsPoints}
-      &nbsp;| <strong>Way:</strong> {waypointsPoints}
-      &nbsp;| <strong>Total:</strong> {totalPoints}
+    <div class="map-top-right">
+      <button class="compass-btn" on:mousedown={onCompassDown} title="Karte drehen (ziehen f&uuml;r feine Ausrichtung)">
+        <svg viewBox="-12 -12 24 24" width="28" height="28">
+          <g transform="rotate({compassRotation})">
+            <circle cx="0" cy="0" r="10" fill="white" stroke="#999" stroke-width="1.5"/>
+            <polygon points="0,-8 -4,0 0,-2 4,0" fill="#d32f2f"/>
+            <polygon points="0,8 -4,0 0,2 4,0" fill="#999"/>
+          </g>
+        </svg>
+      </button>
+      <div class="map-point-counts">
+        <strong>Perimeter:</strong> {perimeterPoints}
+        {#each exclusionPoints as ep, i}
+          &nbsp;| <strong>Excl #{i}:</strong> {ep}
+        {/each}
+        &nbsp;| <strong>Dock:</strong> {dockpointsPoints}
+        &nbsp;| <strong>Way:</strong> {waypointsPoints}
+        &nbsp;| <strong>Total:</strong> {totalPoints}
+      </div>
     </div>
-    <Canvas on:mapclick={onMapClick} on:mousemove={onMouseMove}>
+    <Canvas compassRotation={compassRotation} on:mapclick={onMapClick} on:mousemove={onMouseMove}>
       {#if $MapStore && $MapStore.map}
         <Perimeter
           value={$MapStore.map.perimeter}
@@ -967,10 +1011,40 @@
     display: none;
   }
 
-  .map-point-counts {
+  .map-top-right {
     position: absolute;
     top: 8px;
     right: 8px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .compass-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .compass-btn:hover {
+    background: #f5f5f5;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+  .compass-btn svg {
+    display: block;
+  }
+
+  .map-point-counts {
     background: rgba(255, 255, 255, 0.85);
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -978,7 +1052,6 @@
     font-size: 0.7em;
     font-family: monospace;
     color: #333;
-    z-index: 10;
     pointer-events: none;
   }
 </style>
