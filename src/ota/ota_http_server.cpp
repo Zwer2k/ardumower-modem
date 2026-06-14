@@ -321,7 +321,7 @@ bool Http::ModemUploadSession::beginFlash()
     return false;
   }
 
-  _dramBuf = (uint8_t*)malloc(FLASH_CHUNK_SIZE);
+  _dramBuf = (uint8_t*)malloc(4096);
   if (!_dramBuf)
   {
     Log(ERR, "Ota::Http::ModemUploadSession::flash::dram-alloc-failed");
@@ -349,7 +349,7 @@ bool Http::ModemUploadSession::loopFlashWrite()
   if (!_buffer || !_dramBuf) return false;
 
   size_t chunk = _bufferPos - _flashWritten;
-  if (chunk > FLASH_CHUNK_SIZE) chunk = FLASH_CHUNK_SIZE;
+  if (chunk > 4096) chunk = 4096;
 
   memcpy(_dramBuf, _buffer + _flashWritten, chunk);
 
@@ -365,7 +365,7 @@ bool Http::ModemUploadSession::loopFlashWrite()
   otaFlashProgress = _flashWritten;
   esp_task_wdt_reset();
   yield();
-  if (_flashWritten % (FLASH_CHUNK_SIZE * 10) < chunk)
+  if (_flashWritten % (4096 * 10) < chunk)
     Log(INFO, "Ota::Http::ModemUploadSession::flash::progress(%u/%u)", _flashWritten, _bufferPos);
   return _flashWritten >= _bufferPos;
 }

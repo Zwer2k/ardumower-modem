@@ -110,7 +110,7 @@ void MqttAdapter::publishState(const uint32_t now)
       return;
   }
   if ((settings.mqtt.publishFormat == 2) || (settings.mqtt.publishFormat == 3)) {
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     JsonObject object = doc.to<JsonObject>();
     state.marshal(object);
     if (!publishWithSubtopics(object, topic("/state"))) {
@@ -143,7 +143,7 @@ void MqttAdapter::publishProps(const uint32_t now)
       return;
   }
   if ((settings.mqtt.publishFormat == 2) || (settings.mqtt.publishFormat == 3)) {
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     JsonObject object = doc.to<JsonObject>();
     props.marshal(object);
     if (!publishWithSubtopics(object, topic("/props"))) {
@@ -193,7 +193,7 @@ void MqttAdapter::publishStats(const uint32_t now)
       return;
   }
   if ((settings.mqtt.publishFormat == 2) || (settings.mqtt.publishFormat == 3)) {
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     JsonObject object = doc.to<JsonObject>();
     stats.marshal(object);
     if (!publishWithSubtopics(object, topic("/stats"))) {
@@ -224,7 +224,7 @@ void MqttAdapter::onMqttMessage(String topic, String payload)
 
   if (payload.startsWith("{"))
   {
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     deserializeJson(doc, payload);
 
     const char *command = doc["command"];

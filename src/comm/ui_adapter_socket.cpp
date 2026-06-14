@@ -48,7 +48,7 @@ UiSocketItem::UiSocketItem(
 #endif
 }
 
-void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jsonData)
+void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
 {
   Log(DBG, "%s handle data type %d", _LOG_, dataType);
   switch (dataType)
@@ -148,8 +148,8 @@ void UiSocketItem::handleData(RequestDataType dataType, DynamicJsonDocument &jso
       MowerMap map;
       Log(DBG, "%s setMap: parsing perimeter, exclusions, dockpoints, waypoints", _LOG_);
       auto readDouble = [](JsonObject p, const char* key1, const char* key2) -> double {
-        if (p.containsKey(key1)) return p[key1];
-        if (p.containsKey(key2)) return p[key2];
+        if (p[key1].is<JsonVariant>()) return p[key1];
+        if (p[key2].is<JsonVariant>()) return p[key2];
         return 0.0;
       };
       auto readPoint = [readDouble](JsonObject p) -> MapPoint {
@@ -726,22 +726,22 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
   if (startIdx > total || (startIdx == total && total > 0)) return false;
-  DynamicJsonDocument doc(maxJsonSize);
+  JsonDocument doc;
   doc["type"] = ResponseDataType::map;
   doc["timestamp"] = timestamp;
-  auto dataObj = doc.createNestedObject("data");
+  auto dataObj = doc["data"].to<JsonObject>();
   dataObj["startIndex"] = (int)startIdx;
   dataObj["total"] = (int)total;
   dataObj["pointType"] = static_cast<int>(pointType);
   if (pointType == MapPointType::Exclusion) {
     dataObj["exclusionIdx"] = exclusionIdx;
   }
-  auto arr = dataObj.createNestedArray("points");
+  auto arr = dataObj["points"].to<JsonArray>();
   size_t measured = measureJson(doc);
   size_t pointsAdded = 0;
   size_t idx = startIdx;
   while (pointsAdded < blockSize && idx < total) {
-    JsonObject obj = arr.createNestedObject();
+    JsonObject obj = arr.add<JsonObject>();
     bool marshalOk = true;
     try {
       points[idx].marshal(obj);
@@ -810,8 +810,8 @@ void UiSocketHandler::broadcastFlashProgress(size_t current, size_t total)
   int clients = countConnectedClients();
   Log(DBG, "UiSocket::broadcastFlashProgress(pct=%d, clients=%d)", pct, clients);
   if (clients == 0) return;
-  DynamicJsonDocument doc(128);
-  auto status = doc.createNestedObject("status");
+  JsonDocument doc;
+  auto status = doc["status"].to<JsonObject>();
   status["progress"] = pct;
   String json;
   serializeJson(doc, json);
@@ -885,16 +885,16 @@ void UiSocketHandler::setMowSettings(const ArduMower::Domain::Robot::MowSettings
 }
 
 void UiSocketHandler::sendWaypointsDirect(const std::vector<ArduMower::Domain::Robot::MapPoint> &waypoints, uint32_t timestamp) {
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
   doc["type"] = ResponseDataType::map;
   doc["timestamp"] = timestamp;
-  auto data = doc.createNestedObject("data");
+  auto data = doc["data"].to<JsonObject>();
   data["startIndex"] = 0;
   data["total"] = (int)waypoints.size();
   data["pointType"] = static_cast<int>(MapPointType::Waypoints);
-  auto arr = data.createNestedArray("points");
+  auto arr = data["points"].to<JsonArray>();
   for (const auto &wp : waypoints) {
-    JsonObject obj = arr.createNestedObject();
+    JsonObject obj = arr.add<JsonObject>();
     wp.marshal(obj);
   }
   String json;
@@ -981,9 +981,9 @@ void UiSocketHandler::abortMapChunkSend() {
   }
 }
 
-static bool sendJsonDoc(UiSocketItem *item, DynamicJsonDocument &doc)
+static bool sendJsonDoc(UiSocketItem *item, JsonDocument &doc)
 {
-  if (doc.capacity() == 0) return false;
+  if (doc.memoryUsage() == 0) return false;
   String stateStr;
   serializeJson(doc, stateStr);
   stateStr = sanitizeUtf8(stateStr);
@@ -996,10 +996,10 @@ void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks)
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
   while (chunks < maxChunks) {
-    DynamicJsonDocument doc(2048);
-    if (doc.capacity() == 0) break;
+    JsonDocument doc;
+    if (doc.memoryUsage() == 0) break;
     doc["type"] = ResponseDataType::modemLog;
-    uint16_t sent = logToUi.marshalBatch(doc.createNestedObject("data"), offset, chunkSize);
+    uint16_t sent = logToUi.marshalBatch(doc["data"].to<JsonObject>(), offset, chunkSize);
     if (sent == 0 || doc.overflowed()) break;
     if (!sendJsonDoc(item, doc)) break;
     offset += sent;
@@ -1016,10 +1016,10 @@ void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChu
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
   while (chunks < maxChunks) {
-    DynamicJsonDocument doc(2048);
-    if (doc.capacity() == 0) break;
+    JsonDocument doc;
+    if (doc.memoryUsage() == 0) break;
     doc["type"] = ResponseDataType::mowerConsole;
-    uint16_t sent = _terminal.marshalBatch(doc.createNestedObject("data"), offset, chunkSize);
+    uint16_t sent = _terminal.marshalBatch(doc["data"].to<JsonObject>(), offset, chunkSize);
     if (sent == 0 || doc.overflowed()) break;
     if (!sendJsonDoc(item, doc)) break;
     offset += sent;
@@ -1091,9 +1091,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 #else
   const size_t docSize = 4096;
 #endif
-  DynamicJsonDocument doc(docSize);
+  JsonDocument doc;
   doc["type"] = dataType;
-  data.marshal(doc.createNestedObject("data"));
+  auto _j = doc["data"].to<JsonObject>(); data.marshal(_j);
 
   if (dataType == ResponseDataType::mowerState && !_progressOp.isEmpty()) {
     doc["progressPct"] = _progressPct;
@@ -1197,17 +1197,17 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     // eine Reconnect-Schleife. Lieber Nachrichten verwerfen.
     client->setCloseClientOnQueueFull(false);
     
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     doc["type"] = ResponseDataType::responseHello;
     doc["client"] = client->id();
-    JsonObject valueDescriptions = doc.createNestedObject("data");
-    JsonObject newObj = valueDescriptions.createNestedObject("job");
+    JsonObject valueDescriptions = doc["data"].to<JsonObject>();
+    JsonObject newObj = valueDescriptions["job"].to<JsonObject>();
     int i = 0; 
     for (const char *item: ArduMower::Domain::Robot::State::State::jobDesc) {
       newObj[String(i++)] = item;
     }
 
-    newObj = valueDescriptions.createNestedObject("posSolution");
+    newObj = valueDescriptions["posSolution"].to<JsonObject>();
     i = 0;
     for (const char *item: ArduMower::Domain::Robot::State::State::posSolutionDesc) {
       newObj[String(i++)] = item;
@@ -1358,7 +1358,7 @@ void UiSocketHandler::handleData(uint32_t clientId, char *data)
 {
   // Reichlich bemessener Puffer: 4x rawLen, da ArduinoJson für tief verschachtelte
   // Strukturen (Karte mit vielen Stützpunkten) mehr Speicher braucht als das JSON selbst.
-  DynamicJsonDocument doc(strlen(data) * 4 + 2048);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, data);
   if (error) {
     Log(ERR, "%s handleData: deserializeJson failed: %s (rawLen=%u)", _LOG_, error.f_str(), (unsigned)strlen(data));
@@ -1371,9 +1371,9 @@ void UiSocketHandler::handleData(uint32_t clientId, char *data)
     const size_t rawLen = strlen(data);
     Log(DBG, "%s handleData type=%d dataSize=%u rawLen=%u", _LOG_, (int)doc["type"], (unsigned)dataSize, (unsigned)rawLen);
     const size_t jsonCapacity = (dataSize > 0 ? dataSize * 2 : rawLen) + 1024;
-    DynamicJsonDocument jsonData(jsonCapacity);
+    JsonDocument jsonData;
     if (!jsonData.set(doc["data"])) {
-      Log(ERR, "%s handleData: jsonData.set() failed (capacity=%u dataSize=%u)", _LOG_, (unsigned)jsonData.capacity(), (unsigned)dataSize);
+      Log(ERR, "%s handleData: jsonData.set() failed (capacity=%u dataSize=%u)", _LOG_, (unsigned)jsonData.memoryUsage(), (unsigned)dataSize);
       return;
     }
     itemMap[clientId]->handleData(doc["type"], jsonData);

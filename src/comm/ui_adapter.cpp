@@ -141,8 +141,8 @@ void UiAdapter::handleApiGetModemSettings(AsyncWebServerRequest *request)
     return;
 
   AsyncResponseStream *response = request->beginResponseStream("application/json");
-  DynamicJsonDocument doc(2048);
-  const JsonObject &o = doc.to<JsonObject>();
+  JsonDocument doc;
+  JsonObject o = doc.to<JsonObject>();
   _settings.marshal(o);
   _settings.stripSecrets(o);
   serializeJson(doc, *response);
@@ -175,8 +175,8 @@ void UiAdapter::handleApiPostModemSettings(AsyncWebServerRequest *request, JsonV
     return;
   }
 
-  DynamicJsonDocument doc(1024);
-  uploaded.marshal(doc.to<JsonObject>());
+  JsonDocument doc;
+  auto _j = doc.to<JsonObject>(); uploaded.marshal(_j);
   String body;
   serializeJson(doc, body);
 
@@ -197,8 +197,8 @@ void UiAdapter::handleApiResetModemSettings(AsyncWebServerRequest *request)
     return;
   }
 
-  DynamicJsonDocument doc(1024);
-  replace.marshal(doc.to<JsonObject>());
+  JsonDocument doc;
+  auto _j = doc.to<JsonObject>(); replace.marshal(_j);
   String body;
   serializeJson(doc, body);
   request->send(200, "application/json", body);
@@ -275,25 +275,25 @@ void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVa
 
   if (action == "requestStatus") {
     auto state = _source.state();
-    DynamicJsonDocument doc(4096);
+    JsonDocument doc;
     doc["success"] = true;
     doc["action"] = action;
-    state.marshal(doc.createNestedObject("data"));
+    auto _j = doc["data"].to<JsonObject>(); state.marshal(_j);
     String body;
     serializeJson(doc, body);
     request->send(200, "application/json", body);
   } else if (action == "requestStats") {
     auto stats = _source.stats();
-    DynamicJsonDocument doc(4096);
+    JsonDocument doc;
     doc["success"] = true;
     doc["action"] = action;
-    stats.marshal(doc.createNestedObject("data"));
+    auto _j = doc["data"].to<JsonObject>(); stats.marshal(_j);
     String body;
     serializeJson(doc, body);
     request->send(200, "application/json", body);
   } else {
     AsyncResponseStream *response = request->beginResponseStream("application/json");
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     doc["success"] = ok;
     doc["action"] = action;
     serializeJson(doc, *response);

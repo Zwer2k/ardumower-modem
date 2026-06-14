@@ -20,7 +20,7 @@ namespace ArduMower
       String message;
 
       TerminalMessage(String message) : timestamp(millis()), message(message){};
-      void marshal(const JsonObject &o) const;
+      void marshal(JsonObject o) const;
     };
 
     using RxHandler = std::function<void(String line)>;

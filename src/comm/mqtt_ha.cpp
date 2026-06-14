@@ -41,7 +41,7 @@ void Adapter::loopReport(const uint32_t now)
   if (!changes)
     return;
 
-  DynamicJsonDocument o(1024);
+  JsonDocument o;
 
   uint8_t roundBatterylevel = (uint8_t)roundf(batteryVoltageToLevel(state->batteryVoltage));
   o["battery_level"] = roundBatterylevel;
@@ -135,7 +135,7 @@ String DiscoveryDocument::topic()
 String DiscoveryDocument::toJson(String topicPrefix)
 {
   String result;
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
 
   String chipIdStr = chipIdString();
 
@@ -149,7 +149,7 @@ String DiscoveryDocument::toJson(String topicPrefix)
   doc["set_fan_speed_topic"] = "~/ha/set_fan_speed";
   doc["payload_return_to_base"] = "dock";
 
-  auto features = doc.createNestedArray("supported_features");
+  auto features = doc["supported_features"].to<JsonArray>();
   features.add("start");
   features.add("stop");
   features.add("return_home");
@@ -157,7 +157,7 @@ String DiscoveryDocument::toJson(String topicPrefix)
   features.add("status");
   features.add("fan_speed");
 
-  auto speeds = doc.createNestedArray("fan_speed_list");
+  auto speeds = doc["fan_speed_list"].to<JsonArray>();
   speeds.add("off");
   speeds.add("min");
   speeds.add("medium");

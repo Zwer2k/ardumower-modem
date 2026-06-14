@@ -71,7 +71,7 @@ namespace ArduMower
           UiSocketHandler *socketHandler,
           AsyncWebSocketClient *client, 
           ArduMower::Domain::Robot::StateSource &source);
-        void handleData(RequestDataType dataType, DynamicJsonDocument &jsonData);
+        void handleData(RequestDataType dataType, JsonDocument &jsonData);
         bool sendText(String text);
         void ping();
         AwsClientStatus status();

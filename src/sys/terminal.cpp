@@ -3,10 +3,10 @@
 #ifdef MOWER_TERMINAL
 using namespace ArduMower::Modem;
 
-void TerminalMessage::marshal(const JsonObject &o) const
+void TerminalMessage::marshal(JsonObject o) const
 {
-  JsonArray logJson = o.createNestedArray("lines");
-  JsonObject jsonLine = logJson.createNestedObject();
+  JsonArray logJson = o["lines"].to<JsonArray>();
+  JsonObject jsonLine = logJson.add<JsonObject>();
   jsonLine["nr"] = 0;
   jsonLine["isSend"] = false;
   jsonLine["text"] = message;
@@ -97,12 +97,12 @@ uint16_t Terminal::marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t
 {
   uint16_t count = _buffer->currentSize();
   if (startIdx >= count) return 0;
-  JsonArray logJson = o.createNestedArray("lines");
+  JsonArray logJson = o["lines"].to<JsonArray>();
   String line;
   uint16_t sent = 0;
   for (uint16_t i = startIdx; i < count && sent < maxLines; i++) {
     if (_buffer->peekAt(i, line)) {
-      JsonObject jsonLine = logJson.createNestedObject();
+      JsonObject jsonLine = logJson.add<JsonObject>();
       jsonLine["nr"] = 0;
       jsonLine["isSend"] = false;
       jsonLine["text"] = line;

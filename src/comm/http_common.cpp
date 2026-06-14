@@ -25,7 +25,7 @@ void Common::reject(AsyncWebServerRequest *request, int statusCode, const String
   AsyncResponseStream *response = request->beginResponseStream("application/json");
   response->setCode(statusCode);
 
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   doc["success"] = false; // TODO HTTP OTA uses "success" true/false - get rid of "success" and unify error handling
   doc["error"] = error.c_str();
   doc["action"] = action.c_str();

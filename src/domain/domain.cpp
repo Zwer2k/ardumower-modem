@@ -122,7 +122,7 @@ bool State::Point::operator==(const Point &other)
   return same(other, x) && same(other, y);
 }
 
-void Stats::Durations::marshal(const JsonObject &o) const
+void Stats::Durations::marshal(JsonObject o) const
 {
   o[_t_duration_idle] = idle;
   o[_t_duration_charge] = charge;
@@ -132,14 +132,14 @@ void Stats::Durations::marshal(const JsonObject &o) const
   o[_t_duration_mow_fix] = mowFix;
 }
 
-void Stats::Recoveries::marshal(const JsonObject &o) const
+void Stats::Recoveries::marshal(JsonObject o) const
 {
   o[_t_recoveries_invalid_recoveries] = mowInvalid;
   o[_t_recoveries_float_recoveries] = mowFloatToFix;
   o[_t_recoveries_imu_triggered] = imu;
 }
 
-void Stats::Obstacles::marshal(const JsonObject &o) const
+void Stats::Obstacles::marshal(JsonObject o) const
 {
   o[_t_obstacles_gps_motion_timeout] = gpsMotionLow;
   o[_t_obstacles_sonar_triggered] = sonar;
@@ -147,7 +147,7 @@ void Stats::Obstacles::marshal(const JsonObject &o) const
   o[_t_obstacles_obstacles] = count;
 }
 
-void Stats::Stats::marshal(const JsonObject &o) const
+void Stats::Stats::marshal(JsonObject o) const
 {
   // Flattened format matching frontend Stats interface
   o[_t_duration_idle] = durations.idle;
@@ -176,26 +176,26 @@ void Stats::Stats::marshal(const JsonObject &o) const
   o[_t_stats_temp_max] = tempMax;
 }
 
-void Properties::marshal(const JsonObject &o) const
+void Properties::marshal(JsonObject o) const
 {
   o[_t_props_firmware] = firmware;
   o[_t_props_version] = version;
 }
 
-void State::State::marshal(const JsonObject &o) const
+void State::State::marshal(JsonObject o) const
 {
   o[_t_state_batteryVoltage] = batteryVoltage;
-  o.createNestedObject(_t_state_position);
-  position.marshal(o[_t_state_position]);
-  o.createNestedObject(_t_state_target);
-  target.marshal(o[_t_state_target]);
+  o[_t_state_position].to<JsonObject>();
+  do { auto _j = o[_t_state_position].to<JsonObject>(); position.marshal(_j); } while(0);
+  o[_t_state_target].to<JsonObject>();
+  do { auto _j = o[_t_state_target].to<JsonObject>(); target.marshal(_j); } while(0);
   o[_t_state_job] = job;
   o[_t_state_sensor] = sensor;
   o[_t_state_amps] = amps;
   o[_t_state_mapCrc] = mapCrc;
 }
 
-void State::Position::marshal(const JsonObject &o) const
+void State::Position::marshal(JsonObject o) const
 {
   o[_t_position_delta] = delta;
   o[_t_position_solution] = solution;
@@ -208,14 +208,14 @@ void State::Position::marshal(const JsonObject &o) const
   o[_t_point_y] = y;
 }
 
-void State::Point::marshal(const JsonObject &o) const
+void State::Point::marshal(JsonObject o) const
 {
   o[_t_point_x] = x;
   o[_t_point_y] = y;
 }
 
 
-void DesiredState::marshal(const JsonObject &o) const
+void DesiredState::marshal(JsonObject o) const
 {
   o[_t_desiredState_speed] = speed;
   o[_t_desiredState_mowerMotorEnabled] = mowerMotorEnabled;
@@ -242,7 +242,7 @@ bool SensorSummary::operator==(const SensorSummary &other)
          rainTriggered == other.rainTriggered;
 }
 
-void SensorSummary::marshal(const JsonObject &o) const
+void SensorSummary::marshal(JsonObject o) const
 {
   o[_t_sensor_sonar_left] = sonarLeft;
   o[_t_sensor_sonar_center] = sonarCenter;
@@ -270,7 +270,7 @@ bool GpsDetails::operator==(const GpsDetails &other)
          dgpsAge == other.dgpsAge;
 }
 
-void GpsSatellite::marshal(const JsonObject &o) const
+void GpsSatellite::marshal(JsonObject o) const
 {
   o["gnssId"] = gnssId;
   o["svId"] = svId;
@@ -284,7 +284,7 @@ void GpsSatellite::marshal(const JsonObject &o) const
   o["azimuth"] = azimuth;
 }
 
-void GpsDetails::marshal(const JsonObject &o) const
+void GpsDetails::marshal(JsonObject o) const
 {
   o["numSV"] = numSV;
   o["numSVdgps"] = numSVdgps;
@@ -292,20 +292,20 @@ void GpsDetails::marshal(const JsonObject &o) const
   o["hAccuracy"] = hAccuracy;
   o["vAccuracy"] = vAccuracy;
   o["dgpsAge"] = dgpsAge;
-  JsonArray arr = o.createNestedArray("satellites");
+  JsonArray arr = o["satellites"].to<JsonArray>();
   for (const auto& sat : satellites) {
-    JsonObject obj = arr.createNestedObject();
+    JsonObject obj = arr.add<JsonObject>();
     sat.marshal(obj);
   }
 }
 
-void UbxResponse::marshal(const JsonObject &o) const
+void UbxResponse::marshal(JsonObject o) const
 {
   o["timestamp"] = timestamp;
   o["hex"] = hexData;
 }
 
-void MowSettings::marshal(const JsonObject &o) const
+void MowSettings::marshal(JsonObject o) const
 {
   o["timestamp"] = timestamp;
   o["pattern"] = pattern;

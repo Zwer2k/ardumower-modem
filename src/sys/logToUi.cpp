@@ -67,12 +67,12 @@ bool LogToUi::hasData() {
     return !modemLog->isEmpty();
 } 
 
-void LogToUi::marshal(const JsonObject &o)
+void LogToUi::marshal(JsonObject o)
 {
     uint16_t count = modemLog->currentSize();
     if (count == 0) return;
     
-    JsonArray logJson = o.createNestedArray("log");
+    JsonArray logJson = o["log"].to<JsonArray>();
 
     LogLine line;
     int sent = 0;
@@ -80,7 +80,7 @@ void LogToUi::marshal(const JsonObject &o)
     uint16_t startIdx = count > 6 ? count - 6 : 0;
     for (uint16_t i = startIdx; i < count && sent < 6; i++) {
         if (modemLog->peekAt(i, line)) {
-            JsonObject jsonLine = logJson.createNestedObject();
+            JsonObject jsonLine = logJson.add<JsonObject>();
             jsonLine["nr"] = line.nr;
             jsonLine["level"] = line.level;
             jsonLine["text"] = line.text;
@@ -97,13 +97,13 @@ uint16_t LogToUi::marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t 
     uint16_t count = modemLog->currentSize();
     if (count == 0 || startIdx >= count) return 0;
 
-    JsonArray logJson = o.createNestedArray("log");
+    JsonArray logJson = o["log"].to<JsonArray>();
 
     LogLine line;
     uint16_t sent = 0;
     for (uint16_t i = startIdx; i < count && sent < maxLines; i++) {
         if (modemLog->peekAt(i, line)) {
-            JsonObject jsonLine = logJson.createNestedObject();
+            JsonObject jsonLine = logJson.add<JsonObject>();
             jsonLine["nr"] = line.nr;
             jsonLine["level"] = line.level;
             jsonLine["text"] = line.text;

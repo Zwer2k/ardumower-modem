@@ -22,7 +22,7 @@ class LogToUi {
         size_t printf(const char *format, ...);
         size_t log(const LogLevel logLevel, const char *format, ...);
         bool hasData();
-        void marshal(const JsonObject &o);
+        void marshal(JsonObject o);
         void exportAll(String &csv);
         uint16_t marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t maxLines);
         uint32_t timestamp = 0;

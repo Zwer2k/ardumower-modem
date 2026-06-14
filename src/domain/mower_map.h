@@ -43,17 +43,17 @@ namespace ArduMower {
                 bool isReading() const { return reading; }
 
                 void marshal(JsonObject obj) const {
-                    JsonArray perim = obj.createNestedArray("perimeter");
-                    for (const auto& p : perimeter) p.marshal(perim.createNestedObject());
-                    JsonArray excls = obj.createNestedArray("exclusions");
+                    JsonArray perim = obj["perimeter"].to<JsonArray>();
+                    for (const auto& p : perimeter) p.marshal(perim.add<JsonObject>());
+                    JsonArray excls = obj["exclusions"].to<JsonArray>();
                     for (const auto& ex : exclusions) {
-                        JsonArray exArr = excls.createNestedArray();
-                        for (const auto& p : ex) p.marshal(exArr.createNestedObject());
+                        JsonArray exArr = excls.add<JsonArray>();
+                        for (const auto& p : ex) p.marshal(exArr.add<JsonObject>());
                     }
-                    JsonArray wps = obj.createNestedArray("waypoints");
-                    for (const auto& p : waypoints) p.marshal(wps.createNestedObject());
-                    JsonArray docks = obj.createNestedArray("dockpoints");
-                    for (const auto& p : dockpoints) p.marshal(docks.createNestedObject());
+                    JsonArray wps = obj["waypoints"].to<JsonArray>();
+                    for (const auto& p : waypoints) p.marshal(wps.add<JsonObject>());
+                    JsonArray docks = obj["dockpoints"].to<JsonArray>();
+                    for (const auto& p : dockpoints) p.marshal(docks.add<JsonObject>());
                     Log(DBG, "marshal map perimeter %d, exclusions %d, waypoints %d, dockpoints %d", perimeter.size(), exclusions.size(), waypoints.size(), dockpoints.size());
                 }
             };

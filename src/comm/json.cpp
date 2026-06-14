@@ -26,8 +26,8 @@ using namespace ArduMower::Domain;
 String Json::encode(Properties &p)
 {
   String result;
-  DynamicJsonDocument doc(1024);
-  p.marshal(doc.to<JsonObject>());
+  JsonDocument doc;
+  auto _j = doc.to<JsonObject>(); p.marshal(_j);
   serializeJson(doc, result);
   
   return result;
@@ -36,8 +36,8 @@ String Json::encode(Properties &p)
 String Json::encode(State::State &s)
 {
   String result;
-  DynamicJsonDocument doc(1024);
-  s.marshal(doc.to<JsonObject>());
+  JsonDocument doc;
+  auto _j = doc.to<JsonObject>(); s.marshal(_j);
   serializeJson(doc, result);
   
   return result;
@@ -46,7 +46,7 @@ String Json::encode(State::State &s)
 String Json::encode(Stats::Stats &stats)
 {
   String result;
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
 
   doc["duration_idle"] = stats.durations.idle;
   doc["duration_charge"] = stats.durations.charge;
@@ -86,8 +86,8 @@ String Json::encode(Stats::Stats &stats)
 String Json::encode(DesiredState &d)
 {
   String result;
-  DynamicJsonDocument doc(1024);
-  d.marshal(doc.to<JsonObject>());
+  JsonDocument doc;
+  auto _j = doc.to<JsonObject>(); d.marshal(_j);
   serializeJson(doc, result);
   
   return result;

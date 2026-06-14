@@ -70,7 +70,7 @@ General::General() : name("Ardumower"), encryption(true), password(123456) {}
 
 Settings::Settings(String filename) : _filename(filename), revision(0) {}
 
-#define containsAndHas(o, k, h) (o.containsKey(k) && (!o.containsKey(h) || o[h].as<bool>() == true))
+#define containsAndHas(o, k, h) (o[k].is<JsonVariant>() && (!o[h].is<JsonVariant>() || o[h].as<bool>() == true))
 
 void Settings::begin()
 {
@@ -95,7 +95,7 @@ void Settings::begin()
   file = SPIFFS.open(filename.c_str());
 #endif
 
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
   auto err = deserializeJson(doc, file);
 
   if (err != DeserializationError::Ok)
@@ -126,7 +126,7 @@ bool Settings::save()
     return false;
   }
 
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
   marshal(doc.to<JsonObject>());
 
   if (doc.overflowed())
@@ -156,28 +156,28 @@ bool Settings::valid(String &invalid) const
   return general.valid(invalid) && web.valid(invalid) && wifi.valid(invalid) && mqtt.valid(invalid);
 }
 
-void Settings::marshal(const JsonObject &o) const
+void Settings::marshal(JsonObject o) const
 {
   o[_t_revision] = revision;
-  general.marshal(o.createNestedObject(_t_general));
-  web.marshal(o.createNestedObject(_t_web));
-  wifi.marshal(o.createNestedObject(_t_wifi));
-  bluetooth.marshal(o.createNestedObject(_t_bluetooth));
+  { auto _j = o[_t_general].to<JsonObject>(); general.marshal(_j); }
+  { auto _j = o[_t_web].to<JsonObject>(); web.marshal(_j); }
+  { auto _j = o[_t_wifi].to<JsonObject>(); wifi.marshal(_j); }
+  { auto _j = o[_t_bluetooth].to<JsonObject>(); bluetooth.marshal(_j); }
 #ifdef ENABLE_PS4_CONTROLLER
-  ps4controller.marshal(o.createNestedObject(_t_ps4controller));
+  { auto _j = o[_t_ps4controller].to<JsonObject>(); ps4controller.marshal(_j); }
 #endif
-  mqtt.marshal(o.createNestedObject(_t_mqtt));
-  prometheus.marshal(o.createNestedObject(_t_prometheus));
+  { auto _j = o[_t_mqtt].to<JsonObject>(); mqtt.marshal(_j); }
+  { auto _j = o[_t_prometheus].to<JsonObject>(); prometheus.marshal(_j); }
 }
 
 #define mustContain(component, o, prop)                      \
-  if (!o.containsKey(prop))                                  \
+  if (!o[prop].is<JsonVariant>())                                  \
   {                                                          \
     Log(ERR, "%s::unmarshal::missing(%s)", component, prop); \
     return false;                                            \
   }
 #define mustContainAndSucceed(component, o, prop, fn)        \
-  if (!o.containsKey(prop))                                  \
+  if (!o[prop].is<JsonVariant>())                                  \
   {                                                          \
     Log(ERR, "%s::unmarshal::missing(%s)", component, prop); \
     return false;                                            \
@@ -188,7 +188,7 @@ void Settings::marshal(const JsonObject &o) const
     return false;                                            \
   }
 
-bool Settings::unmarshal(const JsonObject &o)
+bool Settings::unmarshal(JsonObject o)
 {
   mustContain("Settings", o, _t_revision);
   revision = o[_t_revision];
@@ -262,14 +262,14 @@ bool General::valid(String &invalid) const
   return false;
 }
 
-void General::marshal(const JsonObject &o) const
+void General::marshal(JsonObject o) const
 {
   o[_t_name] = name;
   o[_t_encryption] = encryption;
   o[_t_password] = password;
 }
 
-bool General::unmarshal(const JsonObject &o)
+bool General::unmarshal(JsonObject o)
 {
   mustContain("General", o, _t_name);
   mustContain("General", o, _t_encryption);
@@ -302,14 +302,14 @@ bool Web::valid(String &invalid) const
   return false;
 }
 
-void Web::marshal(const JsonObject &o) const
+void Web::marshal(JsonObject o) const
 {
   o[_t_protected] = use_password;
   o[_t_username] = username;
   o[_t_password] = password;
 }
 
-bool Web::unmarshal(const JsonObject &o)
+bool Web::unmarshal(JsonObject o)
 {
   use_password = o[_t_protected];
   username = o[_t_username].as<String>();
@@ -356,7 +356,7 @@ bool WiFi::valid(String &invalid) const
   }
 }
 
-void WiFi::marshal(const JsonObject &o) const
+void WiFi::marshal(JsonObject o) const
 {
   switch (mode)
   {
@@ -376,7 +376,7 @@ void WiFi::marshal(const JsonObject &o) const
   o[_t_ap_psk] = ap_psk;
 }
 
-bool WiFi::unmarshal(const JsonObject &o)
+bool WiFi::unmarshal(JsonObject o)
 {
   mode = 0;
   if (o[_t_mode] == _t_sta)
@@ -384,9 +384,9 @@ bool WiFi::unmarshal(const JsonObject &o)
   else if (o[_t_mode] == _t_ap)
     mode = 2;
 
-  if (o.containsKey(_t_sta_ssid))
+  if (o[_t_sta_ssid].is<JsonVariant>())
     sta_ssid = o[_t_sta_ssid].as<String>();
-  if (o.containsKey(_t_ap_ssid))
+  if (o[_t_ap_ssid].is<JsonVariant>())
     ap_ssid = o[_t_ap_ssid].as<String>();
   if (containsAndHas(o, _t_sta_psk, _t_has_sta_psk))
     sta_psk = o[_t_sta_psk].as<String>();
@@ -402,14 +402,14 @@ void WiFi::stripSecrets(const JsonObject &o) const
   stripSecret(o, _t_ap_psk, _t_has_ap_psk);
 }
 
-void Bluetooth::marshal(const JsonObject &o) const
+void Bluetooth::marshal(JsonObject o) const
 {
   o[_t_enabled] = enabled;
   o[_t_pin_enabled] = pin_enabled;
   o[_t_pin] = pin;
 }
 
-bool Bluetooth::unmarshal(const JsonObject &o)
+bool Bluetooth::unmarshal(JsonObject o)
 {
   enabled = o[_t_enabled];
   pin_enabled = o[_t_pin_enabled];
@@ -421,7 +421,7 @@ bool Bluetooth::unmarshal(const JsonObject &o)
 
 void Bluetooth::stripSecrets(const JsonObject &o) const
 {
-  if (o.containsKey(_t_pin))
+  if (o[_t_pin].is<JsonVariant>())
   {
     o[_t_has_pin] = true;
     o.remove(_t_pin);
@@ -429,14 +429,14 @@ void Bluetooth::stripSecrets(const JsonObject &o) const
 }
 
 #ifdef ENABLE_PS4_CONTROLLER
-void PS4Controller::marshal(const JsonObject &o) const
+void PS4Controller::marshal(JsonObject o) const
 {
   o[_t_enabled] = enabled;
   o[_t_use_ps4_mac] = use_ps4_mac;
   o[_t_ps4_mac] = ps4_mac;
 }
 
-bool PS4Controller::unmarshal(const JsonObject &o)
+bool PS4Controller::unmarshal(JsonObject o)
 {
   enabled = o[_t_enabled];
   use_ps4_mac = o[_t_use_ps4_mac];
@@ -524,7 +524,7 @@ bool MQTT::valid(String &invalid) const
   return true;
 }
 
-void MQTT::marshal(const JsonObject &o) const
+void MQTT::marshal(JsonObject o) const
 {
   o[_t_enabled] = enabled;
 
@@ -541,7 +541,7 @@ void MQTT::marshal(const JsonObject &o) const
   o[_t_iob] = iob;
 }
 
-bool MQTT::unmarshal(const JsonObject &o)
+bool MQTT::unmarshal(JsonObject o)
 {
   enabled = o[_t_enabled];
   prefix = o[_t_prefix].as<String>();
@@ -572,12 +572,12 @@ void MQTT::stripSecrets(const JsonObject &o) const
   stripSecret(o, _t_password, _t_has_password);
 }
 
-void Prometheus::marshal(const JsonObject &o) const
+void Prometheus::marshal(JsonObject o) const
 {
   o[_t_enabled] = enabled;
 }
 
-bool Prometheus::unmarshal(const JsonObject &o)
+bool Prometheus::unmarshal(JsonObject o)
 {
   enabled = o[_t_enabled];
 
@@ -588,7 +588,7 @@ void Prometheus::stripSecrets(const JsonObject &o) const {}
 
 void Group::stripSecret(const JsonObject &o, const char *key, const char *hasKey) const
 {
-  if (!o.containsKey(key))
+  if (!o[key].is<JsonVariant>())
     return;
 
   const String &password = o[key].as<String>();
@@ -608,7 +608,7 @@ const char *PropertiesClass::version() const
   return git_hash;
 }
 
-void PropertiesClass::marshal(const JsonObject &o) const
+void PropertiesClass::marshal(JsonObject o) const
 {
   o[_t_git_hash] = git_hash;
   o[_t_git_time] = git_time;

@@ -181,12 +181,12 @@ void Console::printInfo()
         {
           o["result"] = "ok";
           o["kind"] = "info";
-          auto info = o.createNestedObject("info");
+          auto info = o["info"].to<JsonObject>();
           info["firmware"] = "ArduMower Modem";
           info["name"] = settings.general.name.c_str();
-          auto esp = info.createNestedObject("esp32");
+          auto esp = info["esp32"].to<JsonObject>();
           esp["chip_id"] = id.c_str();
-          auto git = info.createNestedObject("git");
+          auto git = info["git"].to<JsonObject>();
           git["hash"] = git_hash;
           git["time"] = git_time;
           git["tag"] = git_tag;
@@ -251,19 +251,19 @@ void Console::printStatus()
         {
           o["result"] = "ok";
           o["kind"] = "status";
-          auto status = o.createNestedObject("status");
+          auto status = o["status"].to<JsonObject>();
           status["uptime"] = millis();
-          auto heap = status.createNestedObject("heap");
+          auto heap = status["heap"].to<JsonObject>();
           heap["size"] = ESP.getHeapSize();
           heap["free"] = ESP.getFreeHeap();
           heap["min_free"] = ESP.getMinFreeHeap();
           heap["max_alloc"] = ESP.getMaxAllocHeap();
 
-          auto w = status.createNestedObject("wifi");
+          auto w = status["wifi"].to<JsonObject>();
           w["mode"] = wifiMode.c_str();
           w["channel"] = wifiChannel;
           w["status"] = wifiStatus.c_str();
-          auto ap = w.createNestedObject("ap");
+          auto ap = w["ap"].to<JsonObject>();
           if (!wifiAp)
             ap["enabled"] = false;
           else
@@ -272,7 +272,7 @@ void Console::printStatus()
             ap["ssid"] = String(reinterpret_cast<const char *>(confAp.ap.ssid));
             ap["ip"] = String(WiFi.softAPIP().toString().c_str());
           }
-          auto sta = w.createNestedObject("sta");
+          auto sta = w["sta"].to<JsonObject>();
           if (!wifiSta)
             sta["enabled"] = false;
           else
@@ -391,7 +391,7 @@ void Console::dumpSettings()
       {
         o["result"] = "ok";
         o["kind"] = "dump-settings";
-        auto s = o.createNestedObject("settings");
+        auto s = o["settings"].to<JsonObject>();
         settings.marshal(s);
       });
 }
@@ -421,7 +421,7 @@ void Console::processSettings(String line)
   expectSettings = false;
   io.println();
 
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   auto err = deserializeJson(doc, line);
   if (err != DeserializationError::Ok)
   {
@@ -518,8 +518,8 @@ void Console::title(const char *title)
 
 void Console::printJson(std::function<void(const JsonObject &o)> fn)
 {
-  DynamicJsonDocument doc(1024);
-  const JsonObject &o = doc.to<JsonObject>();
+  JsonDocument doc;
+  const JsonObject o = doc.to<JsonObject>();
   fn(o);
   serializeJson(doc, io);
   io.println();

@@ -14,8 +14,8 @@ namespace ArduMower
       class Group
       {
       public:
-        virtual void marshal(const JsonObject &o) const = 0;
-        virtual bool unmarshal(const JsonObject &o) = 0;
+        virtual void marshal(JsonObject o) const = 0;
+        virtual bool unmarshal(JsonObject o) = 0;
         virtual void stripSecrets(const JsonObject &o) const = 0;
 
       protected:
@@ -33,8 +33,8 @@ namespace ArduMower
 
         bool valid(String & invalid) const;
 
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
+        virtual void marshal(JsonObject o) const override;
+        virtual bool unmarshal(JsonObject o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 
@@ -49,8 +49,8 @@ namespace ArduMower
 
         bool valid(String & invalid) const;
 
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
+        virtual void marshal(JsonObject o) const override;
+        virtual bool unmarshal(JsonObject o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 
@@ -90,8 +90,8 @@ namespace ArduMower
           return true;
         }
 
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
+        virtual void marshal(JsonObject o) const override;
+        virtual bool unmarshal(JsonObject o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 
@@ -103,8 +103,8 @@ namespace ArduMower
         bool pin_enabled;
         uint32_t pin;
 
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
+        virtual void marshal(JsonObject o) const override;
+        virtual bool unmarshal(JsonObject o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 
@@ -117,8 +117,8 @@ namespace ArduMower
         bool use_ps4_mac;
         String ps4_mac;
 
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
+        virtual void marshal(JsonObject o) const override;
+        virtual bool unmarshal(JsonObject o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 #endif
@@ -134,8 +134,8 @@ namespace ArduMower
 
         bool valid(String & invalid) const;
 
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
+        virtual void marshal(JsonObject o) const override;
+        virtual bool unmarshal(JsonObject o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 
@@ -145,8 +145,8 @@ namespace ArduMower
         Prometheus() : enabled(false) {}
         bool enabled;
 
-        virtual void marshal(const JsonObject &o) const override;
-        virtual bool unmarshal(const JsonObject &o) override;
+        virtual void marshal(JsonObject o) const override;
+        virtual bool unmarshal(JsonObject o) override;
         virtual void stripSecrets(const JsonObject &o) const override;
       };
 
@@ -176,8 +176,8 @@ namespace ArduMower
 
         bool valid(String & invalid) const;
 
-        bool unmarshal(const JsonObject &o);
-        void marshal(const JsonObject &o) const;
+        bool unmarshal(JsonObject o);
+        void marshal(JsonObject o) const;
         void stripSecrets(const JsonObject &o) const;
       };
 
@@ -190,7 +190,7 @@ namespace ArduMower
 
         const char * version() const;
 
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       private:
         bool initBluetooth() const;
         String getBTMacAddress() const;

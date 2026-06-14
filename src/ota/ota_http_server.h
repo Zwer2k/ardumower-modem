@@ -55,14 +55,13 @@ namespace ArduMower
         class ModemUploadSession : UploadSession
         {
         private:
-          static const size_t MAX_OTA_SIZE = 0x200000; // 2MB PSRAM buffer
-          static const size_t FLASH_CHUNK_SIZE = 4096;
+          static const size_t MAX_OTA_SIZE = 0x300000; // 3MB PSRAM buffer
 
           HttpServer *s;
           Result result;
-          uint8_t *_buffer;     // PSRAM buffer (NULL = streaming fallback)
-          size_t _bufferPos;    // bytes buffered so far / total firmware size
-          bool _streaming;      // true = direct Update.write(), no buffering
+          uint8_t *_buffer;
+          size_t _bufferPos;
+          bool _streaming;
 
           size_t _flashWritten;
           uint8_t *_dramBuf;

@@ -20,7 +20,7 @@ namespace ArduMower
 
         bool operator==(const Properties &other);
         bool operator!=(const Properties &other) { return !(*this == other); }
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       };
 
       namespace Stats
@@ -32,7 +32,7 @@ namespace ArduMower
 
           bool operator==(const Durations &other);
           bool operator!=(const Durations &other) { return !(*this == other); }
-          void marshal(const JsonObject &o) const;
+          void marshal(JsonObject o) const;
         };
 
         class Recoveries
@@ -44,7 +44,7 @@ namespace ArduMower
 
           bool operator==(const Recoveries &other);
           bool operator!=(const Recoveries &other) { return !(*this == other); }
-          void marshal(const JsonObject &o) const;
+          void marshal(JsonObject o) const;
         };
 
         class Obstacles
@@ -57,7 +57,7 @@ namespace ArduMower
 
           bool operator==(const Obstacles &other);
           bool operator!=(const Obstacles &other) { return !(*this == other); }
-          void marshal(const JsonObject &o) const;
+          void marshal(JsonObject o) const;
         };
 
         class Stats
@@ -83,7 +83,7 @@ namespace ArduMower
 
           bool operator==(const Stats &other);
           bool operator!=(const Stats &other) { return !(*this == other); }
-          void marshal(const JsonObject &o) const;
+          void marshal(JsonObject o) const;
         };
       }
 
@@ -99,7 +99,7 @@ namespace ArduMower
 
           bool operator==(const Point &other);
           bool operator!=(const Point &other) { return !(*this == other); }
-          void marshal(const JsonObject &o) const;
+          void marshal(JsonObject o) const;
         };
 
         class Position : public Point
@@ -119,7 +119,7 @@ namespace ArduMower
 
           bool operator==(const Position &other);
           bool operator!=(const Position &other) { return !(*this == other); }
-          void marshal(const JsonObject &o) const;
+          void marshal(JsonObject o) const;
         };
 
         class State
@@ -153,7 +153,7 @@ namespace ArduMower
 
           bool operator==(const State &other);
           bool operator!=(const State &other) { return !(*this == other); }
-          void marshal(const JsonObject &o) const;
+          void marshal(JsonObject o) const;
         };
       }
 
@@ -168,7 +168,7 @@ namespace ArduMower
         int fixTimeout;
 
         DesiredState() : timestamp(1), speed(0), mowerMotorEnabled(false), finishAndRestart(false), op(-1), fixTimeout(-1){};
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       };
 
       class SensorSummary
@@ -201,7 +201,7 @@ namespace ArduMower
 
         bool operator==(const SensorSummary &other);
         bool operator!=(const SensorSummary &other) { return !(*this == other); }
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       };
 
       class GpsSatellite
@@ -224,7 +224,7 @@ namespace ArduMower
         {
         }
 
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       };
 
       class GpsDetails
@@ -247,7 +247,7 @@ namespace ArduMower
 
         bool operator==(const GpsDetails &other);
         bool operator!=(const GpsDetails &other) { return !(*this == other); }
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       };
 
       class UbxResponse
@@ -262,7 +262,7 @@ namespace ArduMower
           return timestamp == other.timestamp && hexData == other.hexData;
         }
         bool operator!=(const UbxResponse &other) { return !(*this == other); }
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       };
 
       class MowSettings
@@ -295,7 +295,7 @@ namespace ArduMower
               && mowBorderCcw == other.mowBorderCcw;
         }
         bool operator!=(const MowSettings &other) { return !(*this == other); }
-        void marshal(const JsonObject &o) const;
+        void marshal(JsonObject o) const;
       };
 
       class StateSource
