@@ -32,6 +32,8 @@ UiSocketItem::UiSocketItem(
   _socketHandler->sendMapList(this);
   yield();
   _socketHandler->sendBufferedLogTo(this, 5);
+  yield();
+  _socketHandler->sendDrivenTrack(this);
 #ifdef MOWER_TERMINAL
   _socketHandler->sendBufferedTerminalTo(this, 5);
 #endif
@@ -477,9 +479,17 @@ void UiSocketHandler::loop()
     case 14:
       processUploadToMower();
       break;
+    case 15: {
+      static unsigned long lastTrackSend = 0;
+      if (millis() - lastTrackSend >= 10000) {
+        lastTrackSend = millis();
+        sendDrivenTrack(NULL);
+      }
+      break;
+    }
     }
     loopCase++;
-    if (loopCase > 14) loopCase = 0;
+    if (loopCase > 15) loopCase = 0;
   yield();
   
   //pingClients();
@@ -662,6 +672,9 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
         }
       }
       sendData(dataType, sendTo, state, force);
+      if (state.job == 1 || state.job == 0) {
+        pushDrivenTrackPoint(state.position.x, state.position.y, state.timestamp);
+      }
       break;
     }
     case ResponseDataType::mowerStats:
@@ -1227,6 +1240,34 @@ void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
     sendTo->sendText(json);
   } else {
     if (countConnectedClients() == 0) return;
+    if (!sendTextAllWithRetry(_ws, json)) {
+      _ws->cleanupClients();
+    }
+  }
+}
+
+void UiSocketHandler::pushDrivenTrackPoint(float x, float y, uint32_t timestamp) {
+  _track.push(x, y, timestamp);
+}
+
+void UiSocketHandler::sendDrivenTrack(UiSocketItem *sendTo)
+{
+  if (countConnectedClients() == 0 && sendTo == NULL) return;
+  if (_track.size() == 0) return;
+
+  JsonDocument doc;
+  doc["type"] = ResponseDataType::drivenTrack;
+  doc["timestamp"] = millis();
+  auto dataObj = doc["data"].to<JsonObject>();
+  _track.marshal(dataObj);
+
+  String json;
+  serializeJson(doc, json);
+  json = sanitizeUtf8(json);
+
+  if (sendTo != NULL) {
+    sendTo->sendText(json);
+  } else {
     if (!sendTextAllWithRetry(_ws, json)) {
       _ws->cleanupClients();
     }

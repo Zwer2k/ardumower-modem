@@ -58,6 +58,7 @@ namespace ArduMower
         mowSettings,
         operationProgress,
         mapList,
+        drivenTrack,
         responseDataTypeLength
       };
 
@@ -153,6 +154,8 @@ namespace ArduMower
         void processUploadToMower();
         void abortMapChunkSend();
         void sendWaypointsDirect(const std::vector<ArduMower::Domain::Robot::MapPoint> &waypoints, uint32_t timestamp);
+        void pushDrivenTrackPoint(float x, float y, uint32_t timestamp);
+        void sendDrivenTrack(UiSocketItem *sendTo = NULL);
         size_t clientCount() { return countConnectedClients(); }
         uint32_t lastClientActivity() const { return _lastClientActivity; }
         uint32_t lastWsConnectionEvent() const { return _lastWsConnectionEvent; }
@@ -222,6 +225,7 @@ namespace ArduMower
         std::map<uint32_t, UiSocketItem*> itemMap;
         MapChunkSendState mapChunkSendState;
         std::map<uint32_t, String> _frameBuffer;
+        ArduMower::Domain::Robot::DrivenTrack _track;
         
         void versionRequestLoop();
         void stateRequestLoop();

@@ -286,12 +286,18 @@ export enum ResponseDataType {
   mowSettings,
   operationProgress,
   mapList,
+  drivenTrack,
 }
 
 export interface OperationProgress {
   operation: string;
   progress: number;
   message: string;
+}
+
+export interface DrivenTrackData {
+  points: { x: number; y: number; t: number }[];
+  size: number;
 }
 
 // Map data for WebSocket

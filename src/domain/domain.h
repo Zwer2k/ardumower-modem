@@ -1,4 +1,4 @@
-#pragma once
+  #pragma once
 
 #include <Arduino.h>
 #include <inttypes.h>
@@ -263,6 +263,50 @@ namespace ArduMower
         }
         bool operator!=(const UbxResponse &other) { return !(*this == other); }
         void marshal(JsonObject o) const;
+      };
+
+      struct TrackPoint {
+        float x, y;
+        uint32_t timestamp;
+      };
+
+      class DrivenTrack {
+      public:
+        static const size_t MAX_POINTS = 500;
+
+        DrivenTrack() : _head(0), _count(0) {
+          _points.resize(MAX_POINTS);
+        }
+
+        void push(float x, float y, uint32_t timestamp) {
+          _points[_head].x = x;
+          _points[_head].y = y;
+          _points[_head].timestamp = timestamp;
+          _head = (_head + 1) % MAX_POINTS;
+          if (_count < MAX_POINTS) _count++;
+        }
+
+        size_t size() const { return _count; }
+
+        void marshal(JsonObject o) const {
+          JsonArray arr = o["points"].to<JsonArray>();
+          size_t start = (_count < MAX_POINTS) ? 0 : _head;
+          for (size_t i = 0; i < _count; i++) {
+            size_t idx = (start + i) % MAX_POINTS;
+            JsonObject p = arr.add<JsonObject>();
+            p["x"] = _points[idx].x;
+            p["y"] = _points[idx].y;
+            p["t"] = _points[idx].timestamp;
+          }
+          o["size"] = (uint32_t)_count;
+        }
+
+        void clear() { _count = 0; _head = 0; }
+
+      private:
+        std::vector<TrackPoint> _points;
+        size_t _head;
+        size_t _count;
       };
 
       class MowSettings

@@ -33,9 +33,10 @@ tasks:
 
   package-ui:
     vars:
-      VITE_ENABLE_MAP: '{{default "false" .VITE_ENABLE_MAP}}'
-      VITE_ENABLE_LIVE_MAP: '{{default "false" .VITE_ENABLE_LIVE_MAP}}'
-      VITE_ENABLE_GPS_DASHBOARD: '{{default "false" .VITE_ENABLE_GPS_DASHBOARD}}'
+      ESP_TARGET: '{{default "esp32" .ESP_TARGET}}'
+      VITE_ENABLE_MAP: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
+      VITE_ENABLE_LIVE_MAP: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
+      VITE_ENABLE_GPS_DASHBOARD: '{{if eq .ESP_TARGET "esp32-S3"}}true{{else}}false{{end}}'
     cmds:
     - go run .
     deps:

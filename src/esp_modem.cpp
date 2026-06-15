@@ -182,58 +182,87 @@ void setup() {
   });
 
   looptime.add("wifi_health", [&]() {
-    static enum { INIT, IDLE, ACTIVE } state = INIT;
-    static uint32_t lastChange = 0;
+    static enum { ACTIVE, RECOVERING_DISCONNECT, RECOVERING_WAIT, RECOVERING_RECONNECT } state = ACTIVE;
+    static uint32_t lastRecovery = 0;
     uint32_t now = millis();
 
     // Do not force a reconnect while a firmware flash is in progress
     if (Ota::MowerUpdater::isFlashing()) {
       state = ACTIVE;
-      lastChange = now;
+      lastRecovery = now;
       return;
     }
 
-    if (state == INIT) {
-      lastChange = now;
-      state = IDLE;
+    // ----- RECOVERY STATE MACHINE (non-blocking) -----
+    if (state == RECOVERING_DISCONNECT) {
+      WiFi.disconnect(true, true);
+      lastRecovery = now;
+      state = RECOVERING_WAIT;
       return;
     }
 
-    bool mqttOk = mqttAdapter.connected();
-    uint32_t lastWs = socketHandler.lastClientActivity();
-
-    // Only monitor the link when there actually are WebSocket clients or
-    // recent connect/disconnect/error events. Otherwise an idle modem with no
-    // open UI would be forced to reconnect every 5 minutes.
-    bool hasWsContext = (socketHandler.clientCount() > 0) ||
-                        (socketHandler.lastWsConnectionEvent() > 0 &&
-                         (now - socketHandler.lastWsConnectionEvent()) < 300000);
-    if (!hasWsContext) {
-      state = ACTIVE;
-      lastChange = now;
+    if (state == RECOVERING_WAIT) {
+      if (now - lastRecovery < 200) return;
+      wifiAdapter.fullReconnect();
+      lastRecovery = now;
+      state = RECOVERING_RECONNECT;
       return;
     }
 
-    bool anyActivity = mqttOk || (lastWs > lastChange);
-
-    if (anyActivity) {
-      state = ACTIVE;
-      lastChange = now;
+    if (state == RECOVERING_RECONNECT) {
+      if (WiFi.status() == WL_CONNECTED) {
+        Log(WARN, "wifi_health: recovery complete – reconnected");
+        state = ACTIVE;
+        lastRecovery = now;
+        return;
+      }
+      if (now - lastRecovery > 30000) {
+        Log(WARN, "wifi_health: recovery timeout – retrying");
+        state = RECOVERING_DISCONNECT;
+        lastRecovery = now;
+      }
       return;
     }
 
-    if (state == ACTIVE) {
-      state = IDLE;
-      lastChange = now;
+    // ----- NORMAL HEALTH CHECK -----
+    wl_status_t wifiStatus = WiFi.status();
+    uint32_t freeHeap = ESP.getFreeHeap();
+
+    if (wifiStatus != WL_CONNECTED) {
+      if (now - lastRecovery < 30000) return;
+      if (freeHeap < 16384) {
+        Log(ERR, "wifi_health: heap critically low (%u), reboot instead of recovery", freeHeap);
+        delay(100);
+        ESP.restart();
+        return;
+      }
+      Log(WARN, "wifi_health: wifi disconnected (status=%d), starting recovery (heap=%u)", wifiStatus, freeHeap);
+      state = RECOVERING_DISCONNECT;
+      lastRecovery = now;
       return;
     }
 
-    // state == IDLE: no activity for at least one full interval
-    if (now - lastChange < 300000) return;
-    Log(WARN, "wifi_health: idle for 5min (mqtt=%d lastWs=%u ws=%zu), forcing reconnect",
-        mqttOk, lastWs, socketHandler.clientCount());
-    wifiAdapter.reconnect();
-    lastChange = now;
+    // Gentle recovery: no WS clients for 15min but previously had one
+    static bool hadClientEver = false;
+    if (socketHandler.clientCount() > 0) hadClientEver = true;
+
+    if (hadClientEver && socketHandler.clientCount() == 0 &&
+        socketHandler.lastWsConnectionEvent() > 0 &&
+        now - socketHandler.lastWsConnectionEvent() > 300000) // 5 min
+    {
+      if (freeHeap < 20480) {
+        Log(ERR, "wifi_health: no WS clients for 15min, heap=%u – restarting", freeHeap);
+        delay(100);
+        ESP.restart();
+        return;
+      }
+      Log(WARN, "wifi_health: no WS clients for 5min – fullReconnect");
+      state = RECOVERING_DISCONNECT;
+      lastRecovery = now;
+      return;
+    }
+
+    state = ACTIVE;
   });
   
 #ifdef ESP_MODEM_SIM

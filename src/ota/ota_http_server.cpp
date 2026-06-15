@@ -55,6 +55,8 @@ void HttpServer::loopFlash()
     {
       delete s;
       _flashSession = NULL;
+      Log(WARN, "Ota::HttpServer::loopFlash::begin-failed – restarting");
+      requestRestart();
       return;
     }
   }
@@ -63,6 +65,10 @@ void HttpServer::loopFlash()
   {
     if (s->endFlash()) {
       if (onFlashProgress) onFlashProgress(s->flashTotal(), s->flashTotal());
+      requestRestart();
+    } else {
+      Log(WARN, "Ota::HttpServer::loopFlash::end-failed – restarting");
+      Update.abort();
       requestRestart();
     }
     delete s;
@@ -304,9 +310,11 @@ void Http::ModemUploadSession::respond(AsyncWebServerRequest *request)
     delete this;
   }
   else {
+    Log(WARN, "Ota::Http::ModemUploadSession::respond::error(%s) – restarting", resultToString(result));
     request->_tempObject = NULL;
     if (_buffer) free(_buffer);
     _buffer = NULL;
+    s->requestRestart();
     delete this;
   }
 }

@@ -17,6 +17,16 @@ void Adapter::reconnect()
   WiFi.reconnect();
 }
 
+void Adapter::fullReconnect()
+{
+  Log(WARN, "WiFi::Adapter::fullReconnect");
+  WiFi.disconnect(true, true);
+
+  if (_settings.wifi.staSettingsValid()) {
+    beginSta();
+  }
+}
+
 void Adapter::begin()
 {
   _mode = mode();

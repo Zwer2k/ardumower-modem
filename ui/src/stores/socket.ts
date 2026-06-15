@@ -21,8 +21,10 @@ import type {
   MowSettingsData,
 } from "../model";
 import { ResponseDataType, RequestDataType } from "../model";
+import type { DrivenTrackData } from "../model";
 import { handleMapChunk, waypointsStore, resetMapChunkBuffer } from "../map/map-chunk-buffer";
 import { mowSettingsStore } from "../map/mow-settings";
+import { drivenTrackStore } from "../map/service";
 
 export interface SocketState {
   socket: WebSocket | null;
@@ -317,6 +319,9 @@ class SocketService {
                   break;
                 case ResponseDataType.mowSettings:
                   mowSettingsStore.set(jsonData.data as MowSettings);
+                  break;
+                case ResponseDataType.drivenTrack:
+                  drivenTrackStore.set(jsonData.data as DrivenTrackData);
                   break;
                 default:
               }

@@ -8,6 +8,7 @@ import type {
   Waypoints,
   Point,
 } from "./model";
+import type { DrivenTrackData } from "../model";
 import { rotatePointsAroundOrigin } from "./geometry";
 import {
   perimeterStore,
@@ -16,6 +17,8 @@ import {
   waypointsStore,
   resetMapChunkBuffer,
 } from "./map-chunk-buffer";
+
+export const drivenTrackStore = writable<DrivenTrackData | null>(null);
 
 export interface StoredMap {
   map: Map;
