@@ -1,0 +1,13 @@
+{
+  "name": "Clipper2Lib",
+  "version": "2.0.1",
+  "description": "Polygon Clipping and Offsetting Library",
+  "keywords": "polygon, clipping, offsetting",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": "clipper2/clipper.h",
+  "build": {
+    "srcDir": "CPP/Clipper2Lib/src",
+    "includeDir": "CPP/Clipper2Lib/include"
+  }
+}
