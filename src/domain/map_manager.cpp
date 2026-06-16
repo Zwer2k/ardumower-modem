@@ -12,6 +12,7 @@ namespace ArduMower {
             obj["name"] = name;
             obj["area"] = area;
             obj["hash"] = hash;
+            obj["crc"] = crc;
             obj["rotation"] = rotation;
             obj["timestamp"] = timestamp;
             obj["file"] = file;
@@ -22,6 +23,7 @@ namespace ArduMower {
             name = obj["name"] | "";
             area = obj["area"] | 0.0;
             hash = obj["hash"] | "";
+            crc = obj["crc"] | 0;
             rotation = obj["rotation"] | 0.0;
             timestamp = obj["timestamp"] | 0u;
             file = obj["file"] | "";
@@ -172,6 +174,16 @@ namespace ArduMower {
             return md5.toString();
         }
 
+        int MapManager::computeCrc(const ArduMower::Domain::Robot::MowerMap &map) {
+            return map.computeMapCrc();
+        }
+
+        int MapManager::getCrc(const String &id) const {
+            const MapMeta *meta = findMeta(id);
+            if (!meta) return 0;
+            return meta->crc;
+        }
+
         String MapManager::save(const ArduMower::Domain::Robot::MowerMap &map, const String &name, double rotation) {
             if (!_initialized && !begin()) return "";
 
@@ -186,6 +198,7 @@ namespace ArduMower {
                 return "";
             }
 
+            int crc = computeCrc(map);
             double area = computeArea(map);
             String displayName = name;
             if (displayName.length() == 0) displayName = generateDefaultName();
@@ -201,6 +214,7 @@ namespace ArduMower {
             if (meta) {
                 fileName = meta->file;
                 meta->hash = hash;
+                meta->crc = crc;
                 meta->area = area;
                 meta->rotation = rotation;
                 meta->timestamp = millis();
@@ -218,6 +232,7 @@ namespace ArduMower {
                     fileName = meta->file;
                     meta->name = displayName;
                     meta->area = area;
+                    meta->crc = crc;
                     meta->rotation = rotation;
                     meta->timestamp = millis();
                     Log(INFO, "%s save: existierende Karte '%s' aktualisiert", _LOG_, displayName.c_str());
@@ -228,6 +243,7 @@ namespace ArduMower {
                     newMeta.name = displayName;
                     newMeta.area = area;
                     newMeta.hash = hash;
+                    newMeta.crc = crc;
                     newMeta.rotation = rotation;
                     newMeta.timestamp = millis();
                     newMeta.file = fileName;

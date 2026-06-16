@@ -14,6 +14,7 @@ namespace ArduMower {
             String name;          // Anzeigename
             double area = 0.0;    // Fläche in m²
             String hash;          // Hash der aktuellen Kartengeometrie
+            int crc = 0;          // Sunray-kompatibler CRC (Feld 16), aus computeMapCrc()
             double rotation = 0.0; // Kartenausrichtung in Grad
             uint32_t timestamp = 0;
             String file;          // SPIFFS-Dateiname, z.B. /maps/map_0.json
@@ -45,7 +46,11 @@ namespace ArduMower {
             String activeId() const { return _index.activeId; }
 
             static String computeHash(const ArduMower::Domain::Robot::MowerMap &map);
+            static int computeCrc(const ArduMower::Domain::Robot::MowerMap &map);
             static double computeArea(const ArduMower::Domain::Robot::MowerMap &map);
+
+            // Gibt den in SPIFFS gespeicherten CRC zurück (0 wenn nicht gefunden)
+            int getCrc(const String &id) const;
             static bool isMapValid(const ArduMower::Domain::Robot::MowerMap &map);
 
         private:

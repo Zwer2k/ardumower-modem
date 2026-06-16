@@ -5,12 +5,13 @@
 #include <ArduinoJson.h>
 #include "ringbuffer.h"
 
-#define RINGBUFFER_SIZE 300
+#define RINGBUFFER_SIZE 100
+#define LOG_LINE_MAX 128
 
 struct LogLine {
     uint32_t nr;
     LogLevel level;
-    String   text;
+    char     text[LOG_LINE_MAX];
     uint32_t freeHeap;
 };
 

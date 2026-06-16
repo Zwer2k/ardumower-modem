@@ -121,7 +121,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     const id = e.detail?.selectedId;
     if (id) {
       socketService.sendLoadMap(id);
-      SyncStore.update(s => ({ ...s, needsUpload: true, mapCrcBeforeUpload: -1, uploadTimestamp: 0 }));
     }
   }
 
@@ -674,72 +673,10 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     moveFloatingPoint(x, y);
   }
 
-  function omg(item: null | string) {
-    if (item == uiEditId) return;
-
-    if (item === null) return;
-
-    let editItemIndex = editItems
-      .map((item, index) => (item.id === editItemId ? index : -1))
-      .reduce((a, b) => (a > b ? a : b), -1);
-
-    selectedId = editItemIndex > -1 ? editItems[editItemIndex].id : null;
-    updateButtonAvailability();
-  }
-
-  $: omg(editItemId);
-
-  // ─── Sync-Status (persistiert via SyncStore) ────────────────────────────
-  import { SyncStore } from '../stores/sync';
-
-  $: mapCrc = $socketStore.state?.map_crc ?? 0;
-  $: sync = $SyncStore;
-
-  // Sync-Status: mapCrc-basiert + explizites needsUpload-Flag
-  $: { updateSyncStatus($SyncStore, mapCrc, $socketStore.state !== null); }
-
-  function updateSyncStatus(
-    s: { needsUpload: boolean; mapCrcBeforeUpload: number; syncedMapCrc: number; uploadTimestamp: number },
-    crc: number,
-    hasState: boolean,
-  ) {
-    console.log('sync: needsUpload=%s crc=%d synced=%s mapCrcBefore=%d upTs=%d hasState=%s',
-      s.needsUpload, crc, s.syncedMapCrc, s.mapCrcBeforeUpload, s.uploadTimestamp, hasState);
-
-    // (1) Ersten mapCrc-Wert als synced merken
-    if (s.syncedMapCrc === -1 && hasState) {
-      SyncStore.update(st => ({ ...st, syncedMapCrc: crc, needsUpload: false }));
-      console.log('sync → (1) first state, syncedMapCrc=%d', crc);
-      return;
-    }
-    if (!s.needsUpload) {
-      // Kein Upload aktiv → nur auf externe Änderung prüfen
-      if (hasState && s.syncedMapCrc !== -1 && crc !== s.syncedMapCrc) {
-        SyncStore.update(st => ({ ...st, needsUpload: true }));
-        console.log('sync → (4) external change: %d → %d', s.syncedMapCrc, crc);
-      }
-      return;
-    }
-    // needsUpload ist true → Upload läuft oder wurde angefordert
-    // (2) CRC hat sich seit Upload-Klick geändert → bestätigt
-    if (s.mapCrcBeforeUpload !== -1 && crc !== s.mapCrcBeforeUpload) {
-      SyncStore.update(st => ({ ...st, syncedMapCrc: crc, mapCrcBeforeUpload: -1, needsUpload: false, uploadTimestamp: 0 }));
-      console.log('sync → (2) upload confirmed by CRC change: %d → %d', s.mapCrcBeforeUpload, crc);
-      return;
-    }
-    // (3) Fallback: kein CRC-Change nach 10s (Mäher sendet kein Feld 16)
-    if (s.uploadTimestamp && Date.now() - s.uploadTimestamp > 10000) {
-      SyncStore.update(st => ({ ...st, syncedMapCrc: crc, mapCrcBeforeUpload: -1, needsUpload: false, uploadTimestamp: 0 }));
-      console.log('sync → (3) upload timeout fallback (10s), syncedMapCrc=%d', crc);
-      return;
-    }
-    // (5) Kartenwechsel/Edit wurde verarbeitet: CRC hat sich geändert, kein Upload aktiv
-    if (hasState && s.syncedMapCrc !== -1 && crc !== s.syncedMapCrc) {
-      SyncStore.update(st => ({ ...st, syncedMapCrc: crc, mapCrcBeforeUpload: -1, needsUpload: false, uploadTimestamp: 0 }));
-      console.log('sync → (5) map change confirmed by CRC: %d → %d', s.syncedMapCrc, crc);
-      return;
-    }
-  }
+  // ─── Sync-Status: CRC aus Metadaten (Backend-berechnet) ─────────
+  $: hasState = $socketStore.state !== null;
+  $: storedCrc = $socketStore.currentMapMeta?.crc ?? 0;
+  $: sync = { needsUpload: hasState && ($socketStore.state?.map_crc ?? 0) !== storedCrc };
 
   $: if (!edit && wasEditing && $MapStore && $MapStore.map) {
     wasEditing = false;
@@ -751,7 +688,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
       waypoints: m.waypoints.points,
       rotation: compassRotation,
     });
-    SyncStore.update(s => ({ ...s, needsUpload: true, mapCrcBeforeUpload: -1 }));
   } else if (edit) {
     wasEditing = true;
   }
@@ -913,7 +849,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                 disabled={busy}
                 icon={IconUpload}
                 iconDescription="Upload map to mower"
-                on:click={() => { socketService.sendUploadMap(); SyncStore.update(s => ({ ...s, mapCrcBeforeUpload: mapCrc, uploadTimestamp: Date.now() })); }}
+                on:click={() => socketService.sendUploadMap()}
               />
               <Button
                 kind={showManage ? "primary" : "secondary"}
@@ -1095,7 +1031,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                 disabled={busy}
                 icon={IconTrashCan}
                 iconDescription="Clear waypoints"
-                on:click={() => { socketService.sendClearWaypoints(); SyncStore.update(s => ({ ...s, needsUpload: true, mapCrcBeforeUpload: -1 })); }}
+                on:click={() => socketService.sendClearWaypoints()}
               >
                 <span class="btn-label">Clear WP</span>
               </Button>
@@ -1105,7 +1041,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                 disabled={busy}
                 icon={IconMagicWand}
                 iconDescription="Calculate waypoints"
-                on:click={() => { socketService.sendCalculateWaypoints(); SyncStore.update(s => ({ ...s, needsUpload: true, mapCrcBeforeUpload: -1 })); }}
+                on:click={() => socketService.sendCalculateWaypoints()}
               >
                 <span class="btn-label">Calculate</span>
               </Button>

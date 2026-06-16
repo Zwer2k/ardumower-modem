@@ -318,6 +318,7 @@ export interface MapMeta {
   name: string;
   area: number;
   hash: string;
+  crc: number;
   rotation: number;
   timestamp: number;
 }

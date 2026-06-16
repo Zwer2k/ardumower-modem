@@ -347,6 +347,7 @@ namespace ArduMower
         String name;
         double area = 0.0;
         String hash;
+        int crc = 0;
         double rotation = 0.0;
         uint32_t timestamp = 0;
       };
@@ -386,6 +387,7 @@ namespace ArduMower
         virtual bool renameMap(const String &id, const String &name) { (void)id; (void)name; return false; }
         virtual bool deleteMap(const String &id) { (void)id; return false; }
         virtual String currentMapHash() { return ""; }
+        virtual int currentMapCrc() { return 0; }
         virtual double currentMapArea() { return 0.0; }
         virtual double currentMapRotation() { return 0.0; }
       };

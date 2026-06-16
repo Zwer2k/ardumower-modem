@@ -42,6 +42,8 @@ namespace ArduMower
       size_t pointIdx = 0;
       int chunkRetry = 0;
       int totalPointsSent = 0;
+      int lastBaseIdx = 0;
+      int lastExpectedNextIdx = 0;
       String lastResponse;
       bool lastOk = false;
       bool waitingForResponse = false;
@@ -71,6 +73,7 @@ namespace ArduMower
       volatile bool _mapUploadPending = false;
       bool _mapListDirty = true;
       String _currentMapHash;
+      int _currentMapCrc = 0;
       double _currentMapArea = 0.0;
 
       void updateCurrentMapMeta();
@@ -96,9 +99,9 @@ namespace ArduMower
       void parseATWCommand(String line);
       void parseATNCommand(String line);
 
-      bool sendCommand(String command, bool encrypt = true);
-      bool sendCommandWithResponse(String command, String &response, bool encrypt = true, int timeoutMs = 3000);
-      bool sendCommandWithResponseAsync(String command, std::function<void(String, bool)> callback, bool encrypt = true, int timeoutMs = 3000);
+      bool sendCommand(const String& command, bool encrypt = true);
+      bool sendCommandWithResponse(const String& command, String &response, bool encrypt = true, int timeoutMs = 3000);
+      bool sendCommandWithResponseAsync(const String& command, std::function<void(String, bool)> callback, bool encrypt = true, int timeoutMs = 3000);
       void processPendingCommand();
       void processMapUpload();
       void startMapUploadFromLoop();
@@ -137,6 +140,7 @@ namespace ArduMower
       virtual bool renameMap(const String &id, const String &name) override;
       virtual bool deleteMap(const String &id) override;
       virtual String currentMapHash() override;
+      virtual int currentMapCrc() override;
       virtual double currentMapArea() override;
       virtual double currentMapRotation() override { return _map.rotation; }
 

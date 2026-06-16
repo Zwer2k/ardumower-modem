@@ -2,15 +2,20 @@
 
 #include <Arduino.h>
 
+#define READER_BUF_SIZE 1024
+
 class Reader
 {
 private:
   String eol;
-  String buffer;
+  char buffer[READER_BUF_SIZE];
+  uint16_t pos;
   String badChars;
 
+  void ensureCapacity(uint16_t needed);
+
 public:
-  Reader(String _eol) : eol(_eol), buffer(""), badChars("") {}
+  Reader(String _eol) : eol(_eol), pos(0) { buffer[0] = '\0'; }
   void reset();
   String update(char c);
   String peek();

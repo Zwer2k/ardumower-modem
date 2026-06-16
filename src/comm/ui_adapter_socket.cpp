@@ -718,6 +718,7 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
   mapChunkSendState.snapshot = map;
   // Metadaten des aktuellen Karteninhalts für alle Chunks merken
   mapChunkSendState.metaHash = _source.currentMapHash();
+  mapChunkSendState.metaCrc = _source.currentMapCrc();
   mapChunkSendState.metaArea = _source.currentMapArea();
   mapChunkSendState.metaRotation = _source.currentMapRotation();
   lastDataRequestTimestamp[ResponseDataType::map] = 0;
@@ -732,6 +733,8 @@ void UiSocketHandler::startMapChunkSend(UiSocketItem* sendTo, bool force) {
 // Pro loop() einen Chunk versenden – Snapshot aus mapChunkSendState verwenden
 void UiSocketHandler::processMapChunkSend() {
   if (!mapChunkSendState.active) return;
+  // Retry-Delay: bei fehlgeschlagenem Senden 100ms warten
+  if (mapChunkSendState.lastRetryMs && millis() - mapChunkSendState.lastRetryMs < 100) return;
   // Keine Clients → Chunk-Versand abbrechen
   if (countConnectedClients() == 0) {
     Log(DBG, "%s processMapChunkSend: no connected clients, aborting", _LOG_);
@@ -749,6 +752,7 @@ void UiSocketHandler::processMapChunkSend() {
       if (map.perimeter.size() > 0 && mapChunkSendState.idx < map.perimeter.size()) {
         chunkSent = sendMapChunk(MapPointType::Perimeter, map.perimeter, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
+          mapChunkSendState.lastRetryMs = millis();
           break;
         }
         mapChunkSendState.idx += blockSize;
@@ -762,6 +766,7 @@ void UiSocketHandler::processMapChunkSend() {
         if (excl.size() > 0 && mapChunkSendState.idx < excl.size()) {
           chunkSent = sendMapChunk(MapPointType::Exclusion, excl, mapChunkSendState.timestamp, mapChunkSendState.clientId, (int)mapChunkSendState.exclusionIdx, mapChunkSendState.idx, blockSize);
           if (!chunkSent) {
+            mapChunkSendState.lastRetryMs = millis();
             break;
           }
           mapChunkSendState.idx += blockSize;
@@ -775,6 +780,7 @@ void UiSocketHandler::processMapChunkSend() {
       if (map.dockpoints.size() > 0 && mapChunkSendState.idx < map.dockpoints.size()) {
         chunkSent = sendMapChunk(MapPointType::Dockpoints, map.dockpoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
+          mapChunkSendState.lastRetryMs = millis();
           break;
         }
         mapChunkSendState.idx += blockSize;
@@ -786,6 +792,7 @@ void UiSocketHandler::processMapChunkSend() {
       if (map.waypoints.size() > 0 && mapChunkSendState.idx < map.waypoints.size()) {
         chunkSent = sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
+          mapChunkSendState.lastRetryMs = millis();
           break;
         }
         mapChunkSendState.idx += blockSize;
@@ -809,6 +816,8 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
   if (startIdx > total || (startIdx == total && total > 0)) return false;
+  // Vor Serialisierung prüfen ob Ziel-Client sendefähig ist
+  if (!clientCanSend(clientId)) return false;
   JsonDocument doc;
   doc["type"] = ResponseDataType::map;
   doc["timestamp"] = timestamp;
@@ -822,6 +831,7 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
   if (mapChunkSendState.metaHash.length() > 0) {
     auto metaObj = dataObj["meta"].to<JsonObject>();
     metaObj["hash"] = mapChunkSendState.metaHash;
+    metaObj["crc"] = mapChunkSendState.metaCrc;
     metaObj["area"] = mapChunkSendState.metaArea;
     metaObj["rotation"] = mapChunkSendState.metaRotation;
   }
@@ -1228,6 +1238,7 @@ void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
     obj["name"] = m.name;
     obj["area"] = m.area;
     obj["hash"] = m.hash;
+    obj["crc"] = m.crc;
     obj["rotation"] = m.rotation;
     obj["timestamp"] = m.timestamp;
   }
@@ -1307,6 +1318,20 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
   if (anySent) markClientActivity();
   if (!anyConnected) return true;
   return anySent;
+}
+
+bool UiSocketHandler::clientCanSend(uint32_t clientId) {
+  if (clientId == 0) {
+    // Broadcast: prüfe ob irgendein Client sendefähig ist
+    for (auto &c : _ws->getClients()) {
+      if (c.status() == WS_CONNECTED && c.canSend()) return true;
+    }
+    return false;
+  }
+  for (auto &c : _ws->getClients()) {
+    if (c.id() == clientId) return c.status() == WS_CONNECTED && c.canSend();
+  }
+  return false;
 }
 
 size_t UiSocketHandler::countConnectedClients()

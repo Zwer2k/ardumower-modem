@@ -47,7 +47,7 @@ void Router::sniffTx(TxDrain *d)
   txDrains.push_back(d);
 }
 
-bool Router::send(String _command, responseCb _cb)
+bool Router::send(const String& _command, responseCb _cb)
 {
   // reject until idle
   if (sendCommand || expectResponse)
@@ -64,7 +64,7 @@ bool Router::send(String _command, responseCb _cb)
   return true;
 }
 
-bool Router::sendWithoutResponse(String line)
+bool Router::sendWithoutResponse(const String& line)
 {
   if (sendCommand || expectResponse)
     return false;

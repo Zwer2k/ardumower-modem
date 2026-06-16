@@ -176,8 +176,9 @@ void setup() {
     last = now;
     wl_status_t ws = WiFi.status();
     int rssi = WiFi.RSSI();
-    Log(INFO, "heartbeat: up=%lus heap=%u wifi=%d rssi=%d ws=%zu http_queue=%zu http_reqs=%u",
-        now / 1000, ESP.getFreeHeap(), (int)ws, rssi, socketHandler.clientCount(),
+    Log(INFO, "heartbeat: up=%lus heap=%u min=%u max=%u wifi=%d rssi=%d ws=%zu http_queue=%zu http_reqs=%u",
+        now / 1000, ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap(),
+        (int)ws, rssi, socketHandler.clientCount(),
         httpAdapter.queueSize(), httpAdapter.requestCount());
   });
 
@@ -195,7 +196,9 @@ void setup() {
 
     // ----- RECOVERY STATE MACHINE (non-blocking) -----
     if (state == RECOVERING_DISCONNECT) {
-      WiFi.disconnect(true, true);
+      // disconnect(false,true) – wifioff=true triggert WiFi-Deinit/Reinit,
+      // das auf ESP32-S3+OPI-PSRAM fehlschlägt (ESP_ERR_NO_MEM)
+      WiFi.disconnect(false, true);
       lastRecovery = now;
       state = RECOVERING_WAIT;
       return;
@@ -227,6 +230,15 @@ void setup() {
     // ----- NORMAL HEALTH CHECK -----
     wl_status_t wifiStatus = WiFi.status();
     uint32_t freeHeap = ESP.getFreeHeap();
+    uint32_t maxAlloc = ESP.getMaxAllocHeap();
+
+    // Heap zu fragmentiert – kein sinnvoller Betrieb mehr möglich
+    if (maxAlloc < 2048) {
+      Log(ERR, "wifi_health: heap fragmentiert (max=%u, free=%u) – restart", maxAlloc, freeHeap);
+      delay(100);
+      ESP.restart();
+      return;
+    }
 
     if (wifiStatus != WL_CONNECTED) {
       if (now - lastRecovery < 30000) return;

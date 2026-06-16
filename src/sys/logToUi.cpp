@@ -50,12 +50,24 @@ size_t LogToUi::log(const LogLevel logLevel, const char *format, ...)
     }
 
     auto freeHeap = ESP.getFreeHeap();
-    auto line = LogLine{nr: modemLineNrIn++, level: logLevel, text: temp, freeHeap: freeHeap};
+    LogLine line;
+    line.nr = modemLineNrIn++;
+    line.level = logLevel;
+    line.freeHeap = freeHeap;
+    strncpy(line.text, temp, LOG_LINE_MAX - 1);
+    line.text[LOG_LINE_MAX - 1] = '\0';
     if(temp != loc_buf){
         free(temp);
     }
-    modemLog->push(&line, true);
-    Serial.printf("(%d) %s\r\n", freeHeap, line.text.c_str());
+
+    // Manuelles Evict: pull ältesten Eintrag (String-Destruktor gibt Speicher frei)
+    // bevor neuer pushed wird – vermeidet Leak beim force-Overwrite im Ringbuffer
+    if (modemLog->isFull()) {
+        LogLine old;
+        modemLog->pull(old);
+    }
+    modemLog->push(&line, false);
+    Serial.printf("(%d) %s\r\n", freeHeap, line.text);
 
     timestamp = millis();
     
@@ -89,7 +101,7 @@ void LogToUi::marshal(JsonObject o)
         }
     }
     
-    Serial.printf("(%d/%d)\r\n", sent, count); 
+    //Serial.printf("(%d/%d)\r\n", sent, count); 
 }
 
 uint16_t LogToUi::marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t maxLines)

@@ -20,7 +20,10 @@ void Adapter::reconnect()
 void Adapter::fullReconnect()
 {
   Log(WARN, "WiFi::Adapter::fullReconnect");
-  WiFi.disconnect(true, true);
+  // disconnect(false,true) statt disconnect(true,true):
+  // wifioff=true triggert WiFi-Deinit/Reinit, das auf ESP32-S3+OPI-PSRAM
+  // fehlschlägt ("create wifi task: failed", esp_wifi_init 257 = ESP_ERR_NO_MEM)
+  WiFi.disconnect(false, true);
 
   if (_settings.wifi.staSettingsValid()) {
     beginSta();
@@ -151,6 +154,8 @@ void Adapter::beginSta()
   _staTimeoutStart = millis();
   WiFi.setHostname(_settings.general.name.c_str());
   WiFi.mode(WIFI_STA);
+  // WiFi.setSleep(false) causes bus contention with OPI-PSRAM -> heap corruption/crash.
+  // Health-Monitor handles reconnects if drop occurs.
   WiFi.begin(_settings.wifi.sta_ssid.c_str(), _settings.wifi.sta_psk.c_str());
   //WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);

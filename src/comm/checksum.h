@@ -15,10 +15,14 @@ namespace ArduMower
 
     void update(char c) { val += c; };
 
-    void update(String& s) {
+    void update(const String& s) {
       for(unsigned int i=0; i < s.length(); i++) {
         update(s[i]);
       }
+    }
+
+    void update(const char* s) {
+      while (*s) update(*s++);
     }
 
     unsigned char value() { return val; }

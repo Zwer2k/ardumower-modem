@@ -99,8 +99,10 @@ namespace ArduMower
         int phase = 0;
         size_t exclusionIdx = 0;
         size_t idx = 0;
+        uint32_t lastRetryMs = 0;
         ArduMower::Domain::Robot::MowerMap snapshot;  // Einmalige Kopie der Map beim Start
         String metaHash;
+        int metaCrc = 0;
         double metaArea = 0.0;
         double metaRotation = 0.0;
       };
@@ -238,6 +240,7 @@ namespace ArduMower
         template<typename T>
         void sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force = false);
         bool sendTextAllWithRetry(AsyncWebSocket* ws, const String& text);
+        bool clientCanSend(uint32_t clientId);
         size_t countConnectedClients();
         void pingClients();
 #ifdef MOWER_TERMINAL

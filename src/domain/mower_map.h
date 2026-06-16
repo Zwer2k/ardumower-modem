@@ -113,6 +113,46 @@ namespace ArduMower {
                 void unmarshal(JsonObject obj) {
                     unmarshalGeometry(obj["map"]);
                 }
+
+    // Sunray-kompatibler CRC: px = x*100 (cm), crc = Σ(trunc16(px) + trunc16(py))
+    int computeMapCrc() const {
+        return computeMapCrcDetail(nullptr, nullptr, nullptr, nullptr);
+    }
+
+    struct CrcDetail {
+        int perimeter = 0;
+        int exclusions = 0;
+        int dockpoints = 0;
+        int waypoints = 0;
+    };
+
+    int computeMapCrcDetail(int *outPerimeter, int *outExclusions, int *outDockpoints, int *outWaypoints) const {
+        int crc = 0;
+        int p = 0, e = 0, d = 0, w = 0;
+        for (const auto &pt : perimeter) {
+            int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+            p += v; crc += v;
+        }
+        for (const auto &ex : exclusions) {
+            for (const auto &pt : ex) {
+                int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+                e += v; crc += v;
+            }
+        }
+        for (const auto &pt : dockpoints) {
+            int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+            d += v; crc += v;
+        }
+        for (const auto &pt : waypoints) {
+            int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+            w += v; crc += v;
+        }
+        if (outPerimeter)   *outPerimeter = p;
+        if (outExclusions)  *outExclusions = e;
+        if (outDockpoints)  *outDockpoints = d;
+        if (outWaypoints)   *outWaypoints = w;
+        return crc;
+    }
             };
 
         } // namespace Robot

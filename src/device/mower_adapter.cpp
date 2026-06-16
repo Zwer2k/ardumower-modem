@@ -12,7 +12,7 @@
 
 using namespace ArduMower::Modem;
 
-void processCSVResponse(String res, std::function<void(int, String)> fn);
+void processCSVResponse(const String& res, std::function<void(int, const char*, size_t)> fn);
 
 MowerAdapter::MowerAdapter(Settings::Settings &_settings, Router &_router)
     : settings(_settings), router(_router), sendIsInitialized(false) {}
@@ -38,7 +38,13 @@ void MowerAdapter::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
 
 void MowerAdapter::updateCurrentMapMeta() {
   _currentMapHash = _mapManager.computeHash(_map);
+  _currentMapCrc = _mapManager.computeCrc(_map);
   _currentMapArea = _mapManager.computeArea(_map);
+  int crcP, crcE, crcD, crcW;
+  _map.computeMapCrcDetail(&crcP, &crcE, &crcD, &crcW);
+  Log(INFO, "%s CRC %d aus Geometrie (p=%d e=%d d=%d w=%d, pts=%d/%d/%d/%d)",
+      _LOG_, _currentMapCrc, crcP, crcE, crcD, crcW,
+      _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size());
 }
 
 void MowerAdapter::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) {
@@ -57,6 +63,7 @@ std::vector<ArduMower::Domain::Robot::MapInfo> MowerAdapter::mapList() {
     info.name = m.name;
     info.area = m.area;
     info.hash = m.hash;
+    info.crc = m.crc;
     info.rotation = m.rotation;
     info.timestamp = m.timestamp;
     result.push_back(info);
@@ -95,9 +102,11 @@ bool MowerAdapter::loadMap(const String &id) {
   if (!_mapManager.load(id, loaded)) return false;
   if (!_mapManager.setActive(id)) return false;
   _map = loaded;
-  updateCurrentMapMeta();
+  _currentMapHash = _mapManager.computeHash(_map);
+  _currentMapArea = _mapManager.computeArea(_map);
+  _currentMapCrc = _mapManager.getCrc(id);
+  Log(INFO, "%sloadMap: Karte %s geladen, CRC %d (aus SPIFFS)", _LOG_, id.c_str(), _currentMapCrc);
   _mapListDirty = true;
-  Log(INFO, "%sloadMap: Karte %s geladen", _LOG_, id.c_str());
   return true;
 }
 
@@ -117,6 +126,10 @@ bool MowerAdapter::deleteMap(const String &id) {
 
 String MowerAdapter::currentMapHash() {
   return _currentMapHash;
+}
+
+int MowerAdapter::currentMapCrc() {
+  return _currentMapCrc;
 }
 
 double MowerAdapter::currentMapArea() {
@@ -141,9 +154,11 @@ void MowerAdapter::begin()
     ArduMower::Domain::Robot::MowerMap loaded;
     if (_mapManager.loadActive(loaded)) {
       _map = loaded;
-      updateCurrentMapMeta();
-      Log(INFO, "%s begin: aktive Karte '%s' aus SPIFFS geladen (%.1f m²)",
-          _LOG_, _mapManager.activeId().c_str(), _currentMapArea);
+      _currentMapHash = _mapManager.computeHash(_map);
+      _currentMapArea = _mapManager.computeArea(_map);
+      _currentMapCrc = _mapManager.getCrc(_mapManager.activeId());
+      Log(INFO, "%s begin: aktive Karte '%s' aus SPIFFS geladen, CRC %d (%.1f m²)",
+          _LOG_, _mapManager.activeId().c_str(), _currentMapCrc, _currentMapArea);
     } else if (_mapManager.activeId().length() > 0) {
       // Aktive ID verweist auf nicht mehr vorhandene Datei -> Index bereinigen
       _mapManager.setActive("");
@@ -282,19 +297,14 @@ void MowerAdapter::parseATNCommand(String line) {
     Log(WARN, "%sparseATNCommand: Map-Lesevorgang läuft noch, ignoriere AT-N", _LOG_);
     return;
   }
-  // Entferne "AT-N," falls vorhanden
+  // Entferne "AT+N," falls vorhanden
   if (line.startsWith("AT+N,")) line = line.substring(5);
   std::vector<int> counts;
-  int lastCommaIdx = -1;
-  int len = line.length();
-  for (int idx = 0; idx < len; idx++) {
-    char ch = line[idx];
-    if ((ch == ',') || (idx == len - 1)) {
-      int valueEnd = (ch == ',') ? idx : idx + 1;
-      String token = line.substring(lastCommaIdx + 1, valueEnd);
-      counts.push_back(token.toInt());
-      lastCommaIdx = idx;
-    }
+  const char* p = line.c_str();
+  while (*p) {
+    counts.push_back(atoi(p));
+    while (*p && *p != ',') p++;
+    if (*p == ',') p++;
   }
   if (counts.size() < 5) {
     Log(ERR, "%sparseATNCommand: zu wenig Felder", _LOG_);
@@ -610,87 +620,88 @@ void MowerAdapter::parseStatisticsResponse(String line)
   Log(DBG, "%sparseStatisticsResponse", _LOG_);
   const auto now = millis();
 
-  processCSVResponse(line, [&](int index, String val)
+  processCSVResponse(line, [&](int index, const char* val, size_t len)
                      {
+                       (void)len;
                        switch (index)
                        {
                        case 1:
-                         _stats.durations.idle = val.toInt();
+                         _stats.durations.idle = atoi(val);
                          break;
                        case 2:
-                         _stats.durations.charge = val.toInt();
+                         _stats.durations.charge = atoi(val);
                          break;
                        case 3:
-                         _stats.durations.mow = val.toInt();
+                         _stats.durations.mow = atoi(val);
                          break;
                        case 4:
-                         _stats.durations.mowFloat = val.toInt();
+                         _stats.durations.mowFloat = atoi(val);
                          break;
                        case 5:
-                         _stats.durations.mowFix = val.toInt();
+                         _stats.durations.mowFix = atoi(val);
                          break;
 
                        case 6:
-                         _stats.recoveries.mowFloatToFix = val.toInt();
+                         _stats.recoveries.mowFloatToFix = atoi(val);
                          break;
 
-                       case 7:
-                         _stats.mowDistanceTraveled = val.toFloat();
-                         break;
-                       case 8:
-                         _stats.mowMaxDgpsAge = val.toFloat();
-                         break;
+                        case 7:
+                          _stats.mowDistanceTraveled = atof(val);
+                          break;
+                        case 8:
+                          _stats.mowMaxDgpsAge = atof(val);
+                          break;
 
-                       case 9:
-                         _stats.recoveries.imu = val.toInt();
-                         break;
+                        case 9:
+                          _stats.recoveries.imu = atoi(val);
+                          break;
 
-                       case 10:
-                         _stats.tempMin = val.toFloat();
-                         break;
-                       case 11:
-                         _stats.tempMax = val.toFloat();
-                         break;
+                        case 10:
+                          _stats.tempMin = atof(val);
+                          break;
+                        case 11:
+                          _stats.tempMax = atof(val);
+                          break;
 
-                       case 12:
-                         _stats.gpsChecksumErrors = val.toInt();
-                         break;
-                       case 13:
-                         _stats.dgpsChecksumErrors = val.toInt();
-                         break;
-                       case 14:
-                         _stats.maxMotorControlCycleTime = val.toFloat();
-                         break;
-                       case 15:
-                         _stats.serialBufferSize = val.toInt();
-                         break;
-                       case 16:
-                         _stats.durations.mowInvalid = val.toInt();
-                         break;
-                       case 17:
-                         _stats.recoveries.mowInvalid = val.toInt();
-                         break;
-                       case 18:
-                         _stats.obstacles.count = val.toInt();
-                         break;
-                       case 19:
-                         _stats.freeMemory = val.toInt();
-                         break;
-                       case 20:
-                         _stats.resetCause = val.toInt();
-                         break;
-                       case 21:
-                         _stats.gpsJumps = val.toInt();
-                         break;
-                       case 22:
-                         _stats.obstacles.sonar = val.toInt();
-                         break;
-                       case 23:
-                         _stats.obstacles.bumper = val.toInt();
-                         break;
-                       case 24:
-                         _stats.obstacles.gpsMotionLow = val.toInt();
-                         break;
+                        case 12:
+                          _stats.gpsChecksumErrors = atoi(val);
+                          break;
+                        case 13:
+                          _stats.dgpsChecksumErrors = atoi(val);
+                          break;
+                        case 14:
+                          _stats.maxMotorControlCycleTime = atof(val);
+                          break;
+                        case 15:
+                          _stats.serialBufferSize = atoi(val);
+                          break;
+                        case 16:
+                          _stats.durations.mowInvalid = atoi(val);
+                          break;
+                        case 17:
+                          _stats.recoveries.mowInvalid = atoi(val);
+                          break;
+                        case 18:
+                          _stats.obstacles.count = atoi(val);
+                          break;
+                        case 19:
+                          _stats.freeMemory = atoi(val);
+                          break;
+                        case 20:
+                          _stats.resetCause = atoi(val);
+                          break;
+                        case 21:
+                          _stats.gpsJumps = atoi(val);
+                          break;
+                        case 22:
+                          _stats.obstacles.sonar = atoi(val);
+                          break;
+                        case 23:
+                          _stats.obstacles.bumper = atoi(val);
+                          break;
+                        case 24:
+                          _stats.obstacles.gpsMotionLow = atoi(val);
+                          break;
                        }
                      });
 
@@ -702,49 +713,50 @@ void MowerAdapter::parseSensorSummaryResponse(String line)
   //Log(DBG, "%sparseSensorSummaryResponse", _LOG_);
   const auto now = millis();
 
-  processCSVResponse(line, [&](int index, String val)
+  processCSVResponse(line, [&](int index, const char* val, size_t len)
                      {
+                       (void)len;
                        // S3,<left>,<center>,<right>,<sonarObs>,<sonarNear>,<bumpL>,<bumpR>,<bumpObs>,<bumpNear>,<lidarObs>,<lidarNear>,<lift>,<rain>
                        switch (index)
                        {
                        case 1:
-                         _sensorSummary.sonarLeft = val.toFloat();
+                         _sensorSummary.sonarLeft = atof(val);
                          break;
                        case 2:
-                         _sensorSummary.sonarCenter = val.toFloat();
+                         _sensorSummary.sonarCenter = atof(val);
                          break;
                        case 3:
-                         _sensorSummary.sonarRight = val.toFloat();
+                         _sensorSummary.sonarRight = atof(val);
                          break;
                        case 4:
-                         _sensorSummary.sonarObstacle = val.toInt() == 1;
+                         _sensorSummary.sonarObstacle = atoi(val) == 1;
                          break;
                        case 5:
-                         _sensorSummary.sonarNearObstacle = val.toInt() == 1;
+                         _sensorSummary.sonarNearObstacle = atoi(val) == 1;
                          break;
                        case 6:
-                         _sensorSummary.bumperLeft = val.toInt() == 1;
+                         _sensorSummary.bumperLeft = atoi(val) == 1;
                          break;
                        case 7:
-                         _sensorSummary.bumperRight = val.toInt() == 1;
+                         _sensorSummary.bumperRight = atoi(val) == 1;
                          break;
                        case 8:
-                         _sensorSummary.bumperObstacle = val.toInt() == 1;
+                         _sensorSummary.bumperObstacle = atoi(val) == 1;
                          break;
                        case 9:
-                         _sensorSummary.bumperNearObstacle = val.toInt() == 1;
+                         _sensorSummary.bumperNearObstacle = atoi(val) == 1;
                          break;
                        case 10:
-                         _sensorSummary.lidarObstacle = val.toInt() == 1;
+                         _sensorSummary.lidarObstacle = atoi(val) == 1;
                          break;
                        case 11:
-                         _sensorSummary.lidarNearObstacle = val.toInt() == 1;
+                         _sensorSummary.lidarNearObstacle = atoi(val) == 1;
                          break;
                        case 12:
-                         _sensorSummary.liftTriggered = val.toInt() == 1;
+                         _sensorSummary.liftTriggered = atoi(val) == 1;
                          break;
                        case 13:
-                         _sensorSummary.rainTriggered = val.toInt() == 1;
+                         _sensorSummary.rainTriggered = atoi(val) == 1;
                          break;
                        }
                      });
@@ -764,31 +776,32 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
   int fieldIdx = -1;
 
   // Erster Durchlauf: Header-Felder parsen und Gesamtzahl der Token ermitteln
-  processCSVResponse(line, [&](int index, String val)
+  processCSVResponse(line, [&](int index, const char* val, size_t len)
                      {
+                       (void)len;
                        fieldIdx = index;
                        switch (index)
                        {
                        case 1:
-                         _gpsDetails.numSV = val.toInt();
+                         _gpsDetails.numSV = atoi(val);
                          break;
                        case 2:
-                         _gpsDetails.numSVdgps = val.toInt();
+                         _gpsDetails.numSVdgps = atoi(val);
                          break;
                        case 3:
-                         _gpsDetails.solution = val.toInt();
+                         _gpsDetails.solution = atoi(val);
                          break;
                        case 4:
-                         _gpsDetails.hAccuracy = val.toFloat();
+                         _gpsDetails.hAccuracy = atof(val);
                          break;
                        case 5:
-                         _gpsDetails.vAccuracy = val.toFloat();
+                         _gpsDetails.vAccuracy = atof(val);
                          break;
                        case 6:
-                         _gpsDetails.dgpsAge = val.toInt();
+                         _gpsDetails.dgpsAge = atoi(val);
                          break;
                        case 7:
-                         satCount = val.toInt();
+                         satCount = atoi(val);
                          break;
                        }
                      });
@@ -806,8 +819,9 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
 
   // Zweiter Durchlauf: Satellitenfelder on-the-fly parsen (kein Vector!)
   _gpsDetails.satellites.clear();
-  processCSVResponse(line, [&](int index, String val)
+  processCSVResponse(line, [&](int index, const char* val, size_t len)
                      {
+                       (void)len;
                        if (index < 8) return;
 
                        int satField = index - 8;
@@ -821,16 +835,16 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
 
                        auto& sat = _gpsDetails.satellites[satIdx];
                        switch (col) {
-                       case 0: sat.gnssId = val.toInt(); break;
-                       case 1: sat.svId = val.toInt(); break;
-                       case 2: sat.sigId = val.toInt(); break;
-                       case 3: sat.cno = val.toInt(); break;
-                       case 4: sat.qualityInd = val.toInt(); break;
-                       case 5: sat.prUsed = val.toInt() == 1; break;
-                       case 6: sat.crCorrUsed = val.toInt() == 1; break;
-                       case 7: sat.prRes = val.toFloat(); break;
-                       case 8: sat.elevation = (int8_t)val.toInt(); break;
-                       case 9: sat.azimuth = (int8_t)val.toInt(); break;
+                       case 0: sat.gnssId = atoi(val); break;
+                       case 1: sat.svId = atoi(val); break;
+                       case 2: sat.sigId = atoi(val); break;
+                       case 3: sat.cno = atoi(val); break;
+                       case 4: sat.qualityInd = atoi(val); break;
+                       case 5: sat.prUsed = atoi(val) == 1; break;
+                       case 6: sat.crCorrUsed = atoi(val) == 1; break;
+                       case 7: sat.prRes = atof(val); break;
+                       case 8: sat.elevation = (int8_t)atoi(val); break;
+                       case 9: sat.azimuth = (int8_t)atoi(val); break;
                        }
                      });
 
@@ -844,22 +858,22 @@ void MowerAdapter::parseVersionResponse(String line)
   Log(DBG, "%sparseVersionResponse", _LOG_);
   const auto now = millis();
 
-  processCSVResponse(line, [&](int index, String val)
+  processCSVResponse(line, [&](int index, const char* val, size_t len)
                      {
                        // V,Ardumower Sunray,1.0.189,1,73,0x58\r
                        switch (index)
                        {
                        case 1:
-                         _props.firmware = val;
+                         _props.firmware = String(val, len);
                          break;
                        case 2:
-                         _props.version = val;
+                         _props.version = String(val, len);
                          break;
                        case 3:
-                         enc.setOn(val.toInt() == 1);
+                         enc.setOn(atoi(val) == 1);
                          break;
                        case 4:
-                         enc.setChallenge(val.toInt());
+                         enc.setChallenge(atoi(val));
                          break;
                        }
                      });
@@ -873,76 +887,77 @@ void MowerAdapter::parseStateResponse(String line)
   Log(DBG, "%sparseStateResponse", _LOG_);
   const auto now = millis();
 
-  processCSVResponse(line, [&](int index, String val)
+  processCSVResponse(line, [&](int index, const char* val, size_t len)
                      {
+                       (void)len;
                        switch (index)
                        {
                        case 1:
-                         _state.batteryVoltage = val.toFloat();
+                         _state.batteryVoltage = atof(val);
                          break;
                        case 2:
-                         _state.position.x = val.toFloat();
+                         _state.position.x = atof(val);
                          break;
                        case 3:
-                         _state.position.y = val.toFloat();
+                         _state.position.y = atof(val);
                          break;
                        case 4:
-                         _state.position.delta = val.toFloat();
+                         _state.position.delta = atof(val);
                          break;
                        case 5:
-                         _state.position.solution = val.toInt();
+                         _state.position.solution = atoi(val);
                          break;
                        case 6:
-                         _state.job = val.toInt();
+                         _state.job = atoi(val);
                          break;
                        case 7:
-                         _state.position.mowPointIndex = val.toInt();
+                         _state.position.mowPointIndex = atoi(val);
                          break;
                        case 8:
-                         _state.position.age = val.toFloat();
+                         _state.position.age = atof(val);
                          break;
                        case 9:
-                         _state.sensor = val.toInt();
+                         _state.sensor = atoi(val);
                          break;
 
                        case 10:
-                         _state.target.x = val.toFloat();
+                         _state.target.x = atof(val);
                          break;
                        case 11:
-                         _state.target.y = val.toFloat();
+                         _state.target.y = atof(val);
                          break;
 
                        case 12:
-                         _state.position.accuracy = val.toFloat();
+                         _state.position.accuracy = atof(val);
                          break;
                        case 13:
-                         _state.position.visibleSatellites = val.toInt();
+                         _state.position.visibleSatellites = atoi(val);
                          break;
                        case 14:
-                         _state.amps = val.toFloat();
+                         _state.amps = atof(val);
                          break;
                        case 15:
-                         _state.position.visibleSatellitesDgps = val.toInt();
+                         _state.position.visibleSatellitesDgps = atoi(val);
                          break;
                        case 16:
-                         _state.mapCrc = val.toInt();
+                         _state.mapCrc = atoi(val);
                          break;
                        
                        // incompatible to sunray upstream
                        case 20:
-                         _state.chargingMah = val.toFloat();
+                         _state.chargingMah = atof(val);
                          break;
                        case 21:
-                         _state.motorLeftMah = val.toFloat();
+                         _state.motorLeftMah = atof(val);
                          break;
                        case 22:
-                         _state.motorRightMah = val.toFloat();
+                         _state.motorRightMah = atof(val);
                          break;
                        case 23:
-                         _state.motorMowMah = val.toFloat();
+                         _state.motorMowMah = atof(val);
                          break;
                        case 24:
-                         _state.temperature = val.toFloat();
+                         _state.temperature = atof(val);
                          break;
                        }
                      });
@@ -957,16 +972,11 @@ void MowerAdapter::parseATWCommand(String line)
   if (line.startsWith("AT+W,")) line = line.substring(5);
   
   std::vector<float> values;
-  int lastCommaIdx = -1;
-  int len = line.length();
-  for (int idx = 0; idx < len; idx++) {
-    char ch = line[idx];
-    if ((ch == ',') || (idx == len - 1)) {
-      int valueEnd = (ch == ',') ? idx : idx + 1;
-      String token = line.substring(lastCommaIdx + 1, valueEnd);
-      values.push_back(token.toFloat());
-      lastCommaIdx = idx;
-    }
+  const char* p = line.c_str();
+  while (*p) {
+    values.push_back(atof(p));
+    while (*p && *p != ',') p++;
+    if (*p == ',') p++;
   }
 
   if (values.size() < 3) return; // Mindestens Index, x, y
@@ -1010,27 +1020,28 @@ void MowerAdapter::parseATCCommand(String line)
 
   processCSVResponse(
       line,
-      [&](int index, String val)
+      [&](int index, const char* val, size_t len)
       {
-        if (val.toInt() == -1)
+        (void)len;
+        if (atoi(val) == -1)
           return;
 
         switch (index)
         {
         case 1:
-          _desiredState.mowerMotorEnabled = val.toInt() == 1;
+          _desiredState.mowerMotorEnabled = atoi(val) == 1;
           break;
         case 2:
-          _desiredState.op = val.toInt();
+          _desiredState.op = atoi(val);
           break;
         case 3:
-          _desiredState.speed = val.toFloat();
+          _desiredState.speed = atof(val);
           break;
         case 4:
-          _desiredState.fixTimeout = val.toInt();
+          _desiredState.fixTimeout = atoi(val);
           break;
         case 5:
-          _desiredState.finishAndRestart = val.toInt() == 1;
+          _desiredState.finishAndRestart = atoi(val) == 1;
           break;
         case 6:
           // setMowingPointPercent
@@ -1162,9 +1173,23 @@ bool MowerAdapter::sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot:
   if (_mapUploadState.pointIdx >= pts.size())
     return false;
 
-  String cmd = "AT+W," + String(baseIdx + _mapUploadState.pointIdx);
-  for (size_t j = _mapUploadState.pointIdx; j < pts.size() && j < _mapUploadState.pointIdx + 20; j++)
-    cmd += "," + String(pts[j].X, 6) + "," + String(pts[j].Y, 6);
+  // Kleinere Chunks, damit der Sunray-Serial-Empfangspuffer nicht überläuft.
+  const size_t chunkSize = 10;
+  size_t endIdx = _mapUploadState.pointIdx + chunkSize;
+  if (endIdx > pts.size()) endIdx = pts.size();
+
+  char buf[512];
+  int n = snprintf(buf, sizeof(buf), "AT+W,%d", baseIdx + _mapUploadState.pointIdx);
+  for (size_t j = _mapUploadState.pointIdx; j < endIdx; j++) {
+    int written = snprintf(buf + n, sizeof(buf) - n, ",%.6f,%.6f", pts[j].X, pts[j].Y);
+    if (written < 0 || (size_t)(n + written) >= sizeof(buf)) break;
+    n += written;
+  }
+  String cmd(buf);
+
+  _mapUploadState.lastBaseIdx = baseIdx;
+  _mapUploadState.lastExpectedNextIdx = baseIdx + (int)endIdx;
+  Log(INFO, "%ssendMapChunkAsync: %s (expect next W,%d)", _LOG_, cmd.c_str(), _mapUploadState.lastExpectedNextIdx);
 
   bool queued = sendCommandWithResponseAsync(cmd, [&](String response, bool ok) {
     _mapUploadState.lastResponse = response;
@@ -1199,6 +1224,36 @@ static bool responseOkForPhase(int phase, const String &response)
   }
 }
 
+static bool isPointUploadPhase(int phase)
+{
+  switch (phase) {
+    case ArduMower::Modem::MapUploadState::perimeter:
+    case ArduMower::Modem::MapUploadState::exclusions:
+    case ArduMower::Modem::MapUploadState::dockpoints:
+    case ArduMower::Modem::MapUploadState::waypoints:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static int parseResponseIndex(int phase, const String &response)
+{
+  if (!response.startsWith("W") && !response.startsWith("N") && !response.startsWith("X"))
+    return -1;
+  int comma = response.indexOf(',');
+  if (comma < 0) return -1;
+  int idx = comma + 1;
+  while (idx < response.length() && response[idx] == ' ') idx++;
+  if (idx >= response.length() || !isdigit((unsigned char)response[idx])) return -1;
+  int value = 0;
+  while (idx < response.length() && isdigit((unsigned char)response[idx])) {
+    value = value * 10 + (response[idx] - '0');
+    idx++;
+  }
+  return value;
+}
+
 void MowerAdapter::processMapUpload()
 {
   if (!_mapUploadState.active)
@@ -1215,6 +1270,14 @@ void MowerAdapter::processMapUpload()
   if (_mapUploadState.phase != MapUploadState::start) {
     _mapUploadState.lastResponse.trim();
     bool responseValid = _mapUploadState.lastOk && responseOkForPhase(_mapUploadState.phase, _mapUploadState.lastResponse);
+    if (responseValid && isPointUploadPhase(_mapUploadState.phase)) {
+      int respIdx = parseResponseIndex(_mapUploadState.phase, _mapUploadState.lastResponse);
+      if (respIdx >= 0 && respIdx != _mapUploadState.lastExpectedNextIdx) {
+        Log(WARN, "%sprocessMapUpload: response index mismatch in phase %d (expected %d, got %d)",
+            _LOG_, _mapUploadState.phase, _mapUploadState.lastExpectedNextIdx, respIdx);
+        responseValid = false;
+      }
+    }
     if (!responseValid) {
       _mapUploadState.chunkRetry++;
       Log(WARN, "%sprocessMapUpload: command failed in phase %d (retry %d/3)", _LOG_, _mapUploadState.phase, _mapUploadState.chunkRetry);
@@ -1389,10 +1452,10 @@ void MowerAdapter::loop()
   }
 }
 
-bool MowerAdapter::sendCommand(String command, bool encrypt)
+bool MowerAdapter::sendCommand(const String& command, bool encrypt)
 {
   Checksum chk;
-  chk.update(command);
+  chk.update(command.c_str());
 
   char *buffer;
   asprintf(&buffer, "%s,0x%02x", command.c_str(), chk.value());
@@ -1407,7 +1470,7 @@ bool MowerAdapter::sendCommand(String command, bool encrypt)
   return result;
 }
 
-bool MowerAdapter::sendCommandWithResponseAsync(String command, std::function<void(String, bool)> callback, bool encrypt, int timeoutMs)
+bool MowerAdapter::sendCommandWithResponseAsync(const String& command, std::function<void(String, bool)> callback, bool encrypt, int timeoutMs)
 {
   if (_pendingCommand.active) {
     Log(WARN, "%ssendCommandWithResponseAsync: already busy", _LOG_);
@@ -1415,7 +1478,7 @@ bool MowerAdapter::sendCommandWithResponseAsync(String command, std::function<vo
   }
 
   Checksum chk;
-  chk.update(command);
+  chk.update(command.c_str());
 
   char *buffer;
   asprintf(&buffer, "%s,0x%02x", command.c_str(), chk.value());
@@ -1474,7 +1537,7 @@ void MowerAdapter::processPendingCommand()
     callback(response, ok);
 }
 
-bool MowerAdapter::sendCommandWithResponse(String command, String &response, bool encrypt, int timeoutMs)
+bool MowerAdapter::sendCommandWithResponse(const String& command, String &response, bool encrypt, int timeoutMs)
 {
   bool done = false;
   bool ok = sendCommandWithResponseAsync(command, [&](String resp, bool success) {
@@ -1501,22 +1564,19 @@ bool MowerAdapter::sendCommandWithResponse(String command, String &response, boo
   return ok;
 }
 
-void processCSVResponse(String res, std::function<void(int, String)> fn)
+void processCSVResponse(const String& res, std::function<void(int, const char*, size_t)> fn)
 {
   int index = -1;
+  const char* p = res.c_str();
 
-  while (res.length() > 0)
+  while (*p)
   {
     index++;
+    const char* comma = strchr(p, ',');
+    size_t len = comma ? (size_t)(comma - p) : strlen(p);
+    fn(index, p, len);
 
-    const auto delimiter = res.indexOf(",");
-    String val = delimiter == -1 ? res : res.substring(0, delimiter);
-
-    fn(index, val);
-
-    if (delimiter != -1)
-      res = res.substring(delimiter + 1);
-    else
-      res = "";
+    p += len;
+    if (*p == ',') p++;
   }
 }

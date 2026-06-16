@@ -6,36 +6,54 @@ bool isPrintableCharacter(char c);
 
 void Reader::reset()
 {
-  buffer = "";
+  pos = 0;
+  buffer[0] = '\0';
+}
+
+void Reader::ensureCapacity(uint16_t needed)
+{
+  if (pos + needed >= READER_BUF_SIZE - 1)
+  {
+    pos = 0;
+    buffer[0] = '\0';
+  }
 }
 
 String Reader::update(char c)
 {
   if (c == 0x7f)
   {
-    if (buffer.length() > 0) buffer = buffer.substring(0, buffer.length() - 1);
+    if (pos > 0)
+    {
+      pos--;
+      buffer[pos] = '\0';
+    }
     return String("");
   }
 
-  // Accept all characters (including encrypted data)
-  // Only filter out null bytes and line endings (handled separately)
-  if (c == '\0') {
+  ensureCapacity(2);
+
+  if (c == '\0')
+  {
     // Ignore null bytes
-  } else if (c == '\r' || c == '\n') {
-    // Line endings - check if we have a complete line
-    buffer += String(c);
-  } else {
-    buffer += String(c);
+  }
+  else
+  {
+    buffer[pos++] = c;
+    buffer[pos] = '\0';
   }
 
-  if (!buffer.endsWith(eol))
+  uint16_t eolLen = eol.length();
+  if (pos < eolLen) return String("");
+  if (strncmp(buffer + pos - eolLen, eol.c_str(), eolLen) != 0)
     return String("");
 
-  String result = buffer.substring(0, buffer.length() - eol.length());
-  buffer = "";
-
+  // Complete line found – extract without EOL
+  uint16_t resultLen = pos - eolLen;
+  String result = String(buffer, resultLen);
+  pos = 0;
+  buffer[0] = '\0';
   return result;
-
 }
 
 String Reader::getAndClearBadChars() {
@@ -46,7 +64,7 @@ String Reader::getAndClearBadChars() {
 
 String Reader::peek()
 {
-  return buffer;
+  return String(buffer);
 }
 
 bool isPrintableCharacter(char c)

@@ -66,8 +66,8 @@ namespace ArduMower
       void sniffTx(TxDrain *d);
       void begin();
       void loop();
-      bool send(String _command, responseCb _cb);
-      bool sendWithoutResponse(String line);
+      bool send(const String& _command, responseCb _cb);
+      bool sendWithoutResponse(const String& line);
       bool inAction();
     };
 
