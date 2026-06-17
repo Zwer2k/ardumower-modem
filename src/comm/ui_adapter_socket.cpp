@@ -986,6 +986,7 @@ void UiSocketHandler::processUploadToMower() {
   }
   sendData(ResponseDataType::map, NULL, true);
   sendData(ResponseDataType::mowerState, NULL, true);
+  _cmd.requestStatusNow(); // refresh state/crc immediately after upload
 }
 
 void UiSocketHandler::setMowSettings(const ArduMower::Domain::Robot::MowSettings &s) {
@@ -1056,9 +1057,10 @@ void UiSocketHandler::processCalculateWaypoints() {
   map.waypoints.clear();
 #ifdef ENABLE_MAP
   auto settings = _calculateWaypointsSettings;
-  decltype(ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings)) waypoints;
+  auto state = _source.state();
+  decltype(ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings, &state)) waypoints;
   try {
-    waypoints = ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings);
+    waypoints = ArduMower::Modem::PathPlanner::calculateWaypoints(map, settings, &state);
   } catch (...) {
     Log(ERR, "%s processCalculateWaypoints: exception during calculation", _LOG_);
     sendProgress("calculate", 100, "Failed");

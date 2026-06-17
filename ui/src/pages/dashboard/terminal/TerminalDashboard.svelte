@@ -6,9 +6,9 @@
     import { browser } from '$app/environment';
     import type { ApiModemInfoResponse } from '../../../firmware/service';
 
-    let showTerminal = false;
+    let showTerminal = $state(false);
     let modemInfo: ApiModemInfoResponse | null = null;
-    let consoleCmd: string;
+    let consoleCmd = $state('');
 
     onMount(async () => {
         if (!browser) return;
@@ -27,11 +27,12 @@
         socketService.clearConsoleLines();
     }
 
-    $: {
+    $effect(() => {
         if (browser && $socketStore.connected && consoleCmd) {
             socketService.sendConsoleCommand(consoleCmd);
+            consoleCmd = ''; // reset so reconnects don't resend the same command
         }
-    }
+    });
 </script>
 
 <div class="dashboard-content">

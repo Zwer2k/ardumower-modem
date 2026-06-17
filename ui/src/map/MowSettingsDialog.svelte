@@ -60,6 +60,8 @@
   on:open={handleOpen}
   title="Mow Settings"
   size="sm"
+  id="mow-settings-modal"
+  hasScrollingContent={true}
   primaryButtonText="Apply"
   secondaryButtonText="Cancel"
   on:click:button--primary={handleOk}
@@ -137,5 +139,11 @@
     flex-direction: column;
     gap: 1rem;
     padding: 0.5rem 0;
+  }
+
+  /* Hide the Carbon scroll-overflow gradient indicator only inside this
+     dialog so it does not overlay the form content. */
+  :global(#mow-settings-modal .bx--modal-content--overflow-indicator) {
+    display: none !important;
   }
 </style>

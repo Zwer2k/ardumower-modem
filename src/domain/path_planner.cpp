@@ -123,63 +123,82 @@ std::vector<Polygon> offsetPolygonInward(const Polygon &poly, double dist) {
     return result;
 }
 
-// Walk along the perimeter from `from` to `to`, following polygon edges exactly.
+// Find the nearest edge and the corresponding projection of p onto poly.
+static void nearestOnBoundary(const Point &p, const Polygon &poly,
+    size_t &edgeIdx, Point &proj)
+{
+    edgeIdx = 0;
+    proj = poly.empty() ? p : poly[0];
+    double bestDist = std::numeric_limits<double>::max();
+    for (size_t i = 0; i < poly.size(); i++) {
+        size_t j = (i + 1) % poly.size();
+        double dx = poly[j].X - poly[i].X, dy = poly[j].Y - poly[i].Y;
+        double len2 = dx*dx + dy*dy;
+        if (len2 < 0.001) continue;
+        double tt = std::max(0.0, std::min(1.0,
+            ((p.X - poly[i].X)*dx + (p.Y - poly[i].Y)*dy) / len2));
+        Point pp = {poly[i].X + tt*dx, poly[i].Y + tt*dy};
+        double d = distance(p, pp);
+        if (d < bestDist) { bestDist = d; edgeIdx = i; proj = pp; }
+    }
+}
+
+// Walk along the perimeter from `from` to `to`, following polygon edges.
+// Both endpoints are projected onto their nearest edge. Because the projected
+// point can travel to either end of its edge, we evaluate the four possible
+// start/end vertex combinations and pick the shortest valid route around the
+// polygon.
 static Polygon walkPerimeter(const Polygon &peri, const Point &from, const Point &to) {
     Polygon result;
     if (peri.size() < 3) { result.push_back(to); return result; }
     size_t n = peri.size();
 
-    auto nearestOnBoundary = [&](const Point &p) -> std::pair<size_t, Point> {
-        size_t bestEdge = 0;
-        Point bestProj = peri[0];
-        double bestDist = std::numeric_limits<double>::max();
-        for (size_t i = 0; i < n; i++) {
-            size_t j = (i + 1) % n;
-            double dx = peri[j].X - peri[i].X, dy = peri[j].Y - peri[i].Y;
-            double len2 = dx*dx + dy*dy;
-            if (len2 < 0.001) continue;
-            double tt = std::max(0.0, std::min(1.0,
-                ((p.X-peri[i].X)*dx + (p.Y-peri[i].Y)*dy) / len2));
-            Point pp = {peri[i].X + tt*dx, peri[i].Y + tt*dy};
-            double d = distance(p, pp);
-            if (d < bestDist) { bestDist = d; bestEdge = i; bestProj = pp; }
-        }
-        return {bestEdge, bestProj};
-    };
-
-    auto [iFrom, projFrom] = nearestOnBoundary(from);
-    auto [iTo, projTo] = nearestOnBoundary(to);
+    size_t iFrom, iTo;
+    Point projFrom, projTo;
+    nearestOnBoundary(from, peri, iFrom, projFrom);
+    nearestOnBoundary(to, peri, iTo, projTo);
 
     result.push_back(projFrom);
 
-    if (iFrom == iTo) {
+    if (iFrom == iTo || distance(projFrom, projTo) < 0.001) {
         result.push_back(projTo);
         return result;
     }
-
-    Polygon fwd, rev;
-    for (size_t k = (iFrom + 1) % n; ; k = (k + 1) % n) {
-        fwd.push_back(peri[k]);
-        if (k == iTo) break;
-        if (fwd.size() > n + 2) break;
-    }
-    fwd.push_back(projTo);
-
-    for (size_t k = iFrom; ; ) {
-        rev.push_back(peri[k]);
-        if (k == (iTo + 1) % n) break;
-        if (rev.size() > n + 2) break;
-        k = (k + n - 1) % n;
-    }
-    rev.push_back(projTo);
 
     auto pathLen = [](const Polygon &p) {
         double d = 0;
         for (size_t i = 1; i < p.size(); i++) d += distance(p[i-1], p[i]);
         return d;
     };
-    const auto &path = pathLen(fwd) <= pathLen(rev) ? fwd : rev;
-    for (const auto &p : path) result.push_back(p);
+
+    // Build a path that starts at projFrom, walks forward through polygon
+    // vertices from startPt to endPt (inclusive), and ends at projTo.
+    auto buildPath = [&](size_t startPt, size_t endPt) -> Polygon {
+        Polygon path;
+        path.push_back(projFrom);
+        if (startPt != endPt) {
+            for (size_t k = startPt; ; k = (k + 1) % n) {
+                path.push_back(peri[k]);
+                if (k == endPt) break;
+                if (path.size() > n + 3) break;
+            }
+        }
+        path.push_back(projTo);
+        return path;
+    };
+
+    // Four candidates: start at either end of iFrom, end at either end of iTo.
+    std::vector<Polygon> candidates;
+    candidates.push_back(buildPath((iFrom + 1) % n, iTo));
+    candidates.push_back(buildPath((iFrom + 1) % n, (iTo + 1) % n));
+    candidates.push_back(buildPath(iFrom, iTo));
+    candidates.push_back(buildPath(iFrom, (iTo + 1) % n));
+
+    double bestLen = std::numeric_limits<double>::max();
+    for (const auto &c : candidates) {
+        double len = pathLen(c);
+        if (len < bestLen) { bestLen = len; result = c; }
+    }
     return result;
 }
 
@@ -365,10 +384,14 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
     solution = sorted;
 }
 
-// Check if line segment from→to crosses any perimeter edge (exits the polygon).
-// Uses exact line-segment intersection — unlike point-sampling, this cannot miss
-// short dips outside the perimeter.
+// Check if line segment from→to leaves the perimeter polygon.
+// The exact edge-crossing test catches most cases, but when both endpoints sit
+// on the boundary (common for clipped mowing segments) it can miss a straight
+// chord that cuts across the outside of a concave area. We therefore sample
+// points along the segment and require every sample to lie inside/on the
+// perimeter.
 static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter) {
+    // Standard segment-vs-segment intersection test.
     for (size_t i = 0; i < perimeter.size(); i++) {
         size_t j = (i + 1) % perimeter.size();
         double o1 = crossProduct(perimeter[i], perimeter[j], from);
@@ -377,13 +400,54 @@ static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon
         double o4 = crossProduct(from, to, perimeter[j]);
         if (o1 * o2 < 0 && o3 * o4 <= 0) return true;
     }
+
+    // Boundary-endpoint fallback: sample the interior of the segment.
+    // A point exactly on the boundary is treated as inside to avoid false
+    // positives for segments that run along an edge.
+    double segLen = distance(from, to);
+    if (segLen > 1e-6) {
+        double step = 0.10; // 10 cm samples
+        int samples = std::max(1, (int)(segLen / step));
+        if (samples > 20) samples = 20; // cap computational cost
+        for (int k = 1; k < samples; k++) {
+            double t = (double)k / samples;
+            Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
+            // Use a tiny outward margin so boundary samples count as inside.
+            if (!pointInPolygon(p, perimeter)) {
+                // Only count as outside if it is not virtually on the boundary.
+                bool onBoundary = false;
+                for (size_t i = 0; i < perimeter.size() && !onBoundary; i++) {
+                    size_t j = (i + 1) % perimeter.size();
+                    double dx = perimeter[j].X - perimeter[i].X;
+                    double dy = perimeter[j].Y - perimeter[i].Y;
+                    double len2 = dx * dx + dy * dy;
+                    if (len2 < 1e-8) continue;
+                    double tt = std::max(0.0, std::min(1.0,
+                        ((p.X - perimeter[i].X) * dx + (p.Y - perimeter[i].Y) * dy) / len2));
+                    double px = perimeter[i].X + tt * dx;
+                    double py = perimeter[i].Y + tt * dy;
+                    if ((p.X - px) * (p.X - px) + (p.Y - py) * (p.Y - py) < 1e-6)
+                        onBoundary = true;
+                }
+                if (!onBoundary) return true;
+            }
+        }
+    }
     return false;
 }
 
 // ── Connect sorted polys into a single waypoint path ──
 void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon> &polys,
-    const Polygon &perimeter) {
+    const Polygon &perimeter, const std::vector<Polygon> &areasToMow) {
     waypoints.clear();
+
+    // When the mowable area is an inward offset of the perimeter, use that
+    // inner boundary for walk/detection so connectors do not cut through the
+    // untraversable border zone. Fall back to the outer perimeter when the
+    // offset produced multiple disconnected pieces.
+    const Polygon *boundary = &perimeter;
+    if (areasToMow.size() == 1 && !areasToMow[0].empty())
+        boundary = &areasToMow[0];
 
     for (size_t i = 0; i < polys.size(); i++) {
         const auto &poly = polys[i];
@@ -393,9 +457,9 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
             const Point &from = waypoints.back();
             const Point &to = poly[0];
             double d = distance(from, to);
-            bool needWalk = d > 0.1 && lineExitsPerimeter(from, to, perimeter);
+            bool needWalk = d > 0.1 && lineExitsPerimeter(from, to, *boundary);
             if (needWalk) {
-                Polygon conn = walkPerimeter(perimeter, from, to);
+                Polygon conn = walkPerimeter(*boundary, from, to);
                 for (size_t k = 0; k < conn.size(); k++)
                     if (distance(waypoints.back(), conn[k]) > 0.01)
                         waypoints.push_back(conn[k]);
@@ -409,7 +473,8 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
 }
 
 Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
-    ArduMower::Domain::Robot::MowSettings &settings)
+    ArduMower::Domain::Robot::MowSettings &settings,
+    const ArduMower::Domain::Robot::State::State *state)
 {
     Log(INFO, "%scalculateWaypoints pattern=%d width=%.3f angle=%d distToBorder=%d borderLaps=%d",
         _LOG_, settings.pattern, settings.width, settings.angle,
@@ -424,6 +489,22 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
 
     Polygon route;
     Point startNear = perimeter[0];
+
+    // Prefer start positions close to the rover:
+    // 1. If docking, use the end of the dock line (homing line).
+    // 2. Otherwise use the current GPS position if it is valid.
+    if (state != nullptr) {
+        const int JOB_DOCK = 4;
+        if (state->job == JOB_DOCK && !map.dockpoints.empty()) {
+            const auto &dp = map.dockpoints.back();
+            startNear = Point{dp.X, dp.Y};
+            Log(DBG, "%sstartNear set to dock line end (%.3f, %.3f)", _LOG_, startNear.X, startNear.Y);
+        } else if (state->position.solution > 0 &&
+                   (state->position.x != 0.0f || state->position.y != 0.0f)) {
+            startNear = Point{state->position.x, state->position.y};
+            Log(DBG, "%sstartNear set to GPS position (%.3f, %.3f)", _LOG_, startNear.X, startNear.Y);
+        }
+    }
 
     // Collect all area polygons (inward offset may split at bottlenecks)
     std::vector<Polygon> areasToMow;
@@ -497,7 +578,7 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
         if (!allSegments.empty()) {
             sortSolutionPolygonsByDistance(allSegments, startNear);
             Polygon pattern;
-            connectPolysUsingPathFinding(pattern, allSegments, perimeter);
+            connectPolysUsingPathFinding(pattern, allSegments, perimeter, areasToMow);
             pattern = pruneOutside(pattern, perimeter);
 
             if (!route.empty() && !pattern.empty()) {

@@ -37,10 +37,11 @@ Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
 
 void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point &startPt);
 void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon> &polys,
-    const Polygon &perimeter);
+    const Polygon &perimeter, const std::vector<Polygon> &areasToMow);
 
 Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
-    ArduMower::Domain::Robot::MowSettings &settings);
+    ArduMower::Domain::Robot::MowSettings &settings,
+    const ArduMower::Domain::Robot::State::State *state = nullptr);
 
         }
     }

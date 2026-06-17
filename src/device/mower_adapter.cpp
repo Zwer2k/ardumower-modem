@@ -189,7 +189,7 @@ void MowerAdapter::parseArduMowerResponse(const String& line)
     return;
   }
 
-  if (line[1] != ',' && !(line[0] == 'S' && (line[1] == '3' || line[1] == '4')) && !(line[0] == 'U'))
+  if (line[1] != ',' && !(line[0] == 'S' && (line[1] == '3' || line[1] == '4')) && !(line[0] == 'U') && !(line[0] == '+' && line[1] == 'U'))
   {
     Log(DBG, "%sparseArduMowerResponse::guard::second-char(%c)", _LOG_, line[1]);
     return;
@@ -206,7 +206,7 @@ void MowerAdapter::parseArduMowerResponse(const String& line)
   const char* payload = cstr;
 
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
-  if (strncmp(payload, "U,", 2) == 0)
+  if (strncmp(payload, "U,", 2) == 0 || strncmp(payload, "+U,", 3) == 0)
     parseUbxResponse(payload);
   else if (strncmp(payload, "S4,", 3) == 0)
     { _cachedRawGpsDetails = line; parseGpsDetailsResponse(payload); }

@@ -7,6 +7,7 @@
 /.dummy
 /screenlog.*
 .venv/*
+.screenshots/*
 
 .task
 .vscode

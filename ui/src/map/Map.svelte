@@ -934,6 +934,9 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               >
                 <span class="btn-label">Del</span>
               </Button>
+              {#if nameDirty}
+                <span class="pending-map-name" title="Neuer Name, noch nicht gespeichert">→ {pendingName}</span>
+              {/if}
             </div>
           </Column>
         </Row>
@@ -1293,6 +1296,21 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   .map-mgmt-row {
     margin-bottom: 0.5rem;
     align-items: flex-end;
+  }
+
+  .pending-map-name {
+    margin-left: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: #fff3e0;
+    color: #b06000;
+    border: 1px solid #ffcc80;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   @container (max-width: 800px) {
