@@ -33,6 +33,7 @@
     // Known commands context menu
     let showCmdMenu = $state(false);
     let menuPos = $state({ x: 0, y: 0 });
+    let menuAbove = $state(false);
     let inputEl: HTMLInputElement | undefined = $state(undefined);
 
     const baseCommands: { cmd: string; desc: string }[] = [
@@ -135,6 +136,9 @@
           command = '';
           event.preventDefault();
         }
+      } else if (event.key === 'ArrowRight' && event.ctrlKey) {
+        event.preventDefault();
+        openCmdMenuAtCursor();
       }
     }
   
@@ -150,9 +154,27 @@
       }
     }
 
+    function positionMenu(x: number, y: number) {
+      const estimatedHeight = Math.min(window.innerHeight * 0.5, 320);
+      const menuWidth = 260;
+      menuAbove = y + estimatedHeight > window.innerHeight;
+      menuPos = {
+        x: Math.min(x, window.innerWidth - menuWidth - 8),
+        y: menuAbove ? window.innerHeight - y : y
+      };
+    }
+
     function onContextMenu(event: MouseEvent) {
       event.preventDefault();
-      menuPos = { x: event.clientX, y: event.clientY };
+      positionMenu(event.clientX, event.clientY);
+      showCmdMenu = true;
+    }
+
+    function openCmdMenuAtCursor() {
+      const rect = inputEl?.getBoundingClientRect();
+      if (rect) {
+        positionMenu(rect.left + 8, rect.top - 8);
+      }
       showCmdMenu = true;
     }
 
@@ -162,8 +184,11 @@
       inputEl?.focus();
     }
 
-    function closeMenu() {
-      showCmdMenu = false;
+    function closeMenu(event?: MouseEvent) {
+      if (!event || !(event.target instanceof Element) ||
+          !event.target.closest('.cmd-menu')) {
+        showCmdMenu = false;
+      }
     }
 
     function downloadLog(): void {
@@ -200,14 +225,13 @@
           </VirtualList>
         </div>
     </div>
-    <div class="terminal-input-wrapper">
+    <div class="terminal-input-wrapper" oncontextmenu={onContextMenu}>
       <span class="prompt">$&nbsp;</span>
       <input
         type="text"
         class="terminal-input"
         bind:value={command}
         onkeydown={processCommand}
-        oncontextmenu={onContextMenu}
         bind:this={inputEl}
         spellcheck="false"
         use:setFous
@@ -230,7 +254,8 @@
   </main>
 
   {#if showCmdMenu}
-  <div class="cmd-menu" style="left: {menuPos.x}px; top: {menuPos.y}px;" role="menu">
+  <div class="cmd-menu" class:cmd-menu-above={menuAbove}
+       style="left: {menuPos.x}px; {menuAbove ? 'bottom' : 'top'}: {menuPos.y}px;" role="menu">
     <div class="cmd-menu-title">Bekannte Befehle</div>
     {#each knownCommands as item}
       <button class="cmd-menu-item" onclick={() => selectKnownCommand(item.cmd)} title={item.desc}>

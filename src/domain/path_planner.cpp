@@ -384,6 +384,24 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
     solution = sorted;
 }
 
+// Returns true if p lies within distance sqrt(tolSq) of any edge of poly.
+static bool pointOnBoundary(const Point &p, const Polygon &poly, double tolSq = 1e-6) {
+    for (size_t i = 0; i < poly.size(); i++) {
+        size_t j = (i + 1) % poly.size();
+        double dx = poly[j].X - poly[i].X;
+        double dy = poly[j].Y - poly[i].Y;
+        double len2 = dx * dx + dy * dy;
+        if (len2 < 1e-10) continue;
+        double tt = std::max(0.0, std::min(1.0,
+            ((p.X - poly[i].X) * dx + (p.Y - poly[i].Y) * dy) / len2));
+        double px = poly[i].X + tt * dx;
+        double py = poly[i].Y + tt * dy;
+        if ((p.X - px) * (p.X - px) + (p.Y - py) * (p.Y - py) <= tolSq)
+            return true;
+    }
+    return false;
+}
+
 // Check if line segment from→to leaves the perimeter polygon.
 // The exact edge-crossing test catches most cases, but when both endpoints sit
 // on the boundary (common for clipped mowing segments) it can miss a straight
@@ -413,27 +431,38 @@ static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon
             double t = (double)k / samples;
             Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
             // Use a tiny outward margin so boundary samples count as inside.
-            if (!pointInPolygon(p, perimeter)) {
-                // Only count as outside if it is not virtually on the boundary.
-                bool onBoundary = false;
-                for (size_t i = 0; i < perimeter.size() && !onBoundary; i++) {
-                    size_t j = (i + 1) % perimeter.size();
-                    double dx = perimeter[j].X - perimeter[i].X;
-                    double dy = perimeter[j].Y - perimeter[i].Y;
-                    double len2 = dx * dx + dy * dy;
-                    if (len2 < 1e-8) continue;
-                    double tt = std::max(0.0, std::min(1.0,
-                        ((p.X - perimeter[i].X) * dx + (p.Y - perimeter[i].Y) * dy) / len2));
-                    double px = perimeter[i].X + tt * dx;
-                    double py = perimeter[i].Y + tt * dy;
-                    if ((p.X - px) * (p.X - px) + (p.Y - py) * (p.Y - py) < 1e-6)
-                        onBoundary = true;
-                }
-                if (!onBoundary) return true;
-            }
+            if (!pointInPolygon(p, perimeter) && !pointOnBoundary(p, perimeter))
+                return true;
         }
     }
     return false;
+}
+
+// Sample points along from→to and require each sample to be inside or on the
+// boundary of at least one of the given areas.
+static bool segmentStaysInAreas(const Point &from, const Point &to,
+    const std::vector<Polygon> &areas)
+{
+    if (areas.empty()) return true;
+    double segLen = distance(from, to);
+    if (segLen < 1e-6) return true;
+    int samples = std::max(5, (int)(segLen / 0.02));
+    if (samples > 100) samples = 100;
+    for (int k = 0; k <= samples; k++) {
+        double t = (double)k / samples;
+        Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
+        bool insideAny = false;
+        for (const auto &area : areas) {
+            // Use a 1 mm boundary margin to avoid false positives from numerical
+            // noise while still detecting chords that clearly leave the area.
+            if (pointInPolygon(p, area) || pointOnBoundary(p, area, 1e-6)) {
+                insideAny = true;
+                break;
+            }
+        }
+        if (!insideAny) return false;
+    }
+    return true;
 }
 
 // ── Connect sorted polys into a single waypoint path ──
@@ -457,9 +486,13 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
             const Point &from = waypoints.back();
             const Point &to = poly[0];
             double d = distance(from, to);
-            bool needWalk = d > 0.1 && lineExitsPerimeter(from, to, *boundary);
-            if (needWalk) {
-                Polygon conn = walkPerimeter(*boundary, from, to);
+            bool exitsBoundary = d > 0.001 && lineExitsPerimeter(from, to, *boundary);
+            bool leavesMowArea = d > 0.001 && !segmentStaysInAreas(from, to, areasToMow);
+            if (exitsBoundary || leavesMowArea) {
+                // If the mowable area is split, walk the outer perimeter so the
+                // connector can travel between disconnected areas.
+                const Polygon &walkBoundary = areasToMow.size() > 1 ? perimeter : *boundary;
+                Polygon conn = walkPerimeter(walkBoundary, from, to);
                 for (size_t k = 0; k < conn.size(); k++)
                     if (distance(waypoints.back(), conn[k]) > 0.01)
                         waypoints.push_back(conn[k]);
@@ -566,15 +599,27 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
                 }
 
                 // Clip to each rotated area and rotate back
+                std::vector<Polygon> passSegments;
                 for (const auto &ra : rotatedAreas) {
                     auto clipped = clipIntersectOpen({zigzag}, ra);
                     auto rotated = rotatePolygons(clipped, angleDeg);
-                    allSegments.insert(allSegments.end(), rotated.begin(), rotated.end());
+                    passSegments.insert(passSegments.end(), rotated.begin(), rotated.end());
+                }
+
+                // Sort and connect this pass on its own. This keeps the mower in
+                // one pass direction as long as possible and avoids long diagonal
+                // connectors that have to cross concave / excluded areas.
+                if (!passSegments.empty()) {
+                    sortSolutionPolygonsByDistance(passSegments, startNear);
+                    Polygon passRoute;
+                    connectPolysUsingPathFinding(passRoute, passSegments, perimeter, areasToMow);
+                    passRoute = pruneOutside(passRoute, perimeter);
+                    if (!passRoute.empty()) allSegments.push_back(passRoute);
                 }
             }
         }
 
-        // Sort and connect all segments into a single route
+        // Sort and connect the per-area/per-pass routes into one final route.
         if (!allSegments.empty()) {
             sortSolutionPolygonsByDistance(allSegments, startNear);
             Polygon pattern;

@@ -141,11 +141,19 @@
     padding: 0.5rem 0;
   }
 
-  /* Limit this dialog's content height so the footer stays in view on small
-     screens, and hide the Carbon scroll-overflow gradient indicator so it does
-     not overlay the form content. */
+  /* Make this dialog a flex column so the content area shrinks to fit between
+     header and footer, scrolls internally, and never pushes the buttons out of
+     the viewport. */
+  :global(#mow-settings-modal .bx--modal-container) {
+    display: flex !important;
+    flex-direction: column !important;
+    max-height: 90vh !important;
+  }
   :global(#mow-settings-modal .bx--modal-content) {
-    max-height: 60vh;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    margin-bottom: 0 !important;
   }
   :global(#mow-settings-modal .bx--modal-content--overflow-indicator) {
     display: none !important;
