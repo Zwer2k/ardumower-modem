@@ -141,8 +141,12 @@
     padding: 0.5rem 0;
   }
 
-  /* Hide the Carbon scroll-overflow gradient indicator only inside this
-     dialog so it does not overlay the form content. */
+  /* Limit this dialog's content height so the footer stays in view on small
+     screens, and hide the Carbon scroll-overflow gradient indicator so it does
+     not overlay the form content. */
+  :global(#mow-settings-modal .bx--modal-content) {
+    max-height: 60vh;
+  }
   :global(#mow-settings-modal .bx--modal-content--overflow-indicator) {
     display: none !important;
   }
