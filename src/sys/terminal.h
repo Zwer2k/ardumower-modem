@@ -8,11 +8,16 @@
 #include "ringbuffer.h"
 
 #define TERMINAL_RINGBUFFER_SIZE 200
+#define TERMINAL_LINE_MAX 128
 
 namespace ArduMower
 {
   namespace Modem
   {
+    struct TerminalLine {
+      char text[TERMINAL_LINE_MAX];
+    };
+
     class TerminalMessage
     {
     public:
@@ -48,8 +53,8 @@ namespace ArduMower
       void resume();
       bool isSuspended() { return suspended; }
       
-      virtual void drainRx(String line, bool &stop) override;
-      virtual void drainTx(String line, bool &stop) override;
+      virtual void drainRx(const String& line, bool &stop) override;
+      virtual void drainTx(const String& line, bool &stop) override;
 
     private:
       ArduMower::Modem::Router *_terminalRouter;
@@ -59,7 +64,7 @@ namespace ArduMower
 
       bool suspended = false;
       bool prepareSuspended = false;
-      Ringbuffer<String, TERMINAL_RINGBUFFER_SIZE> *_buffer;
+      Ringbuffer<TerminalLine, TERMINAL_RINGBUFFER_SIZE> *_buffer;
     };
   }
 }

@@ -375,7 +375,7 @@ static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon
         double o2 = crossProduct(perimeter[i], perimeter[j], to);
         double o3 = crossProduct(from, to, perimeter[i]);
         double o4 = crossProduct(from, to, perimeter[j]);
-        if (o1 * o2 < 0 && o3 * o4 < 0) return true;
+        if (o1 * o2 < 0 && o3 * o4 <= 0) return true;
     }
     return false;
 }

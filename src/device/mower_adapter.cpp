@@ -12,6 +12,7 @@
 
 using namespace ArduMower::Modem;
 
+void processCSVResponse(const char* res, std::function<void(int, const char*, size_t)> fn);
 void processCSVResponse(const String& res, std::function<void(int, const char*, size_t)> fn);
 
 MowerAdapter::MowerAdapter(Settings::Settings &_settings, Router &_router)
@@ -167,127 +168,110 @@ void MowerAdapter::begin()
   }
 }
 
-void MowerAdapter::drainRx(String line, bool &stop)
+void MowerAdapter::drainRx(const String& line, bool &stop)
 {
   parseArduMowerResponse(line);
 }
 
-void MowerAdapter::drainTx(String line, bool &stop)
+void MowerAdapter::drainTx(const String& line, bool &stop)
 {
   parseArduMowerCommand(line);
 }
 
-void MowerAdapter::parseArduMowerResponse(String line)
+void MowerAdapter::parseArduMowerResponse(const String& line)
 {
-  //Log(DBG, "%sparseArduMowerResponse(%s)", _LOG_, line.c_str());
   Log(COMM, "<< %s", line.c_str());
 
-  if (line.length() < 2 + 4)
-  // return;
+  int len = line.length();
+  if (len < 2 + 4)
   {
-    Log(DBG, "%sparseArduMowerResponse::guard::length(%d)", _LOG_, line.length());
+    Log(DBG, "%sparseArduMowerResponse::guard::length(%d)", _LOG_, len);
     return;
   }
 
   if (line[1] != ',' && !(line[0] == 'S' && (line[1] == '3' || line[1] == '4')) && !(line[0] == 'U'))
-  // return;
   {
     Log(DBG, "%sparseArduMowerResponse::guard::second-char(%c)", _LOG_, line[1]);
     return;
   }
 
-  String checksumStr = line.substring(line.length() - 5);
-  if (!checksumStr.startsWith(",0x"))
-  // return;
+  // Checksum-Präfix ",0x" per Pointer-Check statt substring-Allokation
+  const char* cstr = line.c_str();
+  if (cstr[len-5] != ',' || cstr[len-4] != '0' || cstr[len-3] != 'x')
   {
     Log(DBG, "%sparseArduMowerResponse::guard::checksum-prefix", _LOG_);
     return;
   }
-  //uint8_t checksum = (checksumStr[3] - '0') << 4 | (checksumStr[4] - '0');
 
-  String payload = line.substring(0, line.length() - 5);
-
-  Checksum chk;
-  chk.update(payload);
-
-  // TODO test
-  // if (chk.value != checksum) return;
+  const char* payload = cstr;
 
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
-  if (payload.startsWith("U,"))
+  if (strncmp(payload, "U,", 2) == 0)
     parseUbxResponse(payload);
-  else if (payload.startsWith("S4,"))
+  else if (strncmp(payload, "S4,", 3) == 0)
     { _cachedRawGpsDetails = line; parseGpsDetailsResponse(payload); }
-  else if (payload.startsWith("S3,"))
+  else if (strncmp(payload, "S3,", 3) == 0)
 #else
-  if (payload.startsWith("S3,"))
+  if (strncmp(payload, "S3,", 3) == 0)
 #endif
     { _cachedRawSensorSummary = line; parseSensorSummaryResponse(payload); }
-  else if (payload.startsWith("S,"))
+  else if (strncmp(payload, "S,", 2) == 0)
     { _cachedRawState = line; parseStateResponse(payload); }
-  else if (payload.startsWith("V,"))
+  else if (strncmp(payload, "V,", 2) == 0)
     parseVersionResponse(payload);
-  else if (payload.startsWith("T,"))
+  else if (strncmp(payload, "T,", 2) == 0)
     { _cachedRawStats = line; parseStatisticsResponse(payload); }
   else
-    Log(DBG, "%sparseArduMowerResponse::payload-unknown(%s)", _LOG_, payload.c_str());
+    Log(DBG, "%sparseArduMowerResponse::payload-unknown(%s)", _LOG_, payload);
 }
 
-void MowerAdapter::parseArduMowerCommand(String line)
+void MowerAdapter::parseArduMowerCommand(const String& line)
 {
-  //Log(DBG, "%sparseArduMowerCommand %s", _LOG_, line.substring(0, 4).c_str());
+  String mutableLine;
+
   if (!line.startsWith("AT+"))
   {
     char *buffer = strdup(line.c_str());
     enc.decrypt(buffer, line.length());
-    line = buffer;
+    mutableLine = String(buffer, line.length());
     free(buffer);
-    //Log(DBG, "%sparseArduMowerCommand::decrypted(%s)", _LOG_, line.c_str());
+  } else {
+    mutableLine = line;
   }
 
-  if (line.startsWith("AT+")) {
-    // Bereinige die Zeile von invaliden Bytes, bevor sie verarbeitet wird.
-    // Das verhindert, dass invalide UTF-8-Sequenzen in Domain-Objekte
-    // oder WebSocket-Nachrichten gelangen.
-    for (int i = 0; i < line.length(); i++) {
-      unsigned char c = (unsigned char)line[i];
-      if (c < 0x20 && c != '\r' && c != '\n' && c != '\t') {
-        line[i] = '?';
-      } else if (c >= 0x80) {
-        line[i] = '?';
-      }
+  if (mutableLine.startsWith("AT+")) {
+    for (int i = 0; i < mutableLine.length(); i++) {
+      unsigned char c = (unsigned char)mutableLine[i];
+      if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
+        mutableLine[i] = '?';
+      else if (c >= 0x80)
+        mutableLine[i] = '?';
     }
 
-    int badChar = containsNonUTF8(line);
+    int badChar = containsNonUTF8(mutableLine);
     if (badChar == -1) {
-      Log(COMM, ">> %s", line.c_str());
+      Log(COMM, ">> %s", mutableLine.c_str());
     } else {
-      String plainPart = line.substring(0, badChar);
-      String hexPart = line.substring(badChar);
+      String plainPart = mutableLine.substring(0, badChar);
+      String hexPart = mutableLine.substring(badChar);
       String hexString = bytesToHexString(hexPart);
       Log(COMM, ">> %s(%s)", plainPart.c_str(),  hexString.c_str());
     }
   } else {
-    String hexString = bytesToHexString(line);
+    String hexString = bytesToHexString(mutableLine);
     Log(COMM, ">> (%s)", hexString.c_str());
   }
 
-  if (line.startsWith("AT+C"))
-    parseATCCommand(line);
-
-  if (line.startsWith("AT+W")) {
-    parseATWCommand(line);
-  }
-
-  if (line.startsWith("AT+N")) {
-    parseATNCommand(line);
-  }
+  if (mutableLine.startsWith("AT+C")) parseATCCommand(mutableLine);
+  if (mutableLine.startsWith("AT+W")) parseATWCommand(mutableLine);
+  if (mutableLine.startsWith("AT+N")) parseATNCommand(mutableLine);
+  if (mutableLine.startsWith("AT+X")) parseATXCommand(mutableLine);
 }
 
-// AT-N Kommando: AT-N,#perimeter,#exclusions,#dockpoints,#waypoints,#free
-void MowerAdapter::parseATNCommand(String line) {
-  Log(DBG, "%sparseATNCommand (map end)", _LOG_);
-  // Warte kurz, bis kein Lesevorgang auf _map läuft (max 100ms, um Loop-Blockade zu vermeiden)
+// AT-N Kommando: AT-N,#perimeter,#exclusionPoints,#dockpoints,#waypoints,#free
+// Die Exclusion-Polygone werden über anschließende AT+X-Befehle mitgeteilt.
+void MowerAdapter::parseATNCommand(const String& line) {
+  Log(DBG, "%sparseATNCommand (map counts)", _LOG_);
   int waitCount = 0;
   while (_map.isReading() && waitCount < 10) {
     vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -297,10 +281,9 @@ void MowerAdapter::parseATNCommand(String line) {
     Log(WARN, "%sparseATNCommand: Map-Lesevorgang läuft noch, ignoriere AT-N", _LOG_);
     return;
   }
-  // Entferne "AT+N," falls vorhanden
-  if (line.startsWith("AT+N,")) line = line.substring(5);
-  std::vector<int> counts;
   const char* p = line.c_str();
+  if (line.startsWith("AT+N,")) p += 5;
+  std::vector<int> counts;
   while (*p) {
     counts.push_back(atoi(p));
     while (*p && *p != ',') p++;
@@ -310,70 +293,119 @@ void MowerAdapter::parseATNCommand(String line) {
     Log(ERR, "%sparseATNCommand: zu wenig Felder", _LOG_);
     return;
   }
-  int nPerimeter = counts[0];
-  int nExclusions = counts[1];
-  int nDockpoints = counts[2];
-  int nWaypoints = counts[3];
-  //int nFree = counts[4];
+  tempNPerimeter = counts[0];
+  tempNExclusions = counts[1];
+  tempNDockpoints = counts[2];
+  tempNWaypoints = counts[3];
+  tempMapCountsReceived = true;
+  tempExclusionSizes.clear();
+
+  if (tempNExclusions == 0) {
+    finalizeInterceptedMap();
+  }
+}
+
+// AT+X Kommando: AT+X,<startIdx>,<len1>,<len2>,...
+void MowerAdapter::parseATXCommand(const String& line) {
+  Log(DBG, "%sparseATXCommand (exclusion sizes)", _LOG_);
+  int waitCount = 0;
+  while (_map.isReading() && waitCount < 10) {
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    waitCount++;
+  }
+  if (_map.isReading()) {
+    Log(WARN, "%sparseATXCommand: Map-Lesevorgang läuft noch, ignoriere AT-X", _LOG_);
+    return;
+  }
+  const char* p = line.c_str();
+  if (line.startsWith("AT+X,")) p += 5;
+  std::vector<int> values;
+  while (*p) {
+    values.push_back(atoi(p));
+    while (*p && *p != ',') p++;
+    if (*p == ',') p++;
+  }
+  if (values.size() < 2) {
+    Log(ERR, "%sparseATXCommand: zu wenig Felder", _LOG_);
+    return;
+  }
+  // values[0] = Startindex, danach folgen die Polygonlängen
+  for (size_t i = 1; i < values.size(); i++) {
+    tempExclusionSizes.push_back(values[i]);
+  }
+
+  if (tempMapCountsReceived) {
+    int sum = 0;
+    for (int s : tempExclusionSizes) sum += s;
+    if (sum == tempNExclusions) {
+      finalizeInterceptedMap();
+    }
+  }
+}
+
+void MowerAdapter::finalizeInterceptedMap() {
   using namespace ArduMower::Domain::Robot;
-  // Aufteilen der tempWaypointsBuffer in die richtigen Vektoren
-  int idx = 0;
+  Log(DBG, "%sfinalizeInterceptedMap: perimeter=%d exclusions=%d dock=%d waypoints=%d",
+      _LOG_, tempNPerimeter, tempNExclusions, tempNDockpoints, tempNWaypoints);
+
   _map.perimeter.clear();
   _map.exclusions.clear();
   _map.dockpoints.clear();
   _map.waypoints.clear();
 
+  int idx = 0;
   // Perimeter
-  for (int i = 0; i < nPerimeter && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
+  for (int i = 0; i < tempNPerimeter && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
     _map.perimeter.push_back(tempWaypointsBuffer[idx]);
   }
-  // Exclusions (hier als ein Block, ggf. erweitern für mehrere Exclusions)
-  for (int ex = 0; ex < nExclusions; ex++) {
+  // Exclusions anhand der AT+X-Längen aufteilen
+  for (size_t ex = 0; ex < tempExclusionSizes.size(); ex++) {
     std::vector<MapPoint> excl;
-    // Annahme: exclusions sind jeweils gleich groß, oder alle Punkte nacheinander
-    // Hier als Dummy: alle Exclusion-Punkte in einen Vektor
-    // (Anpassung nötig, falls mehrere Exclusions mit je eigener Punktzahl)
-    // Beispiel: nExclusions = 1, dann alle Punkte in einen Vektor
-    //           nExclusions > 1: Aufteilung nach bekannter Punktzahl
-    // Hier: alle Exclusions zusammenfassen
-    // TODO: Exclusion-Aufteilung nach realer Struktur
-    // (Hier als Platzhalter: keine Exclusions)
-    // excl.push_back(...)
+    for (int j = 0; j < tempExclusionSizes[ex] && idx < (int)tempWaypointsBuffer.size(); j++, idx++) {
+      excl.push_back(tempWaypointsBuffer[idx]);
+    }
     _map.exclusions.push_back(excl);
   }
   // Dockpoints
-  for (int i = 0; i < nDockpoints && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
+  for (int i = 0; i < tempNDockpoints && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
     _map.dockpoints.push_back(tempWaypointsBuffer[idx]);
   }
-
   // Waypoints
-  for (int i = 0; i < nWaypoints && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
+  for (int i = 0; i < tempNWaypoints && idx < (int)tempWaypointsBuffer.size(); i++, idx++) {
     _map.waypoints.push_back(tempWaypointsBuffer[idx]);
   }
 
   // Summen prüfen
   bool ok = true;
-  if ((int)_map.perimeter.size() != nPerimeter) {
-    Log(ERR, "%sparseATNCommand: perimeter count mismatch %d != %d", _LOG_, _map.perimeter.size(), nPerimeter);
+  int totalExclPoints = 0;
+  for (const auto &ex : _map.exclusions) totalExclPoints += ex.size();
+  if ((int)_map.perimeter.size() != tempNPerimeter) {
+    Log(ERR, "%sfinalizeInterceptedMap: perimeter count mismatch %d != %d", _LOG_, _map.perimeter.size(), tempNPerimeter);
     ok = false;
   }
-  if ((int)_map.exclusions.size() != nExclusions) {
-    Log(ERR, "%sparseATNCommand: exclusions count mismatch %d != %d", _LOG_, _map.exclusions.size(), nExclusions);
+  if (totalExclPoints != tempNExclusions) {
+    Log(ERR, "%sfinalizeInterceptedMap: exclusion point count mismatch %d != %d", _LOG_, totalExclPoints, tempNExclusions);
     ok = false;
   }
-  if ((int)_map.dockpoints.size() != nDockpoints) {
-    Log(ERR, "%sparseATNCommand: dockpoints count mismatch %d != %d", _LOG_, _map.dockpoints.size(), nDockpoints);
+  if ((int)_map.exclusions.size() != (int)tempExclusionSizes.size()) {
+    Log(ERR, "%sfinalizeInterceptedMap: exclusion polygon count mismatch %d != %d", _LOG_, _map.exclusions.size(), tempExclusionSizes.size());
     ok = false;
   }
-  if ((int)_map.waypoints.size() != nWaypoints) {
-    Log(ERR, "%sparseATNCommand: waypoints count mismatch %d != %d", _LOG_, _map.waypoints.size(), nWaypoints);
+  if ((int)_map.dockpoints.size() != tempNDockpoints) {
+    Log(ERR, "%sfinalizeInterceptedMap: dockpoints count mismatch %d != %d", _LOG_, _map.dockpoints.size(), tempNDockpoints);
+    ok = false;
+  }
+  if ((int)_map.waypoints.size() != tempNWaypoints) {
+    Log(ERR, "%sfinalizeInterceptedMap: waypoints count mismatch %d != %d", _LOG_, _map.waypoints.size(), tempNWaypoints);
     ok = false;
   }
   if (!ok) {
-    Log(ERR, "%sparseATNCommand: Map-Übertragung fehlerhaft, Abbruch", _LOG_);
+    Log(ERR, "%sfinalizeInterceptedMap: Map-Übertragung fehlerhaft, Abbruch", _LOG_);
+    tempMapCountsReceived = false;
+    tempExclusionSizes.clear();
     return;
   }
-  Log(DBG, "%sparseATNCommand: Map vollständig, sende an Client", _LOG_);
+  Log(DBG, "%sfinalizeInterceptedMap: Map vollständig, sende an Client", _LOG_);
   _map.timestamp = millis();
   updateCurrentMapMeta();
 
@@ -381,13 +413,15 @@ void MowerAdapter::parseATNCommand(String line) {
   String existingId = _mapManager.findByHash(_currentMapHash);
   if (existingId.length() > 0) {
     _mapManager.setActive(existingId);
-    Log(INFO, "%sparseATNCommand: abgefangene Karte passt zu gespeicherter ID %s", _LOG_, existingId.c_str());
+    Log(INFO, "%sfinalizeInterceptedMap: abgefangene Karte passt zu gespeicherter ID %s", _LOG_, existingId.c_str());
   } else {
     _mapManager.setActive("");
-    Log(INFO, "%sparseATNCommand: abgefangene Karte unbekannt (hash=%s), keine Auswahl", _LOG_, _currentMapHash.c_str());
+    Log(INFO, "%sfinalizeInterceptedMap: abgefangene Karte unbekannt (hash=%s), keine Auswahl", _LOG_, _currentMapHash.c_str());
   }
   _mapListDirty = true;
   tempWaypointsBuffer.clear();
+  tempExclusionSizes.clear();
+  tempMapCountsReceived = false;
 }
 
 // start mowing
@@ -541,14 +575,14 @@ bool MowerAdapter::sendUbx(const String &hexCmd)
   return sendCommand("AT+U," + hexCmd, true);
 }
 
-void MowerAdapter::parseUbxResponse(String line)
+void MowerAdapter::parseUbxResponse(const char* line)
 {
   Log(DBG, "%sparseUbxResponse", _LOG_);
   const auto now = millis();
 
-  int idx = line.indexOf(',');
-  if (idx >= 0) {
-    _ubxResponse.hexData = line.substring(idx + 1);
+  const char* comma = strchr(line, ',');
+  if (comma != NULL) {
+    _ubxResponse.hexData = String(comma + 1);
   } else {
     _ubxResponse.hexData = "";
   }
@@ -615,7 +649,7 @@ bool MowerAdapter::customCmd(String cmd)
   }
 }
 
-void MowerAdapter::parseStatisticsResponse(String line)
+void MowerAdapter::parseStatisticsResponse(const char* line)
 {
   Log(DBG, "%sparseStatisticsResponse", _LOG_);
   const auto now = millis();
@@ -708,7 +742,7 @@ void MowerAdapter::parseStatisticsResponse(String line)
   _stats.timestamp = now;
 }
 
-void MowerAdapter::parseSensorSummaryResponse(String line)
+void MowerAdapter::parseSensorSummaryResponse(const char* line)
 {
   //Log(DBG, "%sparseSensorSummaryResponse", _LOG_);
   const auto now = millis();
@@ -765,7 +799,7 @@ void MowerAdapter::parseSensorSummaryResponse(String line)
 }
 
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
-void MowerAdapter::parseGpsDetailsResponse(String line)
+void MowerAdapter::parseGpsDetailsResponse(const char* line)
 {
   Log(DBG, "%sparseGpsDetailsResponse", _LOG_);
   const auto now = millis();
@@ -853,7 +887,7 @@ void MowerAdapter::parseGpsDetailsResponse(String line)
 }
 #endif
 
-void MowerAdapter::parseVersionResponse(String line)
+void MowerAdapter::parseVersionResponse(const char* line)
 {
   Log(DBG, "%sparseVersionResponse", _LOG_);
   const auto now = millis();
@@ -882,7 +916,7 @@ void MowerAdapter::parseVersionResponse(String line)
   sendIsInitialized = true;
 }
 
-void MowerAdapter::parseStateResponse(String line)
+void MowerAdapter::parseStateResponse(const char* line)
 {
   Log(DBG, "%sparseStateResponse", _LOG_);
   const auto now = millis();
@@ -965,14 +999,16 @@ void MowerAdapter::parseStateResponse(String line)
   _state.timestamp = now;
 }
 
-void MowerAdapter::parseATWCommand(String line)
+void MowerAdapter::parseATWCommand(const String& line)
 {
   Log(DBG, "%sparseATWCommand (waypoint-list)", _LOG_);
-  // Erwartetes Format: AT+W,<startIndex>,<x1>,<y1>,<x2>,<y2>,...
-  if (line.startsWith("AT+W,")) line = line.substring(5);
-  
-  std::vector<float> values;
+  if (_map.isReading()) {
+    Log(DBG, "%sparseATWCommand: Map-Lesevorgang läuft, ignoriere", _LOG_);
+    return;
+  }
   const char* p = line.c_str();
+  if (line.startsWith("AT+W,")) p += 5;
+  std::vector<float> values;
   while (*p) {
     values.push_back(atof(p));
     while (*p && *p != ',') p++;
@@ -1013,7 +1049,7 @@ void MowerAdapter::parseATWCommand(String line)
   Log(DBG, "%sparseATWCommand done widx=%d, waypoints.size()=%d", _LOG_, widx, tempWaypointsBuffer.size());
 }
 
-void MowerAdapter::parseATCCommand(String line)
+void MowerAdapter::parseATCCommand(const String& line)
 {
   Log(DBG, "%sparseATCCommand", _LOG_);
   const auto now = millis();
@@ -1153,6 +1189,11 @@ void MowerAdapter::startMapUploadFromLoop()
   }
 
   _map.beginRead();
+  // Temporäre Intercept-Buffer für die Dauer des eigenen Uploads zurücksetzen,
+  // damit keine alten/inkonsistenten Zustände eine spätere App-Übertragung stören.
+  tempWaypointsBuffer.clear();
+  tempExclusionSizes.clear();
+  tempMapCountsReceived = false;
   _mapUploadState.snapshot = _map;
   _mapUploadState.active = true;
   _mapUploadState.phase = MapUploadState::start;
@@ -1163,9 +1204,22 @@ void MowerAdapter::startMapUploadFromLoop()
   _mapUploadState.lastResponse = "";
   _mapUploadState.lastOk = false;
   _mapUploadState.waitingForResponse = false;
+  _mapUploadState.lastCommandQueued = false;
   // _map bleibt im reading-Zustand, um parseATNCommand/setMap während des Uploads zu blockieren
 
-  Log(INFO, "%sstartMapUploadFromLoop: started", _LOG_);
+  auto &snap = _mapUploadState.snapshot;
+  Log(INFO, "%sstartMapUploadFromLoop: started (perimeter=%d exclusions=%d dock=%d waypoints=%d)",
+      _LOG_, snap.perimeter.size(), snap.exclusions.size(), snap.dockpoints.size(), snap.waypoints.size());
+  if (!snap.waypoints.empty()) {
+    Log(INFO, "%sstartMapUploadFromLoop: first waypoint %.2f,%.2f  last waypoint %.2f,%.2f",
+        _LOG_, snap.waypoints.front().X, snap.waypoints.front().Y,
+        snap.waypoints.back().X, snap.waypoints.back().Y);
+  }
+  if (!snap.perimeter.empty()) {
+    Log(INFO, "%sstartMapUploadFromLoop: first perimeter %.2f,%.2f  last perimeter %.2f,%.2f",
+        _LOG_, snap.perimeter.front().X, snap.perimeter.front().Y,
+        snap.perimeter.back().X, snap.perimeter.back().Y);
+  }
 }
 
 bool MowerAdapter::sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot::MapPoint> &pts, int baseIdx)
@@ -1180,8 +1234,9 @@ bool MowerAdapter::sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot:
 
   char buf[512];
   int n = snprintf(buf, sizeof(buf), "AT+W,%d", baseIdx + _mapUploadState.pointIdx);
+  // Zwei Nachkommastellen reichen Sunray (cm-Auflösung) und halten die Pakete kurz.
   for (size_t j = _mapUploadState.pointIdx; j < endIdx; j++) {
-    int written = snprintf(buf + n, sizeof(buf) - n, ",%.6f,%.6f", pts[j].X, pts[j].Y);
+    int written = snprintf(buf + n, sizeof(buf) - n, ",%.2f,%.2f", pts[j].X, pts[j].Y);
     if (written < 0 || (size_t)(n + written) >= sizeof(buf)) break;
     n += written;
   }
@@ -1199,9 +1254,11 @@ bool MowerAdapter::sendMapChunkAsync(const std::vector<ArduMower::Domain::Robot:
 
   if (!queued) {
     Log(WARN, "%ssendMapChunkAsync: router busy, will retry", _LOG_);
+    _mapUploadState.lastCommandQueued = false;
     return true; // stay in current phase, retry next loop
   }
 
+  _mapUploadState.lastCommandQueued = true;
   _mapUploadState.waitingForResponse = true;
   return true;
 }
@@ -1267,7 +1324,8 @@ void MowerAdapter::processMapUpload()
   using namespace ArduMower::Domain::Robot;
 
   // Evaluate response of previous command (except for start phase)
-  if (_mapUploadState.phase != MapUploadState::start) {
+  if (_mapUploadState.phase != MapUploadState::start && _mapUploadState.lastCommandQueued) {
+    _mapUploadState.lastCommandQueued = false;
     _mapUploadState.lastResponse.trim();
     bool responseValid = _mapUploadState.lastOk && responseOkForPhase(_mapUploadState.phase, _mapUploadState.lastResponse);
     if (responseValid && isPointUploadPhase(_mapUploadState.phase)) {
@@ -1298,12 +1356,12 @@ void MowerAdapter::processMapUpload()
       _mapUploadState.chunkRetry = 0;
       switch (_mapUploadState.phase) {
         case MapUploadState::perimeter:
+        case MapUploadState::exclusions:
         case MapUploadState::dockpoints:
         case MapUploadState::waypoints:
-          _mapUploadState.pointIdx += 20;
-          break;
-        case MapUploadState::exclusions:
-          _mapUploadState.pointIdx += 20;
+          // Anhand der vom Mower bestätigten Indizes weiterschalten,
+          // damit Chunk-Größe nicht aus der Sync gerät.
+          _mapUploadState.pointIdx = _mapUploadState.lastExpectedNextIdx - _mapUploadState.lastBaseIdx;
           break;
         default:
           break;
@@ -1417,11 +1475,12 @@ void MowerAdapter::processMapUpload()
       _map = _mapUploadState.snapshot;
       _map.timestamp = millis();
       _map.endRead();
+      updateCurrentMapMeta();
       _mapUploadState.snapshot = ArduMower::Domain::Robot::MowerMap();
       _mapUploadState.phase = MapUploadState::done;
       _mapUploadState.active = false;
-      Log(INFO, "%sprocessMapUpload: Map upload complete (%d perimeter, %d exclusions, %d dockpoints, %d waypoints)",
-          _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size());
+      Log(INFO, "%sprocessMapUpload: Map upload complete (%d perimeter, %d exclusions, %d dockpoints, %d waypoints) CRC %d",
+          _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size(), _currentMapCrc);
       Log(INFO, "%sprocessMapUpload: upload complete", _LOG_);
       break;
 
@@ -1457,17 +1516,14 @@ bool MowerAdapter::sendCommand(const String& command, bool encrypt)
   Checksum chk;
   chk.update(command.c_str());
 
-  char *buffer;
-  asprintf(&buffer, "%s,0x%02x", command.c_str(), chk.value());
-  Log(COMM, "> %s", buffer);
-  
+  char buf[256];
+  snprintf(buf, sizeof(buf), "%s,0x%02x", command.c_str(), chk.value());
+  Log(COMM, "> %s", buf);
+
   if (encrypt)
-    enc.encrypt(buffer, strlen(buffer));
+    enc.encrypt(buf, strlen(buf));
 
-  auto result = router.sendWithoutResponse(buffer);  
-  free(buffer);
-
-  return result;
+  return router.sendWithoutResponse(buf);
 }
 
 bool MowerAdapter::sendCommandWithResponseAsync(const String& command, std::function<void(String, bool)> callback, bool encrypt, int timeoutMs)
@@ -1480,12 +1536,12 @@ bool MowerAdapter::sendCommandWithResponseAsync(const String& command, std::func
   Checksum chk;
   chk.update(command.c_str());
 
-  char *buffer;
-  asprintf(&buffer, "%s,0x%02x", command.c_str(), chk.value());
-  Log(COMM, "> %s", buffer);
+  char buf[256];
+  snprintf(buf, sizeof(buf), "%s,0x%02x", command.c_str(), chk.value());
+  Log(COMM, "> %s", buf);
 
   if (encrypt)
-    enc.encrypt(buffer, strlen(buffer));
+    enc.encrypt(buf, strlen(buf));
 
   _pendingCommand.callback = callback;
   _pendingCommand.startTime = millis();
@@ -1496,12 +1552,11 @@ bool MowerAdapter::sendCommandWithResponseAsync(const String& command, std::func
   _pendingCommand.done = false;
   _pendingCommand.command = command;
 
-  bool queued = router.send(buffer, [&](String resp, XferError error) {
+  bool queued = router.send(buf, [&](String resp, XferError error) {
     _pendingCommand.response = resp;
     _pendingCommand.ok = (error == XferError::SUCCESS);
     _pendingCommand.done = true;
   });
-  free(buffer);
 
   if (!queued) {
     _pendingCommand.active = false;
@@ -1564,10 +1619,10 @@ bool MowerAdapter::sendCommandWithResponse(const String& command, String &respon
   return ok;
 }
 
-void processCSVResponse(const String& res, std::function<void(int, const char*, size_t)> fn)
+void processCSVResponse(const char* res, std::function<void(int, const char*, size_t)> fn)
 {
   int index = -1;
-  const char* p = res.c_str();
+  const char* p = res;
 
   while (*p)
   {
@@ -1579,4 +1634,9 @@ void processCSVResponse(const String& res, std::function<void(int, const char*, 
     p += len;
     if (*p == ',') p++;
   }
+}
+
+void processCSVResponse(const String& res, std::function<void(int, const char*, size_t)> fn)
+{
+  processCSVResponse(res.c_str(), fn);
 }

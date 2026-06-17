@@ -87,17 +87,6 @@ void Router::loopSend()
 {
   if (!sendCommand) return;
 
-  {
-    String hex;
-    for (size_t i = 0; i < command.length(); i++) {
-      if (i > 0) hex += " ";
-      char buf[3];
-      snprintf(buf, sizeof(buf), "%02X", (unsigned char)command[i]);
-      hex += buf;
-    }
-    //Log(COMM, "SERIAL>> hex (%d): %s", command.length(), hex.c_str());
-  }
-
   auto sent = down.print(command.c_str());
   down.flush();
 

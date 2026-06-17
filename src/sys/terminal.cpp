@@ -1,4 +1,5 @@
 #include "terminal.h"
+#include <cstring>
 
 #ifdef MOWER_TERMINAL
 using namespace ArduMower::Modem;
@@ -17,7 +18,7 @@ Terminal::Terminal(Stream &serial)
   _terminalRouter = new Router(serial);
   _terminalRouter->sniffRx(this);
   _terminalRouter->sniffTx(this);
-  _buffer = new Ringbuffer<String, TERMINAL_RINGBUFFER_SIZE>();
+  _buffer = new Ringbuffer<TerminalLine, TERMINAL_RINGBUFFER_SIZE>();
 }
 
 Terminal::~Terminal() {
@@ -77,17 +78,23 @@ void Terminal::resume()
   prepareSuspended = false;
 }
 
-void Terminal::drainRx(String line, bool &stop)
+void Terminal::drainRx(const String& line, bool &stop)
 {
-  _buffer->push(&line, true);
+  TerminalLine tl;
+  strncpy(tl.text, line.c_str(), sizeof(tl.text) - 1);
+  tl.text[sizeof(tl.text) - 1] = '\0';
+  _buffer->push(&tl, true);
   if (_rxHandler != NULL) {
     _rxHandler(line);
   }
 }
 
-void Terminal::drainTx(String line, bool &stop)
+void Terminal::drainTx(const String& line, bool &stop)
 {
-  _buffer->push(&line, true);
+  TerminalLine tl;
+  strncpy(tl.text, line.c_str(), sizeof(tl.text) - 1);
+  tl.text[sizeof(tl.text) - 1] = '\0';
+  _buffer->push(&tl, true);
   if (_txHandler != NULL) {
     _txHandler(line);
   }
@@ -98,14 +105,14 @@ uint16_t Terminal::marshalBatch(const JsonObject &o, uint16_t startIdx, uint16_t
   uint16_t count = _buffer->currentSize();
   if (startIdx >= count) return 0;
   JsonArray logJson = o["lines"].to<JsonArray>();
-  String line;
   uint16_t sent = 0;
   for (uint16_t i = startIdx; i < count && sent < maxLines; i++) {
-    if (_buffer->peekAt(i, line)) {
+    TerminalLine tl;
+    if (_buffer->peekAt(i, tl)) {
       JsonObject jsonLine = logJson.add<JsonObject>();
       jsonLine["nr"] = 0;
       jsonLine["isSend"] = false;
-      jsonLine["text"] = line;
+      jsonLine["text"] = tl.text;
       sent++;
     }
   }

@@ -1,7 +1,7 @@
 #include "modem_cli.h"
 #include "settings.h"
 
-void ArduMower::Modem::Cli::drainRx(String line, bool &stop)
+void ArduMower::Modem::Cli::drainRx(const String& line, bool &stop)
 {
   stop = true;
   if (line == "AT")
@@ -27,9 +27,8 @@ void ArduMower::Modem::Cli::respondVersion()
   router.sendWithoutResponse(response);
 }
 
-void ArduMower::Modem::Cli::echoResponse(String &req)
+void ArduMower::Modem::Cli::echoResponse(const String& req)
 {
   String response = req.substring(2);
-
   router.sendWithoutResponse(response);
 }

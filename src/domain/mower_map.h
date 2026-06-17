@@ -129,22 +129,29 @@ namespace ArduMower {
     int computeMapCrcDetail(int *outPerimeter, int *outExclusions, int *outDockpoints, int *outWaypoints) const {
         int crc = 0;
         int p = 0, e = 0, d = 0, w = 0;
+        // Sunray-Konvertierung exakt replizieren: snprintf("%.2f") → strtof → *100 → short
+        auto cm = [](double val) -> int16_t {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%.2f", val);
+            float f = strtof(buf, nullptr);
+            return static_cast<int16_t>(f * 100.0f);
+        };
         for (const auto &pt : perimeter) {
-            int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+            int v = cm(pt.X) + cm(pt.Y);
             p += v; crc += v;
         }
         for (const auto &ex : exclusions) {
             for (const auto &pt : ex) {
-                int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+                int v = cm(pt.X) + cm(pt.Y);
                 e += v; crc += v;
             }
         }
         for (const auto &pt : dockpoints) {
-            int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+            int v = cm(pt.X) + cm(pt.Y);
             d += v; crc += v;
         }
         for (const auto &pt : waypoints) {
-            int v = static_cast<int16_t>(static_cast<float>(pt.X) * 100.0f) + static_cast<int16_t>(static_cast<float>(pt.Y) * 100.0f);
+            int v = cm(pt.X) + cm(pt.Y);
             w += v; crc += v;
         }
         if (outPerimeter)   *outPerimeter = p;

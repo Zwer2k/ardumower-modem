@@ -22,13 +22,13 @@ namespace ArduMower
     class RxDrain
     {
     public:
-      virtual void drainRx(String line, bool &stop) = 0;
+      virtual void drainRx(const String& line, bool &stop) = 0;
     };
 
     class TxDrain
     {
     public:
-      virtual void drainTx(String line, bool &stop) = 0;
+      virtual void drainTx(const String& line, bool &stop) = 0;
     };
 
     class Router

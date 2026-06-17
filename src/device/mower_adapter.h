@@ -47,6 +47,7 @@ namespace ArduMower
       String lastResponse;
       bool lastOk = false;
       bool waitingForResponse = false;
+      bool lastCommandQueued = false;
       ArduMower::Domain::Robot::MowerMap snapshot;
     };
 
@@ -84,20 +85,28 @@ namespace ArduMower
       String _cachedRawGpsDetails;
       // Temporärer Buffer für alle empfangenen Wegpunkte (alle Typen)
       std::vector<ArduMower::Domain::Robot::MapPoint> tempWaypointsBuffer;
+      std::vector<int> tempExclusionSizes;
+      int tempNPerimeter = 0;
+      int tempNExclusions = 0;
+      int tempNDockpoints = 0;
+      int tempNWaypoints = 0;
+      bool tempMapCountsReceived = false;
+      void finalizeInterceptedMap();
 
-      void parseArduMowerCommand(String line);
-      void parseArduMowerResponse(String line);
-      void parseVersionResponse(String line);
-      void parseStateResponse(String line);
-      void parseStatisticsResponse(String line);
-      void parseSensorSummaryResponse(String line);
+      void parseArduMowerCommand(const String& line);
+      void parseArduMowerResponse(const String& line);
+      void parseVersionResponse(const char* line);
+      void parseStateResponse(const char* line);
+      void parseStatisticsResponse(const char* line);
+      void parseSensorSummaryResponse(const char* line);
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
-      void parseGpsDetailsResponse(String line);
-      void parseUbxResponse(String line);
+      void parseGpsDetailsResponse(const char* line);
+      void parseUbxResponse(const char* line);
 #endif
-      void parseATCCommand(String line);
-      void parseATWCommand(String line);
-      void parseATNCommand(String line);
+      void parseATCCommand(const String& line);
+      void parseATWCommand(const String& line);
+      void parseATNCommand(const String& line);
+      void parseATXCommand(const String& line);
 
       bool sendCommand(const String& command, bool encrypt = true);
       bool sendCommandWithResponse(const String& command, String &response, bool encrypt = true, int timeoutMs = 3000);
@@ -178,8 +187,8 @@ namespace ArduMower
       virtual bool uploadMapToMowerActive() override { return _mapUploadState.active; }
       virtual bool uploadMapToMowerSuccess() override { return _mapUploadState.phase == MapUploadState::done; }
       virtual bool customCmd(String cmd);
-      virtual void drainRx(String line, bool &stop) override;
-      virtual void drainTx(String line, bool &stop) override;
+      virtual void drainRx(const String& line, bool &stop) override;
+      virtual void drainTx(const String& line, bool &stop) override;
       virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map);
       virtual void setMowSettings(const ArduMower::Domain::Robot::MowSettings &s);
       virtual void loop();

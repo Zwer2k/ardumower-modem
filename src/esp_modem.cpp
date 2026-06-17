@@ -254,7 +254,7 @@ void setup() {
       return;
     }
 
-    // Gentle recovery: no WS clients for 15min but previously had one
+    // Gentle recovery: no WS clients for 5min but previously had one
     static bool hadClientEver = false;
     if (socketHandler.clientCount() > 0) hadClientEver = true;
 
@@ -263,7 +263,7 @@ void setup() {
         now - socketHandler.lastWsConnectionEvent() > 300000) // 5 min
     {
       if (freeHeap < 20480) {
-        Log(ERR, "wifi_health: no WS clients for 15min, heap=%u – restarting", freeHeap);
+        Log(ERR, "wifi_health: no WS clients for 5min, heap=%u – restarting", freeHeap);
         delay(100);
         ESP.restart();
         return;
@@ -271,6 +271,7 @@ void setup() {
       Log(WARN, "wifi_health: no WS clients for 5min – fullReconnect");
       state = RECOVERING_DISCONNECT;
       lastRecovery = now;
+      hadClientEver = false; // avoid repeated reconnect loops; wait for next real client
       return;
     }
 

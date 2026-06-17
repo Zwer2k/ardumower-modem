@@ -14,12 +14,12 @@ namespace ArduMower
       Router &router;
 
       void respondVersion();
-      void echoResponse(String &req);
+      void echoResponse(const String& req);
 
     public:
       Cli(Router &r) : router(r) {}
       void begin() { router.sniffRx(this); }
-      virtual void drainRx(String line, bool &stop) override;
+      virtual void drainRx(const String& line, bool &stop) override;
     };
   }
 }

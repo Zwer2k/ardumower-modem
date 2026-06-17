@@ -898,21 +898,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
         {/if}
       </Row>
 
-      {#if !showManage && !edit && !showCalculate && hasMap && targetSet}
-        <Row class="goto-row">
-          <Column>
-            <span class="goto-badge">
-              {targetDist.toFixed(1)}m / {targetBearing.toFixed(0)}°
-            </span>
-            {#if isDriving}
-              <button class="goto-btn stop" on:click={stopDrive}>Stop</button>
-            {:else}
-              <button class="goto-btn drive" on:click={startDrive}>Drive</button>
-            {/if}
-            <button class="goto-btn clear" on:click={clearTarget}>✕</button>
-          </Column>
-        </Row>
-      {/if}
+
 
       {#if showManage}
         <Row class="map-mgmt-row">
@@ -1309,25 +1295,12 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     align-items: flex-end;
   }
 
-  .goto-row {
-    display: none !important;
-    align-items: center;
-    gap: 0.25rem;
-    padding-left: 0.75rem;
-  }
-
   @container (max-width: 800px) {
     .btn-label {
       display: none;
     }
     .toolbar-main-group {
       width: 100%;
-    }
-    .toolbar-goto-group {
-      display: none !important;
-    }
-    .goto-row {
-      display: flex !important;
     }
     .toolbar-btn-row :global(.bx--btn) {
       width: 2rem;

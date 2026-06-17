@@ -634,7 +634,7 @@ void UiSocketHandler::ubxLoop()
 }
 #endif
 
-static String sanitizeUtf8(const String& input);
+static void sanitizeUtf8InPlace(String& str);
 
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, bool force)
 {
@@ -867,7 +867,7 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
   String stateStr;
   try {
     serializeJson(doc, stateStr);
-    stateStr = sanitizeUtf8(stateStr);
+    sanitizeUtf8InPlace(stateStr);
   } catch (...) {
     Log(ERR, "%s serializeJson failed", _LOG_);
     return false;
@@ -1007,7 +1007,7 @@ void UiSocketHandler::sendWaypointsDirect(const std::vector<ArduMower::Domain::R
   }
   String json;
   serializeJson(doc, json);
-  json = sanitizeUtf8(json);
+  sanitizeUtf8InPlace(json);
   sendTextAllWithRetry(_ws, json);
 }
 
@@ -1094,7 +1094,7 @@ static bool sendJsonDoc(UiSocketItem *item, JsonDocument &doc)
   String stateStr;
   serializeJson(doc, stateStr);
   if (stateStr.length() == 0) return false;
-  stateStr = sanitizeUtf8(stateStr);
+  sanitizeUtf8InPlace(stateStr);
   return item->sendText(stateStr);
 }
 
@@ -1135,22 +1135,29 @@ void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChu
 }
 #endif
 
-static String sanitizeUtf8(const String& input) {
-  String output;
-  output.reserve(input.length());
-  for (size_t i = 0; i < input.length(); i++) {
-    unsigned char c = (unsigned char)input[i];
-    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t') {
-      output += '?';
-    } else if (c >= 0x80) {
-      // Alle non-ASCII Bytes durch ? ersetzen – verhindert
-      // jegliche Invalid-UTF-8 Probleme im Browser
-      output += '?';
-    } else {
-      output += (char)c;
-    }
+static void sanitizeUtf8InPlace(String& str) {
+  for (size_t i = 0; i < str.length(); i++) {
+    unsigned char c = (unsigned char)str[i];
+    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
+      goto needs_work;
+    if (c >= 0x80)
+      goto needs_work;
   }
-  return output;
+  return;
+
+needs_work:
+  String output;
+  output.reserve(str.length());
+  for (size_t i = 0; i < str.length(); i++) {
+    unsigned char c = (unsigned char)str[i];
+    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
+      output += '?';
+    else if (c >= 0x80)
+      output += '?';
+    else
+      output += (char)c;
+  }
+  str = output;
 }
 
 template<typename T>
@@ -1209,7 +1216,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 
   String stateStr;
   serializeJson(doc, stateStr);
-  stateStr = sanitizeUtf8(stateStr);
+  sanitizeUtf8InPlace(stateStr);
 
   if (sendTo != NULL) {
     sendTo->sendText(stateStr);
@@ -1245,7 +1252,7 @@ void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
 
   String json;
   serializeJson(doc, json);
-  json = sanitizeUtf8(json);
+  sanitizeUtf8InPlace(json);
 
   if (sendTo != NULL) {
     sendTo->sendText(json);
@@ -1274,7 +1281,7 @@ void UiSocketHandler::sendDrivenTrack(UiSocketItem *sendTo)
 
   String json;
   serializeJson(doc, json);
-  json = sanitizeUtf8(json);
+  sanitizeUtf8InPlace(json);
 
   if (sendTo != NULL) {
     sendTo->sendText(json);
@@ -1408,7 +1415,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
 
     String dataStr;
     serializeJson(doc, dataStr);
-    dataStr = sanitizeUtf8(dataStr);
+    sanitizeUtf8InPlace(dataStr);
     Log(DBG, "%s %s", _LOG_, dataStr.c_str());
     client->text(dataStr.c_str());
 
