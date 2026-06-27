@@ -721,6 +721,8 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     }
     if (edit) return;
     if (!hasMap) return;
+    if (showManage || showCalculate) return;
+    if (sync.needsUpload) return;
     const { x, y } = event.detail;
     // y from d3.pointer is in viewBox space, where positive=down.
     // The robot's pos.y is in world space, where positive=north.
@@ -875,7 +877,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
             {/if}
           </div>
         </div>
-        {#if !showManage && !edit && !showCalculate}
+        {#if !showManage && !edit && !showCalculate && !sync.needsUpload}
           <div class="toolbar-goto-group">
             {#if hasMap}
               {#if targetSet}
@@ -1116,7 +1118,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
           {/each}
         {/if}
 
-        {#if targetSet && targetPos}
+        {#if targetSet && targetPos && !showManage && !edit && !showCalculate && !sync.needsUpload}
           <circle
             cx={targetPos.x}
             cy={targetPos.y}
@@ -1136,7 +1138,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
           />
         {/if}
 
-        {#if targetSet && targetPos && mowerPos && (mowerPos.x !== 0 || mowerPos.y !== 0)}
+        {#if targetSet && targetPos && mowerPos && (mowerPos.x !== 0 || mowerPos.y !== 0) && !showManage && !edit && !showCalculate && !sync.needsUpload}
           <line
             x1={mowerPos.x}
             y1={-mowerPos.y}

@@ -16,6 +16,11 @@ export namespace Settings {
     sta_ssid: string;
     sta_psk: string;
     has_sta_psk: boolean;
+    sta_ip_mode: "dhcp" | "static";
+    sta_ip: string;
+    sta_gateway: string;
+    sta_subnet: string;
+    sta_dns: string;
     ap_ssid: string;
     ap_psk: string;
     has_ap_psk: boolean;

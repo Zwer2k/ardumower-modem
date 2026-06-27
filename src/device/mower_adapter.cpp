@@ -582,7 +582,13 @@ void MowerAdapter::parseUbxResponse(const char* line)
 
   const char* comma = strchr(line, ',');
   if (comma != NULL) {
+    // Sunray antwortet mit "U,<hex>,0x<crc>\r\n". Wir speichern nur den
+    // Hex-Teil und entfernen die abschließende AT-CRC.
     _ubxResponse.hexData = String(comma + 1);
+    int crcIdx = _ubxResponse.hexData.indexOf(",0x");
+    if (crcIdx >= 0) {
+      _ubxResponse.hexData = _ubxResponse.hexData.substring(0, crcIdx);
+    }
   } else {
     _ubxResponse.hexData = "";
   }
@@ -840,9 +846,11 @@ void MowerAdapter::parseGpsDetailsResponse(const char* line)
                        }
                      });
 
-  // Format anhand der Gesamtfeldzahl bestimmen
+  // Format anhand der Gesamtfeldzahl bestimmen.
+  // processCSVResponse zählt das abschließende CRC-Feld (0xHH) mit,
+  // daher müssen wir es hier wieder abziehen.
   int totalFields = fieldIdx + 1;
-  int dataFields = totalFields - 8;
+  int dataFields = totalFields - 8 - 1;
   int fieldsPerSat = (satCount > 0) ? dataFields / satCount : 8;
 
   if (fieldsPerSat != 10 && fieldsPerSat != 8) {

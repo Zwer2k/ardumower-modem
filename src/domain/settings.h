@@ -60,13 +60,18 @@ namespace ArduMower
         constexpr static const char *default_ap_ssid = "ArduMower Modem";
         constexpr static const char *default_ap_psk = "ArduMower Modem";
 
-        WiFi() : mode(0), ap_ssid(default_ap_ssid), ap_psk(default_ap_psk) {}
+        WiFi() : mode(0), ap_ssid(default_ap_ssid), ap_psk(default_ap_psk), sta_ip_mode(0) {}
 
         int mode; // 0=off 1=sta 2=ap
         String sta_ssid;
         String sta_psk;
         String ap_ssid;
         String ap_psk;
+        int sta_ip_mode; // 0=dhcp 1=static
+        String sta_ip;
+        String sta_gateway;
+        String sta_subnet;
+        String sta_dns;
 
         bool valid(String & invalid) const;
 

@@ -7,7 +7,7 @@ const production = false;
 export default defineConfig(({ mode }) => {
 	// Load env file from parent directory (one level up)
 	const env = loadEnv(mode, '../', '');
-	const espDevIp = env.ESP_DEV_IP || '192.168.43.221';
+	const espDevIp = env.ESP_DEV_IP || '192.168.43.220';
 
 	const mapEnabled = env.VITE_ENABLE_MAP === 'true';
 	const liveMapEnabled = env.VITE_ENABLE_LIVE_MAP === 'true';

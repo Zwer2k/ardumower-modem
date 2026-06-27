@@ -154,10 +154,34 @@ void Adapter::beginSta()
   _staTimeoutStart = millis();
   WiFi.setHostname(_settings.general.name.c_str());
   WiFi.mode(WIFI_STA);
-  // WiFi.setSleep(false) causes bus contention with OPI-PSRAM -> heap corruption/crash.
-  // Health-Monitor handles reconnects if drop occurs.
+
+  if (_settings.wifi.sta_ip_mode == 1 && 
+      _settings.wifi.sta_ip != "" && 
+      _settings.wifi.sta_gateway != "" && 
+      _settings.wifi.sta_subnet != "")
+  {
+    IPAddress ip, gateway, subnet, dns;
+    if (ip.fromString(_settings.wifi.sta_ip.c_str()) && 
+        gateway.fromString(_settings.wifi.sta_gateway.c_str()) && 
+        subnet.fromString(_settings.wifi.sta_subnet.c_str()))
+    {
+      if (_settings.wifi.sta_dns != "" && dns.fromString(_settings.wifi.sta_dns.c_str()))
+      {
+        WiFi.config(ip, gateway, subnet, dns);
+      }
+      else
+      {
+        WiFi.config(ip, gateway, subnet);
+      }
+      Log(INFO, "WiFi::Adapter::STA::static-ip(%s)", _settings.wifi.sta_ip.c_str());
+    }
+    else
+    {
+      Log(WARN, "WiFi::Adapter::STA::invalid-static-ip");
+    }
+  }
+
   WiFi.begin(_settings.wifi.sta_ssid.c_str(), _settings.wifi.sta_psk.c_str());
-  //WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
 }
 

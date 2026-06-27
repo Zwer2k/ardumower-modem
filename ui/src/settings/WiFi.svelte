@@ -13,6 +13,11 @@
     { label: "Access Point", value: "ap" },
     { label: "Off / setup only", value: "off" },
   ];
+
+  const ipModes: Option<"dhcp" | "static">[] = [
+    { label: "DHCP", value: "dhcp" },
+    { label: "Static IP", value: "static" },
+  ];
 </script>
 
 <Group title="WiFi" {settings} {original}>
@@ -40,6 +45,43 @@
       bind:value={settings.sta_psk}
       bind:original={original.sta_psk}
     />
+    <SelectSetting
+      label="IP Mode"
+      key="wifi.sta_ip_mode"
+      bind:value={settings.sta_ip_mode}
+      bind:original={original.sta_ip_mode}
+      options={ipModes}
+    />
+    {#if settings.sta_ip_mode === "static"}
+      <TextSetting
+        label="IP Address"
+        key="wifi.sta_ip"
+        helpText="Static IP address of the modem"
+        bind:value={settings.sta_ip}
+        bind:original={original.sta_ip}
+      />
+      <TextSetting
+        label="Gateway"
+        key="wifi.sta_gateway"
+        helpText="Default gateway IP address"
+        bind:value={settings.sta_gateway}
+        bind:original={original.sta_gateway}
+      />
+      <TextSetting
+        label="Subnet Mask"
+        key="wifi.sta_subnet"
+        helpText="Subnet mask (e.g. 255.255.255.0)"
+        bind:value={settings.sta_subnet}
+        bind:original={original.sta_subnet}
+      />
+      <TextSetting
+        label="DNS Server"
+        key="wifi.sta_dns"
+        helpText="DNS server IP address (optional)"
+        bind:value={settings.sta_dns}
+        bind:original={original.sta_dns}
+      />
+    {/if}
   {:else if settings.mode === "ap"}
     <p>The modem creates a WiFi network you can connect to.</p>
     <TextSetting

@@ -231,7 +231,7 @@ Example:
 ```
 task compile-pio PIO_ENV=esp32
 task flash SERIAL_PORT=/dev/ttyUSB0 VARIANT=ESP_MODEM_SIM
-task ota ESP_DEV_IP=192.168.43.221 ESP_DEV_CREDS=admin:secret
+task ota ESP_DEV_IP=192.168.43.220 ESP_DEV_CREDS=admin:secret
 ```
 
 ## Gratitude

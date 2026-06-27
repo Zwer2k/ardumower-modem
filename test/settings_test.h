@@ -139,6 +139,7 @@ test(settings_valid_web)
   uut.wifi.sta_psk = staPsk; \
   uut.wifi.ap_ssid = apSsid; \
   uut.wifi.ap_psk = apPsk; \
+  uut.wifi.sta_ip_mode = 0; \
   assertEqual( uut.valid(invalid), expect);}
 test(settings_valid_wifi)
 {
@@ -183,6 +184,39 @@ test(settings_valid_wifi)
   // ap settings don't matter
   assertValidWifi(uut, mode, "sta ssid", "sta psk", "ap ssid", "", true);
   assertValidWifi(uut, mode, "sta ssid", "sta psk", "", "ap psk", true);
+
+  // when sta with static ip
+  mode = 1;
+  uut.wifi.mode = mode;
+  uut.wifi.sta_ssid = "sta ssid";
+  uut.wifi.sta_psk = "sta psk";
+  uut.wifi.ap_ssid = "ap ssid";
+  uut.wifi.ap_psk = "ap psk";
+  uut.wifi.sta_ip_mode = 1;
+  uut.wifi.sta_ip = "192.168.1.10";
+  uut.wifi.sta_gateway = "192.168.1.1";
+  uut.wifi.sta_subnet = "255.255.255.0";
+  assertTrue( uut.valid(invalid) );
+  
+  uut.wifi.sta_ip = "";
+  assertFalse( uut.valid(invalid) );
+  assertEqual( invalid, String("wifi.sta_ip") );
+  uut.wifi.sta_ip = "192.168.1.10";
+  
+  uut.wifi.sta_gateway = "";
+  assertFalse( uut.valid(invalid) );
+  assertEqual( invalid, String("wifi.sta_gateway") );
+  uut.wifi.sta_gateway = "192.168.1.1";
+  
+  uut.wifi.sta_subnet = "";
+  assertFalse( uut.valid(invalid) );
+  assertEqual( invalid, String("wifi.sta_subnet") );
+  uut.wifi.sta_subnet = "255.255.255.0";
+  assertTrue( uut.valid(invalid) );
+  
+  // dns is optional
+  uut.wifi.sta_dns = "8.8.8.8";
+  assertTrue( uut.valid(invalid) );
 
   // invalid mode
   assertValidWifi(uut, 5, "sta ssid", "sta psk", "ap ssid", "ap psk", false);

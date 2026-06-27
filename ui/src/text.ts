@@ -86,6 +86,29 @@ const texts: { language: { [language: string]: any } } = {
             helpText: "Password for your WiFi network",
             invalidText: "The WiFi password cannot be empty"
           },
+          sta_ip_mode: {
+            label: "IP Mode"
+          },
+          sta_ip: {
+            label: "IP Address",
+            helpText: "Static IP address of the modem",
+            invalidText: "Please enter a valid IP address"
+          },
+          sta_gateway: {
+            label: "Gateway",
+            helpText: "Default gateway IP address",
+            invalidText: "Please enter a valid IP address"
+          },
+          sta_subnet: {
+            label: "Subnet Mask",
+            helpText: "Subnet mask (e.g. 255.255.255.0)",
+            invalidText: "Please enter a valid subnet mask"
+          },
+          sta_dns: {
+            label: "DNS Server",
+            helpText: "DNS server IP address (optional)",
+            invalidText: "Please enter a valid IP address"
+          },
           ap_ssid: {
             label: "SSID",
             helpText: "Name of the WiFi network",

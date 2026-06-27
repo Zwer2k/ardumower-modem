@@ -26,6 +26,7 @@
       value={point}
       mapItemId={perimiterId + "-point-" + index}
       bind:editItemId
+      r={0.11}
       on:move={() => value = value}
     />
   {/each}

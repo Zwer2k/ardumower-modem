@@ -156,6 +156,7 @@ testF(TestUiAdapter, post_api_modem_settings_reset_restores_defaults_and_restart
   settings.mqtt.enabled = !defaultSettings.mqtt.enabled;
   settings.prometheus.enabled = !defaultSettings.prometheus.enabled;
   settings.wifi.ap_psk = "non-default-psk";
+  settings.wifi.sta_ip_mode = 0;
   assertTrue(settings.save());
 
   http.begin(net, "http://localhost:8080/api/modem/settings/reset");

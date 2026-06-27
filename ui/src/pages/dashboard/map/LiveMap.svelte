@@ -25,6 +25,7 @@
     let trackPolyline: any = null;
     let accuracyCircle: any = null;
     let roverMarker: any = null;
+    let resizeObserver: ResizeObserver | null = null;
     let gpsState = $derived($gpsStore);
 
     let filteredHistory = $derived(() => {
@@ -34,8 +35,16 @@
         return gpsState.positionHistory.filter(p => p.time >= cutoff);
     });
 
+    function hasVisibleSize() {
+        return mapContainer && mapContainer.offsetWidth > 0 && mapContainer.offsetHeight > 0;
+    }
+
     function initMap() {
-        if (!browser || !mapContainer) return;
+        if (!browser || !mapContainer || map) return;
+
+        // Don't initialise Leaflet while the panel is hidden (0x0). It caches
+        // the size and will not load tiles even after becoming visible.
+        if (!hasVisibleSize()) return;
 
         import('leaflet').then((leafletModule) => {
             L = leafletModule.default || leafletModule;
@@ -52,7 +61,23 @@
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(map);
 
+            // Watch for size changes (e.g. panel becoming visible, window resize)
+            if ('ResizeObserver' in window) {
+                const RO = (window as any).ResizeObserver;
+                resizeObserver = new RO(() => {
+                    if (map) {
+                        map.invalidateSize();
+                    }
+                });
+                resizeObserver.observe(mapContainer);
+            }
+
             updateLayers();
+            // Leaflet may have measured the container while it was still hidden.
+            // Force a size recalculation now that the layout is final.
+            requestAnimationFrame(() => {
+                if (map) map.invalidateSize();
+            });
         });
     }
 
@@ -141,7 +166,18 @@
         if (isLivemap && !lastLivemapActive) {
             socketService.requestGpsDetails();
             gpsStore.connect();
-            if (!map) initMap();
+            initMap();
+            // If initMap was skipped because the container was still hidden,
+            // retry once the browser has painted the active panel.
+            requestAnimationFrame(() => {
+                if (!map && hasVisibleSize()) initMap();
+                if (map) {
+                    // Give the layout one more frame so Leaflet sees the final size.
+                    requestAnimationFrame(() => {
+                        map.invalidateSize();
+                    });
+                }
+            });
             lastLivemapActive = true;
         } else if (!isLivemap && lastLivemapActive) {
             socketService.stopGpsDetails();
@@ -159,6 +195,10 @@
             socketService.stopGpsDetails();
             gpsStore.disconnect();
             lastLivemapActive = false;
+        }
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+            resizeObserver = null;
         }
         if (map) {
             map.remove();

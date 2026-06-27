@@ -59,8 +59,15 @@ const char * _t_build_time = "build_time";
 const char * _t_uptime = "uptime";
 const char * _t_bt_mac = "bt_mac";
 const char * _t_terminal_available = "terminal_available";
-const char * _t_has_sta_psk = "has_sta_psk";
+const char * _t_sta_ip_mode = "sta_ip_mode";
+const char * _t_sta_ip = "sta_ip";
+const char * _t_sta_gateway = "sta_gateway";
+const char * _t_sta_subnet = "sta_subnet";
+const char * _t_sta_dns = "sta_dns";
+const char * _t_dhcp = "dhcp";
+const char * _t_static = "static";
 const char * _t_has_ap_psk = "has_ap_psk";
+const char * _t_has_sta_psk = "has_sta_psk";
 const char * _t_has_password = "has_password";
 const char * _t_has_pin = "has_pin";
 const char * _t_url = "url";
@@ -345,6 +352,19 @@ bool WiFi::valid(String &invalid) const
       invalid = "wifi.sta_ssid";
     else if (sta_psk == "")
       invalid = "wifi.sta_psk";
+    else if (sta_ip_mode == 1)
+    {
+      // static IP mode requires all IP fields
+      if (sta_ip == "")
+        invalid = "wifi.sta_ip";
+      else if (sta_gateway == "")
+        invalid = "wifi.sta_gateway";
+      else if (sta_subnet == "")
+        invalid = "wifi.sta_subnet";
+      else
+        return true;
+      return false;
+    }
     else
       return true;
 
@@ -374,6 +394,14 @@ void WiFi::marshal(JsonObject o) const
   o[_t_sta_psk] = sta_psk;
   o[_t_ap_ssid] = ap_ssid;
   o[_t_ap_psk] = ap_psk;
+  o[_t_sta_ip_mode] = sta_ip_mode == 1 ? _t_static : _t_dhcp;
+  if (sta_ip_mode == 1)
+  {
+    o[_t_sta_ip] = sta_ip;
+    o[_t_sta_gateway] = sta_gateway;
+    o[_t_sta_subnet] = sta_subnet;
+    o[_t_sta_dns] = sta_dns;
+  }
 }
 
 bool WiFi::unmarshal(JsonObject o)
@@ -392,6 +420,21 @@ bool WiFi::unmarshal(JsonObject o)
     sta_psk = o[_t_sta_psk].as<String>();
   if (containsAndHas(o, _t_ap_psk, _t_has_ap_psk))
     ap_psk = o[_t_ap_psk].as<String>();
+
+  sta_ip_mode = 0;
+  if (o[_t_sta_ip_mode].is<JsonVariant>())
+  {
+    if (o[_t_sta_ip_mode] == _t_static)
+      sta_ip_mode = 1;
+  }
+  if (o[_t_sta_ip].is<JsonVariant>())
+    sta_ip = o[_t_sta_ip].as<String>();
+  if (o[_t_sta_gateway].is<JsonVariant>())
+    sta_gateway = o[_t_sta_gateway].as<String>();
+  if (o[_t_sta_subnet].is<JsonVariant>())
+    sta_subnet = o[_t_sta_subnet].as<String>();
+  if (o[_t_sta_dns].is<JsonVariant>())
+    sta_dns = o[_t_sta_dns].as<String>();
 
   return true;
 }

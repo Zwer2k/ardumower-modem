@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-#define READER_BUF_SIZE 1024
+#define READER_BUF_SIZE 4096
 
 class Reader
 {
