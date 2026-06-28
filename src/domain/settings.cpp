@@ -259,6 +259,45 @@ static bool validBluetoothAndDnsName(const String &name)
   return true;
 }
 
+static bool validIPv4(const String &ip)
+{
+  if (ip == "")
+    return false;
+
+  int octets = 0;
+  int num = 0;
+  bool hasNum = false;
+  auto n = ip.length();
+
+  for (auto i = 0; i < n; i++)
+  {
+    char c = ip[i];
+    if (c >= '0' && c <= '9')
+    {
+      hasNum = true;
+      num = num * 10 + (c - '0');
+      if (num > 255)
+        return false;
+    }
+    else if (c == '.')
+    {
+      if (!hasNum)
+        return false;
+      octets++;
+      if (octets > 3)
+        return false;
+      num = 0;
+      hasNum = false;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  return hasNum && octets == 3;
+}
+
 bool General::valid(String &invalid) const
 {
   if (!validBluetoothAndDnsName(name))
@@ -354,13 +393,15 @@ bool WiFi::valid(String &invalid) const
       invalid = "wifi.sta_psk";
     else if (sta_ip_mode == 1)
     {
-      // static IP mode requires all IP fields
-      if (sta_ip == "")
+      // static IP mode requires valid IP fields
+      if (!validIPv4(sta_ip))
         invalid = "wifi.sta_ip";
-      else if (sta_gateway == "")
+      else if (!validIPv4(sta_gateway))
         invalid = "wifi.sta_gateway";
-      else if (sta_subnet == "")
+      else if (!validIPv4(sta_subnet))
         invalid = "wifi.sta_subnet";
+      else if (sta_dns != "" && !validIPv4(sta_dns))
+        invalid = "wifi.sta_dns";
       else
         return true;
       return false;

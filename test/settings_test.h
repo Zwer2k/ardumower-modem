@@ -214,8 +214,24 @@ test(settings_valid_wifi)
   uut.wifi.sta_subnet = "255.255.255.0";
   assertTrue( uut.valid(invalid) );
   
-  // dns is optional
+  // invalid IP format
+  uut.wifi.sta_ip = "192.168.1";
+  assertFalse( uut.valid(invalid) );
+  assertEqual( invalid, String("wifi.sta_ip") );
+  uut.wifi.sta_ip = "192.168.1.10";
+  
+  uut.wifi.sta_gateway = "192.168.1.256";
+  assertFalse( uut.valid(invalid) );
+  assertEqual( invalid, String("wifi.sta_gateway") );
+  uut.wifi.sta_gateway = "192.168.1.1";
+  
+  // dns is optional but must be valid if set
   uut.wifi.sta_dns = "8.8.8.8";
+  assertTrue( uut.valid(invalid) );
+  uut.wifi.sta_dns = "invalid";
+  assertFalse( uut.valid(invalid) );
+  assertEqual( invalid, String("wifi.sta_dns") );
+  uut.wifi.sta_dns = "";
   assertTrue( uut.valid(invalid) );
 
   // invalid mode

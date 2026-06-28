@@ -3,6 +3,7 @@
   import type { Option } from "../model/ui";
   import SelectSetting from "../widget/SelectSetting.svelte";
   import TextSetting from "../widget/TextSetting.svelte";
+  import IpTextSetting from "../widget/IpTextSetting.svelte";
   import Group from "./Group.svelte";
 
   export let settings: Settings.WiFi;
@@ -53,28 +54,28 @@
       options={ipModes}
     />
     {#if settings.sta_ip_mode === "static"}
-      <TextSetting
+      <IpTextSetting
         label="IP Address"
         key="wifi.sta_ip"
         helpText="Static IP address of the modem"
         bind:value={settings.sta_ip}
         bind:original={original.sta_ip}
       />
-      <TextSetting
+      <IpTextSetting
         label="Gateway"
         key="wifi.sta_gateway"
         helpText="Default gateway IP address"
         bind:value={settings.sta_gateway}
         bind:original={original.sta_gateway}
       />
-      <TextSetting
+      <IpTextSetting
         label="Subnet Mask"
         key="wifi.sta_subnet"
         helpText="Subnet mask (e.g. 255.255.255.0)"
         bind:value={settings.sta_subnet}
         bind:original={original.sta_subnet}
       />
-      <TextSetting
+      <IpTextSetting
         label="DNS Server"
         key="wifi.sta_dns"
         helpText="DNS server IP address (optional)"
