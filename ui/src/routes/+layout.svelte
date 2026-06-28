@@ -55,6 +55,13 @@
 {/if}
 <Header company="ArduMower" platformName="Modem">
     <Button
+        href="/?dashboard=main"
+        kind="tertiary"
+        icon={IconDashboard}
+        iconDescription="Dashboard">
+        <span class="button-text">Dashboard</span>
+    </Button>
+    <Button
         href="/?dashboard=status"
         kind="tertiary"
         icon={IconDashboard}

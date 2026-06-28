@@ -3,6 +3,7 @@
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
     import { socketService } from '../../stores/socket';
+    import MainDashboard from './main/MainDashboard.svelte';
     import StatusDashboard from './status/StatusDashboard.svelte';
     import LogDashboard from './log/LogDashboard.svelte';
     import TerminalDashboard from './terminal/TerminalDashboard.svelte';
@@ -13,13 +14,13 @@
     const liveMapEnabled = import.meta.env.VITE_ENABLE_LIVE_MAP === 'true';
     const gpsDashboardEnabled = import.meta.env.VITE_ENABLE_GPS_DASHBOARD === 'true';
 
-    let currentDashboard = $state('status');
+    let currentDashboard = $state('main');
 
     // Reagiere auf URL-Änderungen (Query-Parameter basiert)
     $effect(() => {
         if (browser && $page.url) {
-            const dashboard = $page.url.searchParams.get('dashboard') || 'status';
-            const validDashboards = ['status', 'log', 'terminal', 'tests'];
+            const dashboard = $page.url.searchParams.get('dashboard') || 'main';
+            const validDashboards = ['main', 'status', 'log', 'terminal', 'tests'];
             if (mapEnabled) validDashboards.push('map');
             if (gpsDashboardEnabled) validDashboards.push('gps');
             if (liveMapEnabled) validDashboards.push('livemap');
@@ -46,6 +47,9 @@
 
 <div class="dashboard-container">
     <!-- Alle Dashboards sind immer geladen und bleiben im Memory -->
+    <div class="dashboard-panel" class:active={currentDashboard === 'main'}>
+        <MainDashboard />
+    </div>
     <div class="dashboard-panel" class:active={currentDashboard === 'status'}>
         <StatusDashboard />
     </div>
