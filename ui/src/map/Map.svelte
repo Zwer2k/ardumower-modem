@@ -18,6 +18,7 @@
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import IconUpload from "carbon-icons-svelte/lib/Upload.svelte";
   import IconSave from "carbon-icons-svelte/lib/Save.svelte";
+  import IconStar from "carbon-icons-svelte/lib/Star.svelte";
 import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   import IconCheckmark from "carbon-icons-svelte/lib/Checkmark.svelte";
   import IconClose from "carbon-icons-svelte/lib/Close.svelte";
@@ -101,15 +102,17 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
 
   $: mapOptions = $socketStore.maps.map((m) => ({
     id: m.id,
-    text: `${m.name} (${m.area.toFixed(1)} m²)`,
+    text: `${m.name} (${m.area.toFixed(1)} m²)${m.id === $socketStore.activeMapId ? ' ★ default' : ''}`,
   }));
-  $: activeMap = $socketStore.maps.find((m) => m.id === $socketStore.activeMapId);
-  $: activeMapName = activeMap?.name || "";
+  $: selectedMapId = $socketStore.currentMapId || $socketStore.activeMapId || "";
+  $: effectiveMapId = $socketStore.currentMapId || $socketStore.activeMapId || "";
+  $: effectiveMap = $socketStore.maps.find((m) => m.id === effectiveMapId);
+  $: effectiveMapName = effectiveMap?.name || "";
   $: currentHash = $socketStore.currentMapMeta?.hash || "";
-  $: activeMapHash = activeMap?.hash || "";
-  $: geometryDirty = currentHash !== "" && currentHash !== activeMapHash;
-  $: rotationDirty = !!activeMap && compassRotation !== activeMap.rotation;
-  $: nameDirty = pendingName !== "" && pendingName !== activeMapName;
+  $: effectiveMapHash = effectiveMap?.hash || "";
+  $: geometryDirty = currentHash !== "" && currentHash !== effectiveMapHash;
+  $: rotationDirty = !!effectiveMap && compassRotation !== effectiveMap.rotation;
+  $: nameDirty = pendingName !== "" && pendingName !== effectiveMapName;
   $: isDirty = geometryDirty || rotationDirty || nameDirty;
   $: canRename = ($MapStore.map?.perimeter.points.length ?? 0) >= 3;
 
@@ -125,13 +128,13 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   }
 
   function onSaveMap() {
-    const name = pendingName || activeMapName || `Karte ${$socketStore.maps.length + 1}`;
+    const name = pendingName || effectiveMapName || `Karte ${$socketStore.maps.length + 1}`;
     socketService.sendSaveMap(name, compassRotation);
     pendingName = "";
   }
 
   function startRename() {
-    pendingName = activeMapName;
+    pendingName = effectiveMapName;
     isRenameMode = true;
   }
 
@@ -140,17 +143,21 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   }
 
   function cancelRename() {
-    pendingName = activeMapName;
+    pendingName = effectiveMapName;
     isRenameMode = false;
   }
 
   function onDeleteMap() {
-    const activeId = $socketStore.activeMapId;
-    if (!activeId) return;
+    if (!effectiveMapId) return;
     if (confirm("Karte wirklich löschen?")) {
-      socketService.sendDeleteMap(activeId);
+      socketService.sendDeleteMap(effectiveMapId);
       pendingName = "";
     }
+  }
+
+  function onSetDefaultMap() {
+    if (!effectiveMapId) return;
+    socketService.sendSetActiveMap(effectiveMapId);
   }
 
   // ─── Draw mode ───────────────────────────────────────────────────────────
@@ -761,8 +768,8 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   let compassRotation = 0;
   let rotationManuallySet = false;
   let lastRotationMapId: string | null = null;
-  $: if ($socketStore.activeMapId !== lastRotationMapId) {
-    lastRotationMapId = $socketStore.activeMapId;
+  $: if ($socketStore.currentMapId !== lastRotationMapId) {
+    lastRotationMapId = $socketStore.currentMapId;
     rotationManuallySet = false;
   }
   $: if (!rotationManuallySet && $socketStore.currentMapMeta?.rotation !== undefined) {
@@ -818,7 +825,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Dropdown
                 placeholder="Select map"
                 items={mapOptions}
-                selectedId={$socketStore.activeMapId || ""}
+                selectedId={selectedMapId}
                 on:select={onSelectMap}
               />
             {/if}
@@ -828,7 +835,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="primary"
                 size="small"
-                disabled={!pendingName || pendingName === activeMapName}
+                disabled={!pendingName || pendingName === effectiveMapName}
                 on:click={confirmRename}
                 icon={IconCheckmark}
                 iconDescription="Confirm rename"
@@ -929,12 +936,22 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="danger"
                 size="small"
-                disabled={!$socketStore.activeMapId || isRenameMode}
+                disabled={!effectiveMapId || isRenameMode}
                 on:click={onDeleteMap}
                 icon={IconTrashCan}
                 iconDescription="Delete map"
               >
                 <span class="btn-label">Del</span>
+              </Button>
+              <Button
+                kind="tertiary"
+                size="small"
+                disabled={!effectiveMapId || isRenameMode}
+                on:click={onSetDefaultMap}
+                icon={IconStar}
+                iconDescription="Set as default map"
+              >
+                <span class="btn-label">Default</span>
               </Button>
               {#if nameDirty}
                 <span class="pending-map-name" title="Neuer Name, noch nicht gespeichert">→ {pendingName}</span>

@@ -259,6 +259,14 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
     break;
   }
 
+   case RequestDataType::setActiveMap: {
+    String id = jsonData["id"] | "";
+    if (_source.setActiveMap(id)) {
+      _socketHandler->sendMapList(NULL);
+    }
+    break;
+  }
+
   default:
     break;
   }
@@ -1235,12 +1243,14 @@ void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
 {
   auto list = _source.mapList();
   String activeId = _source.activeMapId();
+  String currentId = _source.currentMapId();
 
   JsonDocument doc;
   doc["type"] = ResponseDataType::mapList;
   doc["timestamp"] = millis();
   auto dataObj = doc["data"].to<JsonObject>();
   dataObj["activeId"] = activeId;
+  dataObj["currentId"] = currentId;
   auto mapsArr = dataObj["maps"].to<JsonArray>();
   for (const auto &m : list) {
     JsonObject obj = mapsArr.add<JsonObject>();

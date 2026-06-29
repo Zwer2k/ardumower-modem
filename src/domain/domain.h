@@ -380,12 +380,14 @@ namespace ArduMower
         // Karten-Verwaltung (optional, Standardimplementierungen liefern leere Werte)
         virtual std::vector<MapInfo> mapList() { return {}; }
         virtual String activeMapId() { return ""; }
+        virtual String currentMapId() { return ""; }
         virtual bool mapListDirty() { return false; }
         virtual void clearMapListDirty() {}
         virtual String saveMap(const String &name, double rotation = 0.0) { (void)name; (void)rotation; return ""; }
         virtual bool loadMap(const String &id) { (void)id; return false; }
         virtual bool renameMap(const String &id, const String &name) { (void)id; (void)name; return false; }
         virtual bool deleteMap(const String &id) { (void)id; return false; }
+        virtual bool setActiveMap(const String &id) { (void)id; return false; }
         virtual String currentMapHash() { return ""; }
         virtual int currentMapCrc() { return 0; }
         virtual double currentMapArea() { return 0.0; }

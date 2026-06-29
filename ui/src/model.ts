@@ -330,6 +330,7 @@ export interface MapMeta {
 
 export interface MapListData {
   activeId: string;
+  currentId?: string;
   maps: MapMeta[];
 }
 
@@ -361,6 +362,7 @@ export enum RequestDataType {
   saveMap,
   renameMap,
   deleteMap,
+  setActiveMap,
 }
 
 export interface MowSettingsData {

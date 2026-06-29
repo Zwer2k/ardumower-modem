@@ -88,6 +88,7 @@ String MowerAdapter::saveMap(const String &name, double rotation) {
   _map.rotation = rotation;
   String id = _mapManager.save(_map, name, rotation);
   if (id.length() > 0) {
+    _currentMapId = id;
     _mapListDirty = true;
     Log(INFO, "%ssaveMap: Karte gespeichert als %s", _LOG_, id.c_str());
   }
@@ -101,7 +102,7 @@ bool MowerAdapter::loadMap(const String &id) {
   }
   ArduMower::Domain::Robot::MowerMap loaded;
   if (!_mapManager.load(id, loaded)) return false;
-  if (!_mapManager.setActive(id)) return false;
+  _currentMapId = id;
   _map = loaded;
   _currentMapHash = _mapManager.computeHash(_map);
   _currentMapArea = _mapManager.computeArea(_map);
@@ -120,8 +121,16 @@ bool MowerAdapter::renameMap(const String &id, const String &name) {
 
 bool MowerAdapter::deleteMap(const String &id) {
   if (!_mapManager.remove(id)) return false;
+  if (_currentMapId == id) _currentMapId = "";
   _mapListDirty = true;
   Log(INFO, "%sdeleteMap: Karte %s gelöscht", _LOG_, id.c_str());
+  return true;
+}
+
+bool MowerAdapter::setActiveMap(const String &id) {
+  if (!_mapManager.setActive(id)) return false;
+  _mapListDirty = true;
+  Log(INFO, "%ssetActiveMap: Karte %s als aktiv gesetzt", _LOG_, id.c_str());
   return true;
 }
 
@@ -154,6 +163,7 @@ void MowerAdapter::begin()
   if (_mapManager.begin()) {
     ArduMower::Domain::Robot::MowerMap loaded;
     if (_mapManager.loadActive(loaded)) {
+      _currentMapId = _mapManager.activeId();
       _map = loaded;
       _currentMapHash = _mapManager.computeHash(_map);
       _currentMapArea = _mapManager.computeArea(_map);

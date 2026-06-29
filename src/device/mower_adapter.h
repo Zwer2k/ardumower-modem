@@ -73,6 +73,7 @@ namespace ArduMower
       MapUploadState _mapUploadState;
       volatile bool _mapUploadPending = false;
       bool _mapListDirty = true;
+      String _currentMapId;
       String _currentMapHash;
       int _currentMapCrc = 0;
       double _currentMapArea = 0.0;
@@ -142,12 +143,14 @@ namespace ArduMower
       // Karten-Verwaltung
       virtual std::vector<ArduMower::Domain::Robot::MapInfo> mapList() override;
       virtual String activeMapId() override { return _mapManager.activeId(); }
+      virtual String currentMapId() override { return _currentMapId; }
       virtual bool mapListDirty() override;
       virtual void clearMapListDirty() override;
       virtual String saveMap(const String &name, double rotation = 0.0) override;
       virtual bool loadMap(const String &id) override;
       virtual bool renameMap(const String &id, const String &name) override;
       virtual bool deleteMap(const String &id) override;
+      virtual bool setActiveMap(const String &id) override;
       virtual String currentMapHash() override;
       virtual int currentMapCrc() override;
       virtual double currentMapArea() override;

@@ -40,6 +40,7 @@ namespace ArduMower
         saveMap,
         renameMap,
         deleteMap,
+        setActiveMap,
         requestDataTypeLength
       };
 

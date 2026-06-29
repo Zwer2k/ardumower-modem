@@ -45,6 +45,7 @@ export interface SocketState {
   gpsDashboardEnabled: boolean;
   maps: MapMeta[];
   activeMapId: string;
+  currentMapId: string;
   currentMapMeta: { hash: string; crc: number; area: number; rotation: number } | null;
 }
 
@@ -67,6 +68,7 @@ const initialState: SocketState = {
   gpsDashboardEnabled: false,
   maps: [],
   activeMapId: "",
+  currentMapId: "",
   currentMapMeta: null,
 };
 
@@ -306,6 +308,7 @@ class SocketService {
                   const listData = jsonData.data as MapListData;
                   newState.maps = listData.maps || [];
                   newState.activeMapId = listData.activeId || "";
+                  newState.currentMapId = listData.currentId || listData.activeId || "";
                   break;
                 }
                 case ResponseDataType.sensorSummary:
@@ -546,6 +549,14 @@ class SocketService {
   sendDeleteMap(id: string) {
     const req: RequestSocketMessage = {
       type: RequestDataType.deleteMap,
+      data: { id },
+    };
+    this.sendMessage(req);
+  }
+
+  sendSetActiveMap(id: string) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.setActiveMap,
       data: { id },
     };
     this.sendMessage(req);
