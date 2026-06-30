@@ -189,7 +189,7 @@ namespace ArduMower
       private:
         void startMapChunkSend(UiSocketItem* sendTo, bool force);
         void processMapChunkSend();
-        bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize);
+        bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize, bool reset = false);
         AsyncWebSocket *_ws;
 
         uint32_t lastVersionRequestTimestamp = 0;

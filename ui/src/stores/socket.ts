@@ -289,6 +289,10 @@ class SocketService {
                   break;
                 case ResponseDataType.map: {
                   const data = jsonData.data as any;
+                  if (data && data.reset) {
+                    resetMapChunkBuffer();
+                    break;
+                  }
                   if (data && data.meta) {
                     const meta = { hash: data.meta.hash, crc: data.meta.crc || 0, area: data.meta.area, rotation: data.meta.rotation || 0 };
                     newState.currentMapMeta = meta;

@@ -758,6 +758,9 @@ void UiSocketHandler::processMapChunkSend() {
 
   switch (mapChunkSendState.phase) {
     case 0: // Perimeter
+      if (mapChunkSendState.idx == 0) {
+        sendMapChunk(MapPointType::Perimeter, map.perimeter, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, 0, 0, true);
+      }
       if (map.perimeter.size() > 0 && mapChunkSendState.idx < map.perimeter.size()) {
         chunkSent = sendMapChunk(MapPointType::Perimeter, map.perimeter, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
@@ -770,6 +773,10 @@ void UiSocketHandler::processMapChunkSend() {
       } else { mapChunkSendState.phase = 1; mapChunkSendState.idx = 0; }
       // fallthrough
     case 1: // Exclusions
+      if (mapChunkSendState.exclusionIdx == 0 && mapChunkSendState.idx == 0) {
+        static const std::vector<ArduMower::Domain::Robot::MapPoint> emptyExcl;
+        sendMapChunk(MapPointType::Exclusion, emptyExcl, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, 0, 0, true);
+      }
       if (map.exclusions.size() > 0 && mapChunkSendState.exclusionIdx < map.exclusions.size()) {
         const auto& excl = map.exclusions[mapChunkSendState.exclusionIdx];
         if (excl.size() > 0 && mapChunkSendState.idx < excl.size()) {
@@ -786,6 +793,10 @@ void UiSocketHandler::processMapChunkSend() {
       } else { mapChunkSendState.phase = 2; mapChunkSendState.exclusionIdx = 0; mapChunkSendState.idx = 0; }
       // fallthrough
     case 2: // Dockpoints
+      if (mapChunkSendState.idx == 0) {
+        static const std::vector<ArduMower::Domain::Robot::MapPoint> emptyDockpoints;
+        sendMapChunk(MapPointType::Dockpoints, emptyDockpoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, 0, 0, true);
+      }
       if (map.dockpoints.size() > 0 && mapChunkSendState.idx < map.dockpoints.size()) {
         chunkSent = sendMapChunk(MapPointType::Dockpoints, map.dockpoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
@@ -798,6 +809,10 @@ void UiSocketHandler::processMapChunkSend() {
       } else { mapChunkSendState.phase = 3; mapChunkSendState.idx = 0; }
       // fallthrough
     case 3: // Waypoints
+      if (mapChunkSendState.idx == 0) {
+        static const std::vector<ArduMower::Domain::Robot::MapPoint> emptyWaypoints;
+        sendMapChunk(MapPointType::Waypoints, emptyWaypoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, 0, 0, true);
+      }
       if (map.waypoints.size() > 0 && mapChunkSendState.idx < map.waypoints.size()) {
         chunkSent = sendMapChunk(MapPointType::Waypoints, map.waypoints, mapChunkSendState.timestamp, mapChunkSendState.clientId, -1, mapChunkSendState.idx, blockSize);
         if (!chunkSent) {
@@ -821,58 +836,62 @@ void UiSocketHandler::processMapChunkSend() {
 }
 
 // Hilfsfunktion: Sende einen Chunk eines MapPoint-Vektors
-bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize) {
+bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize, bool reset) {
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
-  if (startIdx > total || (startIdx == total && total > 0)) return false;
+  if (!reset && startIdx > total || (startIdx == total && total > 0)) return false;
   // Vor Serialisierung prüfen ob Ziel-Client sendefähig ist
   if (!clientCanSend(clientId)) return false;
   JsonDocument doc;
   doc["type"] = ResponseDataType::map;
   doc["timestamp"] = timestamp;
   auto dataObj = doc["data"].to<JsonObject>();
-  dataObj["startIndex"] = (int)startIdx;
-  dataObj["total"] = (int)total;
-  dataObj["pointType"] = static_cast<int>(pointType);
-  if (pointType == MapPointType::Exclusion) {
-    dataObj["exclusionIdx"] = exclusionIdx;
-  }
-  if (mapChunkSendState.metaHash.length() > 0) {
-    auto metaObj = dataObj["meta"].to<JsonObject>();
-    metaObj["hash"] = mapChunkSendState.metaHash;
-    metaObj["crc"] = mapChunkSendState.metaCrc;
-    metaObj["area"] = mapChunkSendState.metaArea;
-    metaObj["rotation"] = mapChunkSendState.metaRotation;
-  }
-  auto arr = dataObj["points"].to<JsonArray>();
-  size_t measured = measureJson(doc);
-  size_t pointsAdded = 0;
-  size_t idx = startIdx;
-  while (pointsAdded < blockSize && idx < total) {
-    JsonObject obj = arr.add<JsonObject>();
-    bool marshalOk = true;
-    try {
-      points[idx].marshal(obj);
-    } catch (...) {
-      Log(ERR, "%s marshal exception at pointType=%d idx=%u", _LOG_, (int)pointType, (unsigned)idx);
-      marshalOk = false;
+  if (reset) {
+    dataObj["reset"] = true;
+  } else {
+    dataObj["startIndex"] = (int)startIdx;
+    dataObj["total"] = (int)total;
+    dataObj["pointType"] = static_cast<int>(pointType);
+    if (pointType == MapPointType::Exclusion) {
+      dataObj["exclusionIdx"] = exclusionIdx;
     }
-    if (!marshalOk) {
-      arr.remove(arr.size() - 1);
+    if (mapChunkSendState.metaHash.length() > 0) {
+      auto metaObj = dataObj["meta"].to<JsonObject>();
+      metaObj["hash"] = mapChunkSendState.metaHash;
+      metaObj["crc"] = mapChunkSendState.metaCrc;
+      metaObj["area"] = mapChunkSendState.metaArea;
+      metaObj["rotation"] = mapChunkSendState.metaRotation;
+    }
+    auto arr = dataObj["points"].to<JsonArray>();
+    size_t measured = measureJson(doc);
+    size_t pointsAdded = 0;
+    size_t idx = startIdx;
+    while (pointsAdded < blockSize && idx < total) {
+      JsonObject obj = arr.add<JsonObject>();
+      bool marshalOk = true;
+      try {
+        points[idx].marshal(obj);
+      } catch (...) {
+        Log(ERR, "%s marshal exception at pointType=%d idx=%u", _LOG_, (int)pointType, (unsigned)idx);
+        marshalOk = false;
+      }
+      if (!marshalOk) {
+        arr.remove(arr.size() - 1);
+        ++idx;
+        continue;
+      }
+      size_t newMeasured = measureJson(doc);
+      if (newMeasured >= maxJsonSize - 128) {
+        arr.remove(arr.size() - 1);
+        Log(DBG, "%s remove point", _LOG_);
+        break;
+      }
+      measured = newMeasured;
       ++idx;
-      continue;
+      ++pointsAdded;
     }
-    size_t newMeasured = measureJson(doc);
-    if (newMeasured >= maxJsonSize - 128) {
-      arr.remove(arr.size() - 1);
-      Log(DBG, "%s remove point", _LOG_);
-      break;
-    }
-    measured = newMeasured;
-    ++idx;
-    ++pointsAdded;
+    Log(DBG, "%s MapChunk type=%d exclIdx=%d: measured=%u, points=%u, nextIdx=%u, pointsAdded=%u", _LOG_, (int)pointType, exclusionIdx, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx, (unsigned)pointsAdded);
   }
-  Log(DBG, "%s MapChunk type=%d exclIdx=%d: measured=%u, points=%u, nextIdx=%u, pointsAdded=%u", _LOG_, (int)pointType, exclusionIdx, (unsigned)measured, (unsigned)arr.size(), (unsigned)idx, (unsigned)pointsAdded);
   String stateStr;
   try {
     serializeJson(doc, stateStr);
