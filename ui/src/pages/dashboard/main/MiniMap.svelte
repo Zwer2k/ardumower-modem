@@ -5,7 +5,6 @@
     import { MapStore, drivenTrackStore } from '../../../map/service';
     import { socketStore } from '../../../stores/socket';
 
-    export let mapCrc: number | null | undefined = null;
     export let mowPointIndex: number = -1;
 
     $: map = $MapStore?.map;
@@ -29,6 +28,15 @@
                          (map?.waypoints?.points?.length ?? 0) > 0 ||
                          (map?.dockpoints?.points?.length ?? 0) > 0 ||
                          (map?.exclusions ?? []).some((ex) => (ex.points?.length ?? 0) > 0);
+
+    $: storedCrc = $socketStore?.currentMapMeta?.crc ?? 0;
+    $: mowerCrc = $socketStore?.state?.map_crc ?? 0;
+    $: isMapSynced = mowerCrc !== 0 && storedCrc !== 0 && mowerCrc === storedCrc;
+    $: mapStatus = !hasAnyMapData
+        ? { text: 'Keine Karte', synced: false, warn: false }
+        : isMapSynced
+            ? { text: 'Karte synchron', synced: true, warn: false }
+            : { text: 'Karte nicht synchron', synced: false, warn: true };
 
     $: viewBoxValid = isViewBoxValid(presentation?.viewBox);
     $: derivedViewBox = deriveViewBox(map, presentation?.viewBox);
@@ -179,12 +187,13 @@
         const w2y = y - r * 0.5 * Math.sin(wing2);
         return `${tipX},${tipY} ${w1x},${w1y} ${w2x},${w2y}`;
     }
+
 </script>
 
 <div class="mini-map">
     {#if hasAnyMapData}
-        <div class="map-status" class:synced={mapCrc != null}>
-            {mapCrc != null ? 'Karte OK' : 'Keine Karte'}
+        <div class="map-status" class:synced={mapStatus.synced} class:warn={mapStatus.warn}>
+            {mapStatus.text}
         </div>
         <button class="compass-btn" on:mousedown={onCompassDown} on:dblclick={resetCompass} title="Karte drehen (ziehen für fein, Doppelklick zurücksetzen)">
             <svg viewBox="-12 -12 24 24" width="20" height="20">
@@ -237,19 +246,21 @@
                 {/if}
 
                 {#if map.waypoints?.points?.length}
-                    {#each map.waypoints.points as wp, i}
-                        {@const done = i <= completedIndex}
-                        <circle
-                            cx={wp.x}
-                            cy={wp.y}
-                            r={done ? 0.06 : 0.03}
-                            fill={done ? '#8d8d8d' : '#a8a8a8'}
-                            stroke={done ? '#8d8d8d' : '#a8a8a8'}
-                            stroke-width="0.01"
-                            />
-                        {/each}
+                    {@const wpCount = map.waypoints.points.length}
+                    {@const lastDone = Math.min(completedIndex + 1, wpCount - 1)}
+                    {#if lastDone > 0}
                         <polyline
-                            points={map.waypoints.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                            points={map.waypoints.points.slice(0, lastDone + 1).map((p) => `${p.x},${p.y}`).join(' ')}
+                            fill="none"
+                            stroke="#555555"
+                            stroke-width="0.015"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    {/if}
+                    {#if lastDone < wpCount - 1}
+                        <polyline
+                            points={map.waypoints.points.slice(lastDone).map((p) => `${p.x},${p.y}`).join(' ')}
                             fill="none"
                             stroke="#c6c6c6"
                             stroke-width="0.015"
@@ -257,10 +268,22 @@
                             stroke-linejoin="round"
                         />
                     {/if}
+                    {#each map.waypoints.points as wp, i}
+                        {@const done = i <= completedIndex}
+                        <circle
+                            cx={wp.x}
+                            cy={wp.y}
+                            r={done ? 0.035 : 0.03}
+                            fill={done ? '#333333' : '#a8a8a8'}
+                            stroke={done ? '#333333' : '#a8a8a8'}
+                            stroke-width="0.01"
+                            />
+                        {/each}
+                    {/if}
 
                 </g>
                 <g transform={rotationAttr}>
-                    {#if track?.points?.length}
+                    {#if track?.points?.length && isMapSynced}
                         <polyline
                             points={track.points.map((p) => `${p.x},${-p.y}`).join(' ')}
                             fill="none"
@@ -315,6 +338,11 @@
 
     .map-status.synced {
         background: #24a148;
+    }
+
+    .map-status.warn {
+        background: #f1c21b;
+        color: #161616;
     }
 
     .zoom-reset,

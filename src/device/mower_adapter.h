@@ -162,6 +162,9 @@ namespace ArduMower
       virtual String cachedRawSensorSummary() { return _cachedRawSensorSummary; }
       virtual String cachedRawGpsDetails() { return _cachedRawGpsDetails; }
       virtual bool changeSpeed(float speed);
+      virtual bool changeWayPerc(float perc);
+      virtual bool changeMowHeight(int height);
+      virtual bool tuneParam(int index, float value);
       virtual bool dock();
       virtual bool finishAndRestartEnabled(bool enabled);
       virtual bool mowerEnabled(bool enabled);

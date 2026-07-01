@@ -246,6 +246,9 @@ export type RobotAction =
   | "finishAndRestartEnabled"
   | "changeSpeed"
   | "setFixTimeout"
+  | "changeWayPerc"
+  | "changeMowHeight"
+  | "tuneParam"
   | "customCmd";
 
 export interface RobotCommandResult {

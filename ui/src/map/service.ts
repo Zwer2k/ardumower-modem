@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { writable, derived } from "svelte/store";
 import type {
   Map,
   MapPresentation,
@@ -8,7 +8,7 @@ import type {
   Waypoints,
   Point,
 } from "./model";
-import type { DrivenTrackData } from "../model";
+import type { DrivenTrackData, MapMeta } from "../model";
 import { rotatePointsAroundOrigin } from "./geometry";
 import {
   perimeterStore,
@@ -23,6 +23,8 @@ export const drivenTrackStore = writable<DrivenTrackData | null>(null);
 export interface StoredMap {
   map: Map;
   presentation: MapPresentation;
+  meta?: MapMeta | null;
+  synced?: boolean;
 }
 // MapStore is now derived from socketStore
 // Initialize with empty map so $MapStore is always defined
@@ -215,3 +217,4 @@ function updateMapStore() {
 }
 
 updateMapStore();
+

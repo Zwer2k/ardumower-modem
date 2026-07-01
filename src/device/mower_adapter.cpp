@@ -484,6 +484,36 @@ bool MowerAdapter::changeSpeed(float speed)
   return sendCommand(command);
 }
 
+// change way percentage (path coverage / overlap)
+bool MowerAdapter::changeWayPerc(float perc)
+{
+  Log(DBG, "%schangeWayPerc(%.2f)", _LOG_CMD_, perc);
+  char buffer[48];
+  snprintf(buffer, sizeof(buffer), "AT+C,-1,-1,-1,-1,-1,%.2f,-1,-1", perc);
+  String command(buffer);
+  return sendCommand(command);
+}
+
+// change mow height (AT+S2)
+bool MowerAdapter::changeMowHeight(int height)
+{
+  Log(DBG, "%schangeMowHeight(%d)", _LOG_CMD_, height);
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "AT+S2,%d", height);
+  String command(buffer);
+  return sendCommand(command);
+}
+
+// change tune parameter (AT+CT,<index>,<value>)
+bool MowerAdapter::tuneParam(int index, float value)
+{
+  Log(DBG, "%stuneParam(%d, %.4f)", _LOG_CMD_, index, value);
+  char buffer[48];
+  snprintf(buffer, sizeof(buffer), "AT+CT,%d,%.4f", index, value);
+  String command(buffer);
+  return sendCommand(command);
+}
+
 // set fix Timeout
 bool MowerAdapter::setFixTimeout(int timeout)
 {

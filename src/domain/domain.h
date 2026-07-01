@@ -399,6 +399,9 @@ namespace ArduMower
       public:
 
         virtual bool changeSpeed(float speed) = 0;
+        virtual bool changeWayPerc(float perc) = 0;
+        virtual bool changeMowHeight(int height) = 0;
+        virtual bool tuneParam(int index, float value) = 0;
         virtual bool dock() = 0;
         virtual bool finishAndRestartEnabled(bool enabled) = 0;
         virtual bool mowerEnabled(bool enabled) = 0;

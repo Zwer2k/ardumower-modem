@@ -266,6 +266,12 @@ void UiAdapter::handleApiPostRobotCommand(AsyncWebServerRequest *request, JsonVa
     ok = _cmd.changeSpeed(json.as<JsonObject>()["speed"] | 0.2f);
   else if (action == "setFixTimeout")
     ok = _cmd.setFixTimeout(json.as<JsonObject>()["timeout"] | 0);
+  else if (action == "changeWayPerc")
+    ok = _cmd.changeWayPerc(json.as<JsonObject>()["perc"] | 1.0f);
+  else if (action == "changeMowHeight")
+    ok = _cmd.changeMowHeight(json.as<JsonObject>()["height"] | 55);
+  else if (action == "tuneParam")
+    ok = _cmd.tuneParam(json.as<JsonObject>()["index"] | 0, json.as<JsonObject>()["value"] | 0.0f);
   else if (action == "customCmd")
     ok = _cmd.customCmd(json.as<JsonObject>()["cmd"] | "");
   else {

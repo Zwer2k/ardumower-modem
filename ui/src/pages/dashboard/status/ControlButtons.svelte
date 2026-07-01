@@ -1,6 +1,9 @@
 <script lang="ts">
+    import { slide } from "svelte/transition";
     import type { DesiredState } from "../../../model";
     import { RobotCommandService } from "../../../service";
+    import { socketStore } from "../../../stores/socket";
+    import { MapStore } from "../../../map/service";
     import PlayFilled from "carbon-icons-svelte/lib/PlayFilled.svelte";
     import StopFilled from "carbon-icons-svelte/lib/StopFilled.svelte";
     import Home from "carbon-icons-svelte/lib/Home.svelte";
@@ -20,21 +23,9 @@
     }
 
     async function send(action: string, payload?: Record<string, any>) {
-        let entry = { time: formatTime(), action, success: false };
+        let entry = { time: formatTime(), action, success: false, error: undefined as string | undefined };
         try {
             const res = await RobotCommandService.send(action as any, payload);
-            entry.success = res.success;
-            commandLog = [entry, ...commandLog].slice(0, 8);
-        } catch (e: any) {
-            entry.error = e.message || String(e);
-            commandLog = [entry, ...commandLog].slice(0, 8);
-        }
-    }
-
-    async function sendCustom(cmd: string, displayAction: string) {
-        let entry = { time: formatTime(), action: displayAction, success: false };
-        try {
-            const res = await RobotCommandService.send('customCmd', { cmd });
             entry.success = res.success;
             commandLog = [entry, ...commandLog].slice(0, 8);
         } catch (e: any) {
@@ -49,7 +40,35 @@
     // svelte-ignore state_referenced_locally
     if (desiredState) { speedVal = desiredState.speed ?? speedVal; fixTimeoutVal = desiredState.fix_timeout ?? fixTimeoutVal; }
     let mowHeightVal = $state(55);     // mm, typical range 30-85
-    let wayPercVal = $state(100);      // %, typical range 0-200
+    let wayPercVal = $state(100);      // %, typical range 0-100
+    let wayPercManuallySetAt = $state<number | null>(null);
+    const WAY_PERC_MIRROR_PAUSE_MS = 3000;
+
+    // mirror mower's current waypoint index into the Way % slider, unless recently changed manually
+    $effect(() => {
+        const total = $MapStore?.map?.waypoints?.points?.length ?? 0;
+        const idx = $socketStore?.state?.position?.mow_point_index ?? -1;
+        if (total > 0 && idx >= 0) {
+            if (wayPercManuallySetAt && (Date.now() - wayPercManuallySetAt < WAY_PERC_MIRROR_PAUSE_MS)) {
+                return;
+            }
+            const target = parseFloat((((idx + 1) / total) * 100).toFixed(1));
+            if (Math.abs(target - wayPercVal) > 0.05) wayPercVal = target;
+        }
+    });
+
+    // tune parameters via AT+CT (index -> value)
+    let tuneExpanded = $state(false);
+    let motorPidKpVal = $state(2.0);     // param 4
+    let motorPidKiVal = $state(0.0);     // param 5
+    let motorPidKdVal = $state(0.02);    // param 6
+    let motorPidTfVal = $state(0.0);     // param 7 (low-pass filter)
+    let motorPidRampVal = $state(100);   // param 8 (output ramp)
+    let motorPidLimitVal = $state(255);  // param 9 (pwmMax)
+    let stanleyNormalPVal = $state(1.0); // param 0
+    let stanleyNormalKVal = $state(1.0); // param 1
+    let stanleySlowPVal = $state(0.5);   // param 2
+    let stanleySlowKVal = $state(0.5);   // param 3
 
     function onSpeedChange(e: Event) {
         const val = parseFloat((e.target as HTMLInputElement).value);
@@ -66,13 +85,40 @@
     function onMowHeightChange(e: Event) {
         const val = parseInt((e.target as HTMLInputElement).value, 10);
         mowHeightVal = val;
-        sendCustom(`AT+S2,${val}`, `mowHeight=${val}`);
+        send('changeMowHeight', { height: val });
     }
 
     function onWayPercChange(e: Event) {
-        const val = parseInt((e.target as HTMLInputElement).value, 10);
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        setWayPerc(val);
+    }
+
+    function adjustWayPerc(delta: number) {
+        const next = Math.max(0, Math.min(100, wayPercVal + delta));
+        setWayPerc(next);
+    }
+
+    function setWayPerc(val: number) {
         wayPercVal = val;
-        sendCustom(`AT+W,${val}`, `wayPerc=${val}`);
+        wayPercManuallySetAt = Date.now();
+        send('changeWayPerc', { perc: val / 100 });
+    }
+
+    function onTuneParam(index: number) {
+        return (e: Event) => {
+            const val = parseFloat((e.target as HTMLInputElement).value);
+            if (index === 0) stanleyNormalPVal = val;
+            else if (index === 1) stanleyNormalKVal = val;
+            else if (index === 2) stanleySlowPVal = val;
+            else if (index === 3) stanleySlowKVal = val;
+            else if (index === 4) motorPidKpVal = val;
+            else if (index === 5) motorPidKiVal = val;
+            else if (index === 6) motorPidKdVal = val;
+            else if (index === 7) motorPidTfVal = val;
+            else if (index === 8) motorPidRampVal = val;
+            else if (index === 9) motorPidLimitVal = val;
+            send('tuneParam', { index, value: val });
+        };
     }
 </script>
 
@@ -133,14 +179,114 @@
                    onchange={onMowHeightChange} />
             <span class="slider-value">{mowHeightVal} mm</span>
         </label>
-        <label class="slider-group">
+        <div class="slider-group way-perc-group">
             <span class="slider-label">Way %</span>
-            <input type="range" class="slider-input"
-                   min="0" max="200" step="1"
-                   value={wayPercVal}
-                   onchange={onWayPercChange} />
-            <span class="slider-value">{wayPercVal}%</span>
-        </label>
+            <div class="way-perc-control">
+                <button type="button" class="step-btn" onclick={() => adjustWayPerc(-0.1)} aria-label="Way % verringern">−</button>
+                <input type="range" class="slider-input"
+                       min="0" max="100" step="0.1"
+                       value={wayPercVal}
+                       onchange={onWayPercChange} />
+                <button type="button" class="step-btn" onclick={() => adjustWayPerc(0.1)} aria-label="Way % erhöhen">+</button>
+            </div>
+            <span class="slider-value">{wayPercVal.toFixed(1)}%</span>
+        </div>
+    </div>
+
+    <div class="slider-section tune-section">
+        <button type="button" class="tune-toggle" onclick={() => tuneExpanded = !tuneExpanded}>
+            Advanced Tuning {tuneExpanded ? '▲' : '▼'}
+        </button>
+        {#if tuneExpanded}
+            <div class="tune-groups" transition:slide={{ duration: 150 }}>
+                <div class="tune-group">
+                    <span class="slider-label">Stanley Control</span>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Normal P</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="5" step="0.01"
+                               value={stanleyNormalPVal}
+                               onchange={onTuneParam(0)} />
+                        <span class="slider-value">{stanleyNormalPVal.toFixed(2)}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Normal K</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="5" step="0.01"
+                               value={stanleyNormalKVal}
+                               onchange={onTuneParam(1)} />
+                        <span class="slider-value">{stanleyNormalKVal.toFixed(2)}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Slow P</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="5" step="0.01"
+                               value={stanleySlowPVal}
+                               onchange={onTuneParam(2)} />
+                        <span class="slider-value">{stanleySlowPVal.toFixed(2)}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Slow K</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="5" step="0.01"
+                               value={stanleySlowKVal}
+                               onchange={onTuneParam(3)} />
+                        <span class="slider-value">{stanleySlowKVal.toFixed(2)}</span>
+                    </label>
+                </div>
+                <div class="tune-group">
+                    <span class="slider-label">Motor PID</span>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Kp</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="10" step="0.01"
+                               value={motorPidKpVal}
+                               onchange={onTuneParam(4)} />
+                        <span class="slider-value">{motorPidKpVal.toFixed(2)}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Ki</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="10" step="0.001"
+                               value={motorPidKiVal}
+                               onchange={onTuneParam(5)} />
+                        <span class="slider-value">{motorPidKiVal.toFixed(3)}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Kd</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="1" step="0.001"
+                               value={motorPidKdVal}
+                               onchange={onTuneParam(6)} />
+                        <span class="slider-value">{motorPidKdVal.toFixed(3)}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">LP Tf</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="1" step="0.001"
+                               value={motorPidTfVal}
+                               onchange={onTuneParam(7)} />
+                        <span class="slider-value">{motorPidTfVal.toFixed(3)}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Ramp</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="500" step="1"
+                               value={motorPidRampVal}
+                               onchange={onTuneParam(8)} />
+                        <span class="slider-value">{motorPidRampVal}</span>
+                    </label>
+                    <label class="slider-group">
+                        <span class="slider-label sub">Limit</span>
+                        <input type="range" class="slider-input"
+                               min="0" max="255" step="1"
+                               value={motorPidLimitVal}
+                               onchange={onTuneParam(9)} />
+                        <span class="slider-value">{motorPidLimitVal}</span>
+                    </label>
+                </div>
+            </div>
+        {/if}
     </div>
 
     {#if commandLog.length > 0}
@@ -209,10 +355,58 @@
     .slider-section {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
         margin-top: 4px;
         padding-top: 8px;
         border-top: 1px solid #eee;
+    }
+
+    .tune-toggle {
+        width: 100%;
+        padding: 6px 10px;
+        font-size: 0.8em;
+        font-weight: 500;
+        color: #555;
+        background: #f4f4f4;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.15s;
+    }
+
+    .tune-toggle:hover {
+        background: #e8e8e8;
+    }
+
+    .tune-groups {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .tune-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        background: #fafafa;
+    }
+
+    .tune-group > .slider-label {
+        width: auto;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 2px;
+    }
+
+    .slider-label.sub {
+        width: 55px;
+        font-weight: 400;
+        color: #666;
     }
 
     .slider-group {
@@ -220,6 +414,53 @@
         align-items: center;
         gap: 6px;
         font-size: 0.75em;
+        margin-bottom: 4px;
+        width: 100%;
+    }
+
+    .slider-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .way-perc-control {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        width: 129px;
+        flex-shrink: 0;
+        min-width: 0;
+    }
+
+    .way-perc-group .step-btn {
+        width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        font-size: 0.9em;
+        font-weight: 600;
+        color: #333;
+        background: #f4f4f4;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: background 0.15s;
+    }
+
+    .way-perc-group .step-btn:hover {
+        background: #e0e0e0;
+    }
+
+    .way-perc-group .step-btn:active {
+        background: #c6c6c6;
+    }
+
+    .way-perc-control .slider-input {
+        flex: 1;
+        min-width: 0;
+        width: auto;
     }
 
     .slider-label {
