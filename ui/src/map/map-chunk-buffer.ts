@@ -12,11 +12,12 @@ export enum MapPointType {
 }
 
 export interface MapChunk {
-  startIndex: number;
+  startIndex?: number;
   total: number;
   pointType: MapPointType;
   exclusionIdx?: number;
-  points: MapPoint[];
+  points?: MapPoint[];
+  reset?: boolean;
 }
 
 // Buffer für alle Typen
@@ -39,6 +40,37 @@ export const mapChunkProgress = writable<{ received: number; total: number; labe
 
 export function handleMapChunk(chunk: MapChunk) {
   //console.log('[MapChunkBuffer] handleMapChunk received:', chunk);
+  function resetType(type: MapPointType) {
+    switch (type) {
+      case MapPointType.Perimeter:
+        perimeterBuffer = [];
+        perimeterTotal = 0;
+        perimeterStore.set([]);
+        break;
+      case MapPointType.Dockpoints:
+        dockpointsBuffer = [];
+        dockpointsTotal = 0;
+        dockpointsStore.set([]);
+        break;
+      case MapPointType.Waypoints:
+        waypointsBuffer = [];
+        waypointsTotal = 0;
+        waypointsStore.set([]);
+        break;
+      case MapPointType.Exclusion:
+        exclusionsBuffer = [];
+        exclusionsTotal = [];
+        exclusionsStore.set([]);
+        break;
+    }
+  }
+
+  // Reset-Chunks löschen nur den jeweiligen Typ, nicht die ganze Karte
+  if (chunk.reset) {
+    resetType(chunk.pointType ?? MapPointType.Perimeter);
+    return;
+  }
+
   // Helper for shared logic, chunk is in closure
   function handleGeneric(buffer: MapPoint[], total: number, store: typeof perimeterStore): [MapPoint[], number] {
     if (chunk.startIndex === 0 || chunk.total !== total) {

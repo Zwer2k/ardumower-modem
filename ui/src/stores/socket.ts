@@ -23,6 +23,7 @@ import type {
 import { ResponseDataType, RequestDataType } from "../model";
 import type { DrivenTrackData } from "../model";
 import { handleMapChunk, waypointsStore, resetMapChunkBuffer } from "../map/map-chunk-buffer";
+import { MapPointType } from "../map/map-chunk-buffer";
 import { mowSettingsStore } from "../map/mow-settings";
 import { drivenTrackStore } from "../map/service";
 
@@ -290,7 +291,11 @@ class SocketService {
                 case ResponseDataType.map: {
                   const data = jsonData.data as any;
                   if (data && data.reset) {
-                    resetMapChunkBuffer();
+                    handleMapChunk({
+                      pointType: data.pointType ?? MapPointType.Perimeter,
+                      total: 0,
+                      reset: true,
+                    } as any);
                     break;
                   }
                   if (data && data.meta) {

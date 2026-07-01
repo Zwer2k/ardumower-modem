@@ -8,6 +8,7 @@
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
     import MiniMap from './MiniMap.svelte';
+    import { MapStore } from '../../../map/service';
 
     $effect(() => {
         if (!browser) return;
@@ -47,6 +48,16 @@
         return desc[job] ?? String(job);
     }
 
+    function solutionLabel(solution: number | undefined): string {
+        switch (solution) {
+            case 0: return 'None';
+            case 1: return '3D';
+            case 2: return 'RTK float';
+            case 3: return 'RTK fixed';
+            default: return '—';
+        }
+    }
+
     function sendCmd(action: string) {
         socketService.sendCommand({ action });
     }
@@ -58,10 +69,10 @@
         {@const stats = $socketStore.stats}
         {@const sensor = $socketStore.sensorSummary}
         {@const desc = $socketStore.valueDescriptions}
+        {@const pos = state?.position}
+        {@const totalPoints = ($MapStore?.map?.waypoints?.points?.length ?? 0)}
+        {@const currentPoint = (pos?.mow_point_index ?? -1) >= 0 ? pos.mow_point_index + 1 : 0}
 
-
-
-        <!-- Kachel-Grid + Mini-Map -->
         <Row narrow class="metrics-row">
             <Column sm={4} md={8} lg={5} class="metrics-col">
                 <div class="top-grid">
@@ -72,10 +83,12 @@
                     </Tile>
                     <Tile class="battery-tile compact">
                         <div class="battery-icon">🔋</div>
-                        <div class="battery-main">
-                            <span class="battery-value">{(state?.battery_voltage ?? 0).toFixed(1)} V</span>
-                            <span class="battery-extra">({Math.abs(state?.amps ?? 0).toFixed(1)} A)</span>
-                        </div>
+                        <div class="metric-value">{(state?.battery_voltage ?? 0).toFixed(1)}</div>
+                        <div class="metric-unit">V</div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-icon">⚡</div>
+                        <div class="metric-value">{Math.abs(state?.amps ?? 0).toFixed(1)}</div>
+                        <div class="metric-unit">A</div>
                         <div class="battery-label">Akku</div>
                     </Tile>
                 </div>
@@ -84,19 +97,11 @@
                         <div class="metric-icon">⏱️</div>
                         <div class="metric-value">{((stats?.mow ?? 0) / 60).toFixed(1)}</div>
                         <div class="metric-unit">h</div>
-                        <div class="metric-label">Mähzeit</div>
-                    </Tile>
-                    <Tile class="metric-tile compact">
+                        <div class="metric-divider"></div>
                         <div class="metric-icon">📏</div>
                         <div class="metric-value">{(stats?.mow_traveled ?? 0).toFixed(0)}</div>
                         <div class="metric-unit">m</div>
-                        <div class="metric-label">Strecke</div>
-                    </Tile>
-                    <Tile class="metric-tile compact">
-                        <div class="metric-icon">🚧</div>
-                        <div class="metric-value">{stats?.obstacles ?? 0}</div>
-                        <div class="metric-unit">×</div>
-                        <div class="metric-label">Hindernisse</div>
+                        <div class="metric-label">Mähzeit / Strecke</div>
                     </Tile>
                     <Tile class="metric-tile compact">
                         <div class="metric-icon">🌡️</div>
@@ -106,25 +111,45 @@
                         {:else}
                             <div class="metric-value">—</div>
                         {/if}
-                        <div class="metric-label">Temp. max</div>
-                    </Tile>
-                    <Tile class="metric-tile compact">
-                        <div class="metric-icon">📡</div>
-                        <div class="metric-value">{state?.position?.solution ?? '—'}</div>
-                        <div class="metric-unit">{state?.position?.accuracy ? (state.position.accuracy).toFixed(2) + ' m' : ''}</div>
-                        <div class="metric-label">GPS</div>
-                    </Tile>
-                    <Tile class="metric-tile compact">
+                        <div class="metric-divider"></div>
                         <div class="metric-icon">🧠</div>
                         <div class="metric-value">{((stats?.free_memory ?? 0) / 1024).toFixed(1)}</div>
                         <div class="metric-unit">kB</div>
-                        <div class="metric-label">Freier RAM</div>
+                        <div class="metric-label">Temp / RAM</div>
+                    </Tile>
+                    <Tile class="metric-tile compact gps-position">
+                        <div class="metric-icon">📍</div>
+                        <div class="metric-stack">
+                            <span class="stack-row"><span class="stack-label">E</span>{(pos?.x ?? 0).toFixed(2)}</span>
+                            <span class="stack-row"><span class="stack-label">N</span>{(pos?.y ?? 0).toFixed(2)}</span>
+                            <span class="stack-row"><span class="stack-label">Δ</span>{pos?.delta != null ? ((pos.delta * 180) / Math.PI).toFixed(0) + '°' : '—'}</span>
+                        </div>
+                        <div class="metric-label">Position</div>
+                    </Tile>
+                    <Tile class="metric-tile compact gps-quality">
+                        <div class="metric-icon">📡</div>
+                        <div class="metric-stack">
+                            <span class="stack-row"><span class="stack-label">Sol</span>{solutionLabel(pos?.solution)}</span>
+                            <span class="stack-row"><span class="stack-label">Acc</span>{(pos?.accuracy ?? 0).toFixed(2)} m</span>
+                            <span class="stack-row"><span class="stack-label">Sat</span>{pos?.visible_satellites ?? 0} ({pos?.visible_satellites_dgps ?? 0})</span>
+                        </div>
+                        <div class="metric-label">GPS</div>
+                    </Tile>
+                    <Tile class="metric-tile compact">
+                        <div class="metric-icon">🚧</div>
+                        <div class="metric-value">{stats?.obstacles ?? 0}</div>
+                        <div class="metric-unit">×</div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-icon">🛤️</div>
+                        <div class="metric-value">{currentPoint}</div>
+                        <span class="metric-unit">/{totalPoints}</span>
+                        <div class="metric-label">Hindernisse / Punkte</div>
                     </Tile>
                 </div>
             </Column><!--
             --><Column sm={4} md={8} lg={6} class="map-col">
                 <Tile class="map-tile">
-                    <MiniMap mapCrc={state?.map_crc} />
+                    <MiniMap mapCrc={state?.map_crc} mowPointIndex={pos?.mow_point_index ?? -1} />
                 </Tile>
             </Column>
         </Row>
@@ -201,7 +226,36 @@
         margin-bottom: 6px;
     }
 
-    :global(.status-tile),
+    :global(.status-tile) {
+        padding: 0.375rem 0.5rem !important;
+        min-height: 32px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 4px;
+        justify-content: flex-start;
+        margin-bottom: 0;
+    }
+
+    .status-icon {
+        font-size: 1rem;
+        line-height: 1;
+    }
+
+    .status-value {
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1;
+    }
+
+    .status-label {
+        font-size: 0.75rem;
+        color: #525252;
+        margin-left: auto;
+        white-space: nowrap;
+        line-height: 1;
+    }
+
     :global(.battery-tile) {
         padding: 0.375rem 0.5rem !important;
         min-height: 32px;
@@ -209,44 +263,15 @@
         flex-direction: row;
         align-items: center;
         gap: 4px;
-        justify-content: center;
+        justify-content: flex-start;
         margin-bottom: 0;
     }
 
-    .status-icon,
     .battery-icon {
         font-size: 1rem;
         line-height: 1;
     }
 
-    .status-value,
-    .battery-value {
-        font-size: 1rem;
-        font-weight: 600;
-        line-height: 1;
-    }
-
-    .battery-main {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        line-height: 1;
-    }
-
-    .battery-extra {
-        font-size: 0.625rem;
-        color: #525252;
-        line-height: 1;
-    }
-
-    .status-unit,
-    .battery-unit {
-        font-size: 0.75rem;
-        color: #525252;
-        line-height: 1;
-    }
-
-    .status-label,
     .battery-label {
         font-size: 0.75rem;
         color: #525252;
@@ -255,11 +280,19 @@
         line-height: 1;
     }
 
-    .status-value,
-    .battery-value {
-        font-size: 0.875rem;
-        font-weight: 600;
-        line-height: 1;
+    @media (max-width: 960px) {
+        :global(.status-tile),
+        :global(.battery-tile) {
+            padding: 0.25rem 0.5rem !important;
+            min-height: 28px;
+            gap: 3px;
+            justify-content: center;
+        }
+
+        .status-value,
+        .battery-label {
+            display: none;
+        }
     }
 
     :global(.metrics-row) {
@@ -295,6 +328,7 @@
             flex-direction: column !important;
             flex-wrap: nowrap !important;
             flex: 1 1 auto !important;
+            min-height: 0 !important;
         }
 
         :global(.metrics-row .metrics-col),
@@ -305,10 +339,61 @@
             padding-right: 8px;
         }
 
+        :global(.metrics-row .map-col) {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            display: flex;
+            flex-direction: column;
+        }
+
         :global(.map-tile) {
-            height: 35vh;
-            min-height: 180px;
-            flex: 1 1 auto;
+            height: auto !important;
+            min-height: 140px !important;
+            max-height: none !important;
+            flex: 1 1 auto !important;
+            overflow: hidden !important;
+        }
+
+        :global(.map-tile > div) {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            height: auto !important;
+        }
+
+        .sensor-strip {
+            flex: 0 0 auto !important;
+            padding: 0 8px;
+        }
+
+        :global(.sensor-strip .bx--tile) {
+            padding: 0 !important;
+            min-height: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        .sensor-row {
+            gap: 8px;
+            padding: 0 8px;
+        }
+
+        .sensor-group {
+            gap: 2px;
+        }
+
+        .sensor-dot {
+            width: 24px;
+            height: 24px;
+            font-size: 0.5rem;
+        }
+
+        .sensor-divider {
+            height: 24px;
+        }
+
+        .sensor-title {
+            display: none;
         }
     }
 
@@ -336,11 +421,20 @@
         justify-content: flex-start;
     }
 
+    @media (min-width: 961px) {
+        :global(.map-tile) {
+            padding: 0 !important;
+            flex: 1 1 auto;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+    }
+
     :global(.map-tile) {
         padding: 0 !important;
-        flex: 1 1 auto;
-        height: 100%;
-        min-height: 0;
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -370,6 +464,34 @@
         line-height: 1;
     }
 
+    .metric-divider {
+        width: 1px;
+        height: 18px;
+        background: #e0e0e0;
+        margin: 0 2px;
+    }
+
+    .metric-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        font-size: 0.75rem;
+        line-height: 1.1;
+    }
+
+    .stack-row {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+
+    .stack-label {
+        font-size: 0.625rem;
+        color: #8d8d8d;
+        text-transform: uppercase;
+        min-width: 1.25rem;
+    }
+
     .metric-label {
         font-size: 0.75rem;
         color: #525252;
@@ -390,7 +512,15 @@
         }
 
         .metric-value {
-            font-size: 1.25rem;
+            font-size: 1rem;
+        }
+
+        .metric-stack {
+            font-size: 0.7rem;
+        }
+
+        .stack-label {
+            font-size: 0.6rem;
         }
 
         .top-grid {
@@ -404,23 +534,23 @@
             gap: 3px;
         }
 
-        .status-value,
-        .battery-value {
-            font-size: 0.875rem;
-        }
-
-        .battery-main {
-            align-items: center;
-        }
-
         .status-label,
         .battery-label {
             display: none;
         }
 
         :global(.map-tile) {
-            height: 40vh;
-            max-height: none;
+            height: auto !important;
+            min-height: 140px !important;
+            max-height: none !important;
+            flex: 1 1 auto !important;
+            overflow: hidden !important;
+        }
+
+        :global(.map-tile > div) {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            height: auto !important;
         }
     }
 
@@ -436,7 +566,12 @@
     }
 
     :global(.sensor-strip .bx--tile) {
-        padding: 0.25rem 0.75rem !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
 
     .sensor-row {

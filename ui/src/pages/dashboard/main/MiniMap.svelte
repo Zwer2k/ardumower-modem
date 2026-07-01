@@ -6,12 +6,15 @@
     import { socketStore } from '../../../stores/socket';
 
     export let mapCrc: number | null | undefined = null;
+    export let mowPointIndex: number = -1;
 
     $: map = $MapStore?.map;
     $: presentation = $MapStore?.presentation;
     $: mowerPos = $socketStore?.state?.position ?? null;
     $: track = $drivenTrackStore;
     $: mapRotation = $socketStore?.currentMapMeta?.rotation ?? 0;
+    $: waypoints = map?.waypoints?.points ?? [];
+    $: completedIndex = mowPointIndex ?? -1;
 
     $: mx = mowerPos?.x ?? 0;
     $: my = mowerPos != null ? -mowerPos.y : 0;
@@ -22,24 +25,76 @@
     let cleanup: (() => void) | null = null;
     let compassOffset = 0;
 
-    $: viewBoxValid = isViewBoxValid(presentation?.viewBox);
+    $: hasAnyMapData = (map?.perimeter?.points?.length ?? 0) > 0 ||
+                         (map?.waypoints?.points?.length ?? 0) > 0 ||
+                         (map?.dockpoints?.points?.length ?? 0) > 0 ||
+                         (map?.exclusions ?? []).some((ex) => (ex.points?.length ?? 0) > 0);
 
-    $: transformAttr = viewBoxValid
-        ? `translate(${currentTransform.x.toFixed(4)}, ${currentTransform.y.toFixed(4)}) scale(${currentTransform.k.toFixed(4)})`
+    $: viewBoxValid = isViewBoxValid(presentation?.viewBox);
+    $: derivedViewBox = deriveViewBox(map, presentation?.viewBox);
+    $: safeViewBox = viewBoxValid ? presentation?.viewBox : derivedViewBox;
+
+    $: transformAttr = viewBoxValid || derivedViewBox !== '0 0 1 1'
+        ? `translate(${safeNumber(currentTransform.x).toFixed(4)}, ${safeNumber(currentTransform.y).toFixed(4)}) scale(${safeNumber(currentTransform.k).toFixed(4)})`
         : '';
 
-    $: vb = viewBoxValid && presentation?.viewBox ? presentation.viewBox.split(/\s+/).map(Number) : [0, 0, 1, 1];
-    $: cx = vb[0] + vb[2] / 2;
-    $: cy = vb[1] + vb[3] / 2;
+    $: vb = safeViewBox.split(/\s+/).map(Number);
+    $: cx = safeNumber(vb[0] + vb[2] / 2);
+    $: cy = safeNumber(vb[1] + vb[3] / 2);
     $: totalRotation = mapRotation + compassOffset;
-    $: rotationAttr = viewBoxValid && totalRotation
-        ? `rotate(${totalRotation}, ${cx}, ${cy})`
+    $: rotationAttr = (viewBoxValid || derivedViewBox !== '0 0 1 1') && Number.isFinite(totalRotation)
+        ? `rotate(${safeNumber(totalRotation).toFixed(4)}, ${cx.toFixed(4)}, ${cy.toFixed(4)})`
         : '';
 
     function isViewBoxValid(viewBox: string | undefined): boolean {
         if (!viewBox) return false;
         const parts = viewBox.split(/\s+/).map(Number);
-        return parts.length === 4 && parts.every((n) => Number.isFinite(n));
+        if (parts.length !== 4) return false;
+        const max = 1e9;
+        const [x, y, w, h] = parts;
+        return (
+            Number.isFinite(x) && Math.abs(x) < max &&
+            Number.isFinite(y) && Math.abs(y) < max &&
+            Number.isFinite(w) && Math.abs(w) < max && w > 0 &&
+            Number.isFinite(h) && Math.abs(h) < max && h > 0
+        );
+    }
+
+    function deriveViewBox(map: any, viewBox: string | undefined): string {
+        if (isViewBoxValid(viewBox)) return viewBox!;
+
+        const points: { x: number; y: number }[] = [];
+        for (const arr of [
+            map?.perimeter?.points ?? [],
+            map?.waypoints?.points ?? [],
+            map?.dockpoints?.points ?? [],
+            ...(map?.exclusions ?? []).map((ex: any) => ex.points ?? []),
+        ]) {
+            for (const p of arr) {
+                if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+                    points.push({ x: p.x, y: p.y });
+                }
+            }
+        }
+
+        if (points.length === 0) return '0 0 1 1';
+
+        const xs = points.map((p) => p.x);
+        const ys = points.map((p) => p.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const padding = 1;
+        const w = Math.max(maxX - minX, 0.001) + padding * 2;
+        const h = Math.max(maxY - minY, 0.001) + padding * 2;
+        const x = minX - padding;
+        const y = minY - padding;
+        return `${x} ${y} ${w} ${h}`;
+    }
+
+    function safeNumber(n: number): number {
+        return Number.isFinite(n) ? n : 0;
     }
 
     function attachZoom(node: SVGSVGElement) {
@@ -53,7 +108,7 @@
         return () => sel.on('.zoom', null);
     }
 
-    $: if (svgEl && viewBoxValid) {
+    $: if (svgEl && (viewBoxValid || derivedViewBox !== '0 0 1 1')) {
         cleanup = attachZoom(svgEl);
     } else if (cleanup) {
         cleanup();
@@ -127,7 +182,7 @@
 </script>
 
 <div class="mini-map">
-    {#if map?.perimeter?.points?.length > 0 && viewBoxValid}
+    {#if hasAnyMapData}
         <div class="map-status" class:synced={mapCrc != null}>
             {mapCrc != null ? 'Karte OK' : 'Keine Karte'}
         </div>
@@ -141,15 +196,25 @@
             </svg>
         </button>
         <button class="zoom-reset" on:click={resetZoom} title="Zoom zurücksetzen">⟲</button>
-        <svg bind:this={svgEl} viewBox={presentation.viewBox} preserveAspectRatio="xMidYMid meet">
+        <svg bind:this={svgEl} viewBox={safeViewBox} preserveAspectRatio="xMidYMid meet">
             <g transform={transformAttr}>
                 <g transform={rotationAttr}>
-                    <polygon
-                        points={map.perimeter.points.map((p) => `${p.x},${p.y}`).join(' ')}
-                        fill="rgba(36, 161, 72, 0.15)"
-                        stroke="#24a148"
-                        stroke-width="0.04"
-                    />
+                    {#if map.perimeter?.points?.length > 0}
+                        <polygon
+                            points={map.perimeter.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                            fill="rgba(36, 161, 72, 0.15)"
+                            stroke="#24a148"
+                            stroke-width="0.04"
+                        />
+                    {:else if derivedViewBox !== '0 0 1 1'}
+                        {@const [vx, vy, vw, vh] = derivedViewBox.split(/\s+/).map(Number)}
+                        <polygon
+                            points={`${vx},${vy} ${vx + vw},${vy} ${vx + vw},${vy + vh} ${vx},${vy + vh}`}
+                            fill="rgba(36, 161, 72, 0.08)"
+                            stroke="#24a148"
+                            stroke-width="0.04"
+                        />
+                    {/if}
 
                 {#each map.exclusions ?? [] as ex}
                     <polygon
@@ -172,16 +237,26 @@
                 {/if}
 
                 {#if map.waypoints?.points?.length}
-                    <polyline
-                        points={map.waypoints.points.map((p) => `${p.x},${p.y}`).join(' ')}
-                        fill="none"
-                        stroke="#6929c4"
-                        stroke-width="0.015"
-                        stroke-dasharray="0.15 0.10"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                {/if}
+                    {#each map.waypoints.points as wp, i}
+                        {@const done = i <= completedIndex}
+                        <circle
+                            cx={wp.x}
+                            cy={wp.y}
+                            r={done ? 0.06 : 0.03}
+                            fill={done ? '#8d8d8d' : '#a8a8a8'}
+                            stroke={done ? '#8d8d8d' : '#a8a8a8'}
+                            stroke-width="0.01"
+                            />
+                        {/each}
+                        <polyline
+                            points={map.waypoints.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                            fill="none"
+                            stroke="#c6c6c6"
+                            stroke-width="0.015"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    {/if}
 
                 </g>
                 <g transform={rotationAttr}>

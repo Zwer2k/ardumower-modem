@@ -95,8 +95,14 @@ const calculatePresentation = (
 const calculateBoundary = (
   value: Point[],
 ): { a: Point; b: Point; center: Point } => {
-  const allX: number[] = value.map(({ x }) => x);
-  const allY: number[] = value.map(({ y }) => y);
+  const allX: number[] = value.map(({ x }) => x).filter(Number.isFinite);
+  const allY: number[] = value.map(({ y }) => y).filter(Number.isFinite);
+
+  if (allX.length === 0 || allY.length === 0) {
+    const origin: Point = { x: 0, y: 0 };
+    return { a: origin, b: origin, center: origin };
+  }
+
   const extremes = {
     x: [smallest(allX), largest(allX)],
     y: [smallest(allY), largest(allY)],
@@ -139,10 +145,8 @@ const calculateRotation = (m: Map): number => {
   return sorted[0].orientation;
 };
 
-const smallest = (a: number[]): number =>
-  a.reduce((a, b) => (a < b ? a : b), Number.MAX_VALUE);
-const largest = (a: number[]): number =>
-  a.reduce((a, b) => (a > b ? a : b), Number.MIN_VALUE);
+const smallest = (a: number[]): number => a.reduce((a, b) => (a < b ? a : b), Infinity);
+const largest = (a: number[]): number => a.reduce((a, b) => (a > b ? a : b), -Infinity);
 const middle = (a: number[]): number =>
   Math.min(a[0], a[1]) + Math.abs(a[0] - a[1]) / 2;
 

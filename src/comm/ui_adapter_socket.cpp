@@ -839,7 +839,7 @@ void UiSocketHandler::processMapChunkSend() {
 bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize, bool reset) {
   const size_t maxJsonSize = 2048;
   size_t total = points.size();
-  if (!reset && startIdx > total || (startIdx == total && total > 0)) return false;
+  if (!reset && (startIdx > total || (startIdx == total && total > 0))) return false;
   // Vor Serialisierung prüfen ob Ziel-Client sendefähig ist
   if (!clientCanSend(clientId)) return false;
   JsonDocument doc;
@@ -848,6 +848,7 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
   auto dataObj = doc["data"].to<JsonObject>();
   if (reset) {
     dataObj["reset"] = true;
+    dataObj["pointType"] = static_cast<int>(pointType);
   } else {
     dataObj["startIndex"] = (int)startIdx;
     dataObj["total"] = (int)total;

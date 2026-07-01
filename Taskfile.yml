@@ -79,7 +79,7 @@ tasks:
           $f_cpu_prop \
           --build-property build.partitions="$partitions" \
           --build-property upload.maximum_size="$upload_size" \
-          --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} $git_tag_defines"
+          --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} $git_tag_defines -Isrc -Isrc/hal -Isrc/comm -Isrc/device -Isrc/domain -Isrc/sys -Isrc/ota -Isrc/stm32ota"
       else
         target_fqbn=esp32:esp32:lolin32
         partitions=min_spiffs
@@ -99,7 +99,7 @@ tasks:
           $f_cpu_prop \
           --build-property build.partitions="$partitions" \
           --build-property upload.maximum_size="$upload_size" \
-          --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} -DENABLE_PS4_CONTROLLER $git_tag_defines"
+          --build-property "build.extra_flags=-DESP32 -D{{.VARIANT}} -DENABLE_PS4_CONTROLLER $git_tag_defines -Isrc -Isrc/hal -Isrc/comm -Isrc/device -Isrc/domain -Isrc/sys -Isrc/ota -Isrc/stm32ota"
       fi
     deps:
     - task: package-ui
