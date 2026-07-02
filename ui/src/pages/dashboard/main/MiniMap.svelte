@@ -248,7 +248,7 @@
                 {#if map.waypoints?.points?.length}
                     {@const wpCount = map.waypoints.points.length}
                     {@const lastDone = Math.min(completedIndex + 1, wpCount - 1)}
-                    {#if lastDone > 0}
+                    {#if lastDone > 0 && isMapSynced}
                         <polyline
                             points={map.waypoints.points.slice(0, lastDone + 1).map((p) => `${p.x},${p.y}`).join(' ')}
                             fill="none"
@@ -270,16 +270,18 @@
                     {/if}
                     {#each map.waypoints.points as wp, i}
                         {@const done = i <= completedIndex}
-                        <circle
-                            cx={wp.x}
-                            cy={wp.y}
-                            r={done ? 0.035 : 0.03}
-                            fill={done ? '#333333' : '#a8a8a8'}
-                            stroke={done ? '#333333' : '#a8a8a8'}
-                            stroke-width="0.01"
+                        {#if !done || isMapSynced}
+                            <circle
+                                cx={wp.x}
+                                cy={wp.y}
+                                r={done ? 0.035 : 0.03}
+                                fill={done ? '#333333' : '#a8a8a8'}
+                                stroke={done ? '#333333' : '#a8a8a8'}
+                                stroke-width="0.01"
                             />
-                        {/each}
-                    {/if}
+                        {/if}
+                    {/each}
+                {/if}
 
                 </g>
                 <g transform={rotationAttr}>

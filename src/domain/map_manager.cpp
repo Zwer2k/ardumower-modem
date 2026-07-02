@@ -36,6 +36,18 @@ namespace ArduMower {
                 return false;
             }
             loadIndex();
+            // Fallback/Reparatur: garantiere eine gültige activeId. Wenn keine
+            // aktive Karte markiert ist, oder die gespeicherte ID auf eine
+            // gelöschte Karte verweist, automatisch die erste vorhandene Karte
+            // als aktiv/Default setzen. Damit bleibt die Default-Markierung in
+            // der Dropdown nach einem Reboot erhalten.
+            if (!_index.maps.empty()) {
+                if (_index.activeId.length() == 0 || findMeta(_index.activeId) == nullptr) {
+                    _index.activeId = _index.maps[0].id;
+                    Log(INFO, "%s begin: activeId ungültig/leer, setze Fallback auf %s", _LOG_, _index.activeId.c_str());
+                    saveIndex();
+                }
+            }
             _initialized = true;
             return true;
         }
