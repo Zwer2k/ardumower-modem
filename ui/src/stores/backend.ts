@@ -31,11 +31,10 @@ function createBackendSettings() {
 
   const writeToBackend = async (it: Settings) => maybeSet(SettingsService.save(it, original))
 
-  loadFromBackend()
-
   return {
     subscribe,
     set,
+    load: loadFromBackend,
     commit: (it: Settings) => writeToBackend(it),
   };
 }

@@ -4,12 +4,22 @@ import { Invalid } from "./stores/invalid";
 import { InfoStore } from "./stores/info";
 import { StatusStore } from "./stores/status";
 import { Error as ErrorStore } from "./stores/error";
+import { browser } from "$app/environment";
+import { BackendSettings } from "./stores/backend";
 
 const apiPath = (p: string) => `/api/modem/${p}`;
 
 class SettingsServiceClass {
   constructor() {
-    this.loadFirstInfo();
+    // Initial load is now triggered explicitly in +layout.svelte onMount
+    // to avoid SSR fetch issues.
+  }
+
+  public init() {
+    if (browser) {
+      this.loadFirstInfo();
+      BackendSettings.load();
+    }
   }
 
   public async load(): Promise<Settings> {

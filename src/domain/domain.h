@@ -11,6 +11,14 @@ namespace ArduMower
   {
     namespace Robot
     {
+      struct UploadProgress {
+        int pct = 0;
+        String label;
+        int done = 0;
+        int total = 0;
+        int totalDone = 0;
+        int totalTotal = 0;
+      };
       class Properties
       {
       public:
@@ -433,6 +441,7 @@ namespace ArduMower
         virtual bool uploadMapToMower() = 0;
         virtual bool uploadMapToMowerActive() { return false; }
         virtual bool uploadMapToMowerSuccess() { return false; }
+        virtual UploadProgress uploadProgress() { return UploadProgress(); }
         virtual bool customCmd(String cmd) = 0;
       };
     }

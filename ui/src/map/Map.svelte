@@ -160,13 +160,8 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     socketService.sendSetActiveMap(effectiveMapId);
   }
 
-  // ─── Draw mode ───────────────────────────────────────────────────────────
-  $: opPct = $socketStore.state?.progressPct || 0;
-  $: opMsg = $socketStore.state?.progressMsg || '';
-  $: opActive = !!$socketStore.state?.progressOp;
-  $: busy = opActive && opPct < 100;
-
   // ─── Point counts per segment ─────────────────────────────────────────────
+  $: busy = !!$socketStore.state?.progressOp;
   $: perimeterPoints = $MapStore.map?.perimeter.points.length ?? 0;
   $: exclusionPoints = $MapStore.map?.exclusions.map(e => e.points.length) ?? [];
   $: dockpointsPoints = $MapStore.map?.dockpoints.points.length ?? 0;
@@ -1058,11 +1053,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
         </Row>
       {/if}
     </Grid>
-    {#if busy}
-      <div class="progress-bar-container" title="{opMsg}">
-        <div class="progress-bar {opPct === 0 ? 'indeterminate' : ''}" style="width: {opPct > 0 ? opPct + '%' : '0%'}"></div>
-      </div>
-    {/if}
   </div>
   <div class="map-canvas-wrapper">
     <div class="map-top-right">
@@ -1357,41 +1347,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
       position: static;
       margin: 0;
     }
-  }
-
-  .progress-bar-container {
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 6px;
-    margin: 0;
-    background: #e0e0e0;
-    overflow: hidden;
-    z-index: 10;
-  }
-
-  .progress-bar {
-    height: 100%;
-    background: #4caf50;
-    transition: width 0.5s ease;
-    border-radius: 0;
-  }
-
-  .progress-bar.indeterminate {
-    width: 100% !important;
-    background: linear-gradient(90deg, transparent, #66bb6a, #4caf50, #66bb6a, transparent);
-    background-size: 200% 100%;
-    animation: progress-indeterminate 1.5s ease-in-out infinite;
-  }
-
-  @keyframes progress-indeterminate {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
-  .progress-label {
-    display: none;
   }
 
   .map-top-right {

@@ -203,7 +203,7 @@
         <!-- Schnellaktionen -->
         <div class="quick-actions">
             {#if hasMapData && !isMapSynced}
-                <Button kind="primary" icon={Upload} size="small" class="action-upload" on:click={() => socketService.sendUploadMap()}>Upload</Button>
+                <Button kind="primary" icon={Upload} size="small" class="action-upload" on:click={() => socketService.sendUploadMap()} />
             {/if}
             <Button kind="primary" icon={PlayFilledAlt} size="small" class="action-start" disabled={hasMapData && !isMapSynced} on:click={() => sendCmd('start')} />
             <Button kind="danger" icon={StopFilledAlt} size="small" class="action-stop" disabled={hasMapData && !isMapSynced} on:click={() => sendCmd('stop')} />

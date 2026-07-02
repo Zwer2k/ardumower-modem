@@ -32,11 +32,17 @@
     $: storedCrc = $socketStore?.currentMapMeta?.crc ?? 0;
     $: mowerCrc = $socketStore?.state?.map_crc ?? 0;
     $: isMapSynced = mowerCrc !== 0 && storedCrc !== 0 && mowerCrc === storedCrc;
-    $: mapStatus = !hasAnyMapData
-        ? { text: 'Keine Karte', synced: false, warn: false }
-        : isMapSynced
-            ? { text: 'Karte synchron', synced: true, warn: false }
-            : { text: 'Karte nicht synchron', synced: false, warn: true };
+    $: uploadOp = ($socketStore?.state as any)?.progressOp;
+    $: uploadMsg = $socketStore?.state?.progressMsg ?? '';
+    $: uploadPct = $socketStore?.state?.progressPct ?? 0;
+    $: isUploading = uploadOp === 'upload' && uploadPct < 100;
+    $: mapStatus = isUploading
+        ? { text: uploadMsg || 'Hochladen...', synced: false, warn: false }
+        : !hasAnyMapData
+            ? { text: 'Keine Karte', synced: false, warn: false }
+            : isMapSynced
+                ? { text: 'Karte synchron', synced: true, warn: false }
+                : { text: 'Karte nicht synchron', synced: false, warn: true };
 
     $: viewBoxValid = isViewBoxValid(presentation?.viewBox);
     $: derivedViewBox = deriveViewBox(map, presentation?.viewBox);
@@ -212,14 +218,6 @@
                         <polygon
                             points={map.perimeter.points.map((p) => `${p.x},${p.y}`).join(' ')}
                             fill="rgba(36, 161, 72, 0.15)"
-                            stroke="#24a148"
-                            stroke-width="0.04"
-                        />
-                    {:else if derivedViewBox !== '0 0 1 1'}
-                        {@const [vx, vy, vw, vh] = derivedViewBox.split(/\s+/).map(Number)}
-                        <polygon
-                            points={`${vx},${vy} ${vx + vw},${vy} ${vx + vw},${vy + vh} ${vx},${vy + vh}`}
-                            fill="rgba(36, 161, 72, 0.08)"
                             stroke="#24a148"
                             stroke-width="0.04"
                         />

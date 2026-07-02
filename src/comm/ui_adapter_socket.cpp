@@ -996,14 +996,26 @@ void UiSocketHandler::uploadMapToMower() {
     return;
   }
   _uploadToMowerPending = true;
-  sendProgress("upload", 0, "Uploading map...");
+  sendProgress("upload", 0, "Uploading map");
   sendData(ResponseDataType::mowerState, NULL, true);
   Log(INFO, "%s uploadMapToMower: started", _LOG_);
 }
 
 void UiSocketHandler::processUploadToMower() {
   if (!_uploadToMowerPending) return;
-  if (_cmd.uploadMapToMowerActive()) return;
+  if (_cmd.uploadMapToMowerActive()) {
+    auto p = _cmd.uploadProgress();
+    if (p.label.length() > 0) {
+      String msg = p.label;
+      if (p.total > 0) msg += " " + String(p.done) + "/" + String(p.total);
+      if (p.totalTotal > 0) {
+        if (p.total > 0) msg += " (" + String(p.totalDone) + "/" + String(p.totalTotal) + ")";
+        else msg += " " + String(p.totalDone) + "/" + String(p.totalTotal);
+      }
+      sendProgress("upload", p.pct, msg);
+    }
+    return;
+  }
 
   _uploadToMowerPending = false;
   if (_cmd.uploadMapToMowerSuccess()) {

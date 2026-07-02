@@ -12,6 +12,81 @@
 
 using namespace ArduMower::Modem;
 
+ArduMower::Domain::Robot::UploadProgress MowerAdapter::uploadProgress() {
+  ArduMower::Domain::Robot::UploadProgress p;
+  if (!_mapUploadState.active) return p;
+
+  auto &st = _mapUploadState;
+  auto &snap = st.snapshot;
+
+  int exclusionTotal = 0;
+  for (const auto &ex : snap.exclusions) exclusionTotal += ex.size();
+  p.totalTotal = (int)snap.perimeter.size() + exclusionTotal + (int)snap.dockpoints.size() + (int)snap.waypoints.size();
+
+  int previousDone = 0;
+  switch (st.phase) {
+    case MapUploadState::start:
+      p.label = "Start upload";
+      p.total = 0;
+      break;
+    case MapUploadState::perimeter:
+      p.label = "Perimeter";
+      p.done = (int)st.pointIdx;
+      p.total = (int)snap.perimeter.size();
+      break;
+    case MapUploadState::exclusions: {
+      p.label = "Exclusion " + String(st.polygonIdx + 1);
+      p.done = (int)st.pointIdx;
+      p.total = (st.polygonIdx < snap.exclusions.size()) ? (int)snap.exclusions[st.polygonIdx].size() : 0;
+      previousDone = (int)snap.perimeter.size();
+      for (size_t i = 0; i < st.polygonIdx && i < snap.exclusions.size(); i++) previousDone += (int)snap.exclusions[i].size();
+      break;
+    }
+    case MapUploadState::dockpoints:
+      p.label = "Dockpoints";
+      p.done = (int)st.pointIdx;
+      p.total = (int)snap.dockpoints.size();
+      previousDone = (int)snap.perimeter.size() + exclusionTotal;
+      break;
+    case MapUploadState::waypoints:
+      p.label = "Waypoints";
+      p.done = (int)st.pointIdx;
+      p.total = (int)snap.waypoints.size();
+      previousDone = (int)snap.perimeter.size() + exclusionTotal + (int)snap.dockpoints.size();
+      break;
+    case MapUploadState::counts:
+      p.label = "Counts";
+      p.total = 0;
+      previousDone = p.totalTotal;
+      break;
+    case MapUploadState::exclusionSizes:
+      p.label = "Exclusion sizes";
+      p.done = (int)st.polygonIdx;
+      p.total = (int)snap.exclusions.size();
+      previousDone = p.totalTotal;
+      break;
+    case MapUploadState::finalizing:
+      p.label = "Finalizing";
+      p.total = 0;
+      previousDone = p.totalTotal;
+      break;
+    default:
+      p.label = "Uploading map";
+      p.total = 0;
+      break;
+  }
+  p.totalDone = previousDone + p.done;
+  if (p.totalDone > p.totalTotal) p.totalDone = p.totalTotal;
+
+  if (p.total > 0) {
+    p.pct = (int)(p.done * 100L / p.total);
+    if (p.pct >= 100) p.pct = 99; // 100% reserved for done/failed
+  } else {
+    p.pct = 0;
+  }
+  return p;
+}
+
 void processCSVResponse(const char* res, std::function<void(int, const char*, size_t)> fn);
 void processCSVResponse(const String& res, std::function<void(int, const char*, size_t)> fn);
 

@@ -80,17 +80,6 @@ const calculatePresentation = (
   boundary.b.y += p.padding;
   const viewBox = `${boundary.a.x} ${boundary.a.y} ${boundary.b.x - boundary.a.x} ${boundary.b.y - boundary.a.y}`;
 
-  // const allX: number[] = m.perimeter.points.map(({ x }) => x)
-  // const allY: number[] = m.perimeter.points.map(({ y }) => y)
-  // const extremes = { x: [smallest(allX), largest(allX)], y: [smallest(allY), largest(allY)] }
-  // const center: Point = { x: middle(extremes.x), y: middle(extremes.y) }
-  // const boundary = {
-  //   a: { x: extremes.x[0], y: extremes.y[0] },
-  //   b: { x: extremes.x[1], y: extremes.y[1] },
-  // }
-
-  // const viewBox = `${extremes.x[0]} ${extremes.y[0]} ${extremes.x[1] - extremes.x[0]} ${extremes.y[1] - extremes.y[0]}`;
-
   return { center, boundary, rotation, viewBox };
 };
 
@@ -189,6 +178,16 @@ function updateMapStore() {
     dockpoints: { points: [] },
     waypoints: { points: [] },
   };
+  let lastSerialized: string | null = null;
+
+  function setMap() {
+    const presentation = calculatePresentation(map);
+    const serialized = JSON.stringify({ map, presentation });
+    if (serialized === lastSerialized) return;
+    lastSerialized = serialized;
+    MapStore.set({ map, presentation });
+    console.log("[MapService] Map updated:", { map, presentation });
+  }
 
   perimeterStore.subscribe((arr) => {
     map.perimeter = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
@@ -208,13 +207,12 @@ function updateMapStore() {
     map.waypoints = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
     setMap();
   });
-
-  function setMap() {
-    const presentation = calculatePresentation(map);
-    MapStore.set({ map, presentation });
-    console.log("[MapService] Map updated:", { map, presentation });
-  }
 }
 
-updateMapStore();
+if (!import.meta.hot || !import.meta.hot.data.updateMapStoreCalled) {
+  updateMapStore();
+  if (import.meta.hot) {
+    import.meta.hot.data.updateMapStoreCalled = true;
+  }
+}
 
