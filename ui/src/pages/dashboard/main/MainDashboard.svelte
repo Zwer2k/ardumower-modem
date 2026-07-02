@@ -4,6 +4,7 @@
     import StopFilledAlt from "carbon-icons-svelte/lib/StopFilledAlt.svelte";
     import Home from "carbon-icons-svelte/lib/Home.svelte";
     import SkipForwardFilled from "carbon-icons-svelte/lib/SkipForwardFilled.svelte";
+    import Upload from "carbon-icons-svelte/lib/Upload.svelte";
     import { socketStore, socketService } from '../../../stores/socket';
     import { page } from '$app/stores';
     import { browser } from '$app/environment';
@@ -72,6 +73,10 @@
         {@const pos = state?.position}
         {@const totalPoints = ($MapStore?.map?.waypoints?.points?.length ?? 0)}
         {@const currentPoint = (pos?.mow_point_index ?? -1) >= 0 ? pos.mow_point_index + 1 : 0}
+        {@const storedCrc = $socketStore?.currentMapMeta?.crc ?? 0}
+        {@const mowerCrc = state?.map_crc ?? 0}
+        {@const hasMapData = ($MapStore?.map?.perimeter?.points?.length ?? 0) > 0}
+        {@const isMapSynced = mowerCrc !== 0 && storedCrc !== 0 && mowerCrc === storedCrc}
 
         <Row narrow class="metrics-row">
             <Column sm={4} md={8} lg={5} class="metrics-col">
@@ -197,10 +202,13 @@
 
         <!-- Schnellaktionen -->
         <div class="quick-actions">
-            <Button kind="primary" icon={PlayFilledAlt} size="small" class="action-start" on:click={() => sendCmd('start')} />
-            <Button kind="danger" icon={StopFilledAlt} size="small" class="action-stop" on:click={() => sendCmd('stop')} />
-            <Button kind="secondary" icon={Home} size="small" class="action-dock" on:click={() => sendCmd('dock')} />
-            <Button kind="tertiary" icon={SkipForwardFilled} size="small" class="action-skip" on:click={() => sendCmd('skipWaypoint')} />
+            {#if hasMapData && !isMapSynced}
+                <Button kind="primary" icon={Upload} size="small" class="action-upload" on:click={() => socketService.sendUploadMap()}>Upload</Button>
+            {/if}
+            <Button kind="primary" icon={PlayFilledAlt} size="small" class="action-start" disabled={hasMapData && !isMapSynced} on:click={() => sendCmd('start')} />
+            <Button kind="danger" icon={StopFilledAlt} size="small" class="action-stop" disabled={hasMapData && !isMapSynced} on:click={() => sendCmd('stop')} />
+            <Button kind="secondary" icon={Home} size="small" class="action-dock" disabled={hasMapData && !isMapSynced} on:click={() => sendCmd('dock')} />
+            <Button kind="tertiary" icon={SkipForwardFilled} size="small" class="action-skip" disabled={hasMapData && !isMapSynced} on:click={() => sendCmd('skipWaypoint')} />
         </div>
     {/if}
 </div>
