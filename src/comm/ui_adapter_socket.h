@@ -31,6 +31,7 @@ namespace ArduMower
         navigateTo,
         setMap,
         uploadMap,
+        robotCommand,
         setMowSettings,
         requestMowSettings,
         clearWaypoints,
@@ -147,6 +148,14 @@ namespace ArduMower
         void sendProgress(String operation, int progress, String message = "");
         void requestStats();
         void requestStatsNow();
+        void cmdStart();
+        void cmdStop();
+        void cmdDock();
+        void cmdSkipWaypoint();
+        void cmdReboot();
+        void cmdPowerOff();
+        void cmdMowerEnabled(bool enabled);
+        void cmdMowerAuto();
         void sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
         void setMap(const ArduMower::Domain::Robot::MowerMap &map);
         void setMowSettings(const ArduMower::Domain::Robot::MowSettings &s);
@@ -164,6 +173,11 @@ namespace ArduMower
         uint32_t lastWsConnectionEvent() const { return _lastWsConnectionEvent; }
         void markClientActivity() { _lastClientActivity = millis(); }
         void markWsConnectionEvent() { _lastWsConnectionEvent = millis(); }
+
+        // Defer first map chunk send after a connect so the TCP/WS queues are
+        // ready and we do not corrupt the first few frames.
+        static const uint32_t mapSendDelayMs = 500;
+        uint32_t _mapSendPendingUntil = 0;
 #ifdef MOWER_TERMINAL
         void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
 #endif

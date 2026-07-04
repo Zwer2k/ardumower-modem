@@ -17,6 +17,49 @@ uint32_t defaultStateUpdateInterval = 5000;
 
 using namespace ArduMower::Modem::Http;
 
+static void sanitizeUtf8InPlace(String& str) {
+  const size_t oldLen = str.length();
+  size_t i = 0;
+  for (; i < oldLen; i++) {
+    unsigned char c = (unsigned char)str[i];
+    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
+      goto needs_work;
+    if (c >= 0x80)
+      goto needs_work;
+  }
+  return;
+
+needs_work:
+  size_t out = i;
+  if (i < oldLen) {
+    str.setCharAt(out++, '?');
+    i++;
+  }
+  for (; i < oldLen; i++) {
+    unsigned char c = (unsigned char)str[i];
+    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
+      str.setCharAt(out++, '?');
+    else if (c >= 0x80)
+      str.setCharAt(out++, '?');
+    else
+      str.setCharAt(out++, (char)c);
+  }
+  str.remove(out);
+}
+
+// Conservative heap guard: leave enough headroom so that the underlying TCP
+// stack and ESPAsyncWebServer can safely allocate frame headers and queue
+// nodes.  Queuing many messages when heap is low causes frame corruption
+// (observed as "Invalid frame header" / 0x81 prefix bytes inside payloads).
+static bool broadcastHeapOk(size_t payloadLen) {
+  const size_t minHeap = payloadLen * 2 + 8192;
+  if (ESP.getFreeHeap() < minHeap) {
+    Log(WARN, "%s broadcast heap too low (%u free) for %u byte payload, skipping", _LOG_, ESP.getFreeHeap(), (unsigned)payloadLen);
+    return false;
+  }
+  return true;
+}
+
 UiSocketItem::UiSocketItem(
   UiSocketHandler *socketHandler,
   AsyncWebSocketClient *client, 
@@ -27,19 +70,15 @@ UiSocketItem::UiSocketItem(
   yield();
   _socketHandler->sendData(ResponseDataType::desiredState, this, true);
   yield();
-  _socketHandler->sendData(ResponseDataType::map, this, true);
-  yield();
   _socketHandler->sendMapList(this);
   yield();
-  _socketHandler->sendBufferedLogTo(this, 5);
+  _socketHandler->sendBufferedLogTo(this, 2);
   yield();
   _socketHandler->sendDrivenTrack(this);
-#ifdef MOWER_TERMINAL
-  _socketHandler->sendBufferedTerminalTo(this, 5);
-#endif
-
-  // Request fresh stats from Teensy immediately (bypasses rate limit)
-  _socketHandler->requestStatsNow();
+  // Defer map chunks until the TCP/WS queues have drained.  Sending a large
+  // map snapshot immediately after connect causes frame corruption in
+  // ESPAsyncWebServer (observed as 0x81 prefix bytes inside payloads).
+  _socketHandler->_mapSendPendingUntil = millis() + UiSocketHandler::mapSendDelayMs;
 
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   // Send cached UBX data to new client if available
@@ -144,6 +183,33 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
 
   case RequestDataType::uploadMap:
     _socketHandler->uploadMapToMower();
+    break;
+
+  case RequestDataType::robotCommand:
+    {
+      String action = jsonData["action"] | "";
+      if (action == "start")
+        _socketHandler->cmdStart();
+      else if (action == "stop")
+        _socketHandler->cmdStop();
+      else if (action == "dock")
+        _socketHandler->cmdDock();
+      else if (action == "skipWaypoint")
+        _socketHandler->cmdSkipWaypoint();
+      else if (action == "reboot")
+        _socketHandler->cmdReboot();
+      else if (action == "poweroff")
+        _socketHandler->cmdPowerOff();
+      else if (action == "mowerEnabled") {
+        auto enabled = jsonData["enabled"];
+        if (enabled.isNull())
+          _socketHandler->cmdMowerAuto();
+        else
+          _socketHandler->cmdMowerEnabled(enabled.as<bool>());
+      }
+      else
+        Log(WARN, "%s robotCommand: unknown action %s", _LOG_, action.c_str());
+    }
     break;
 
    case RequestDataType::setMap:
@@ -292,10 +358,22 @@ bool UiSocketItem::sendText(String text)
   if (!_client->canSend())
     return false;
 
+  sanitizeUtf8InPlace(text);
+  const char *data = text.c_str();
+  size_t len = text.length();
+
   for (int attempt = 0; attempt < 3; ++attempt) {
     try {
-      if (_client->text(text.c_str())) {
+      if (_client->text(data, len)) {
         _socketHandler->markClientActivity();
+        // Wait briefly for the frame to leave the local queue.  Rapidly
+        // queueing another message before the TCP stack has picked up the
+        // previous one can corrupt the frame boundary in ESPAsyncWebServer
+        // (observed as continuation frames without a preceding text frame).
+        for (int wait = 0; wait < 5 && !_client->canSend(); ++wait) {
+          yield();
+          vTaskDelay(1 / portTICK_PERIOD_MS);
+        }
         return true;
       }
     } catch (...) {
@@ -422,6 +500,15 @@ void UiSocketHandler::loop()
 
   if (countConnectedClients() == 0)
     return;
+
+  // Start the deferred initial map chunk send once the connect burst has had
+  // time to drain.  _mapSendPendingUntil is reset in the WS_EVT_CONNECT path.
+  if (_mapSendPendingUntil != 0 && millis() - _mapSendPendingUntil < 0x80000000) {
+    if (millis() >= _mapSendPendingUntil) {
+      _mapSendPendingUntil = 0;
+      sendData(ResponseDataType::map, NULL, true);
+    }
+  }
 
 #if defined(ENABLE_LIVE_MAP) || defined(ENABLE_GPS_DASHBOARD)
   ubxLoop();
@@ -647,6 +734,12 @@ static void sanitizeUtf8InPlace(String& str);
 
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, bool force)
 {
+  // Serialize all non-map traffic while a chunked map transfer is in progress.
+  // ESPAsyncWebServer interleaves other frames with fragmented text frames,
+  // which violates the WebSocket spec and causes "previous message is unfinished".
+  if (dataType != ResponseDataType::map && mapChunkSendState.active) {
+    return;
+  }
   switch (dataType) {
     case ResponseDataType::mowerState: {
       auto state = _source.state();
@@ -932,6 +1025,9 @@ void UiSocketHandler::logToUiLoop()
   uint32_t now = millis();
   if (now - _lastLogSend < 100) return;
 
+  // Pausiere Log-Versand während Map-Chunk-Transfer aktiv ist
+  if (mapChunkSendState.active) return;
+
   for (auto &c : _ws->getClients()) {
     if (c.status() == WS_CONNECTED && !c.canSend())
       return;
@@ -947,6 +1043,8 @@ void UiSocketHandler::broadcastFlashProgress(size_t current, size_t total)
   int clients = countConnectedClients();
   Log(DBG, "UiSocket::broadcastFlashProgress(pct=%d, clients=%d)", pct, clients);
   if (clients == 0) return;
+  // Pausiere während Map-Chunk-Transfer aktiv ist
+  if (mapChunkSendState.active) return;
   JsonDocument doc;
   auto status = doc["status"].to<JsonObject>();
   status["progress"] = pct;
@@ -969,6 +1067,38 @@ bool UiSocketHandler::cmdToMower(String) {
   return false;
 }
 #endif
+
+void UiSocketHandler::cmdStart() {
+  _cmd.start();
+}
+
+void UiSocketHandler::cmdStop() {
+  _cmd.stop();
+}
+
+void UiSocketHandler::cmdDock() {
+  _cmd.dock();
+}
+
+void UiSocketHandler::cmdSkipWaypoint() {
+  _cmd.skipWaypoint();
+}
+
+void UiSocketHandler::cmdReboot() {
+  _cmd.reboot();
+}
+
+void UiSocketHandler::cmdPowerOff() {
+  _cmd.powerOff();
+}
+
+void UiSocketHandler::cmdMowerEnabled(bool enabled) {
+  _cmd.mowerEnabled(enabled);
+}
+
+void UiSocketHandler::cmdMowerAuto() {
+  _cmd.mowerAuto();
+}
 
 void UiSocketHandler::joystickMove(float linear, float angular) {
   _cmd.manualDrive(linear, angular);
@@ -1143,6 +1273,8 @@ static bool sendJsonDoc(UiSocketItem *item, JsonDocument &doc)
 
 void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks)
 {
+  // Pausiere Puffer-Log-Versand während Map-Chunk-Transfer aktiv ist
+  if (mapChunkSendState.active) return;
   uint16_t chunks = 0;
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
@@ -1162,6 +1294,8 @@ void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks)
 #ifdef MOWER_TERMINAL
 void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks)
 {
+  // Pausiere Terminal-Log-Versand während Map-Chunk-Transfer aktiv ist
+  if (mapChunkSendState.active) return;
   uint16_t chunks = 0;
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
@@ -1178,34 +1312,13 @@ void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChu
 }
 #endif
 
-static void sanitizeUtf8InPlace(String& str) {
-  for (size_t i = 0; i < str.length(); i++) {
-    unsigned char c = (unsigned char)str[i];
-    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
-      goto needs_work;
-    if (c >= 0x80)
-      goto needs_work;
-  }
-  return;
-
-needs_work:
-  String output;
-  output.reserve(str.length());
-  for (size_t i = 0; i < str.length(); i++) {
-    unsigned char c = (unsigned char)str[i];
-    if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
-      output += '?';
-    else if (c >= 0x80)
-      output += '?';
-    else
-      output += (char)c;
-  }
-  str = output;
-}
-
 template<typename T>
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force)
 {
+  // Serialize all non-map traffic while a chunked map transfer is in progress.
+  if (dataType != ResponseDataType::map && mapChunkSendState.active) {
+    return;
+  }
   if (!force && (data.timestamp == 0 || data.timestamp == oldDataTimestamp[dataType])) {
     return;
   }
@@ -1265,7 +1378,7 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
     sendTo->sendText(stateStr);
   } else {
     if (countConnectedClients() == 0) return;
-    if (!sendTextAllWithRetry(_ws, stateStr)) {
+    if (!broadcastHeapOk(stateStr.length()) || !sendTextAllWithRetry(_ws, stateStr)) {
       _ws->cleanupClients();
     }
   }
@@ -1303,7 +1416,7 @@ void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
     sendTo->sendText(json);
   } else {
     if (countConnectedClients() == 0) return;
-    if (!sendTextAllWithRetry(_ws, json)) {
+    if (!broadcastHeapOk(json.length()) || !sendTextAllWithRetry(_ws, json)) {
       _ws->cleanupClients();
     }
   }
@@ -1339,6 +1452,24 @@ void UiSocketHandler::sendDrivenTrack(UiSocketItem *sendTo)
 
 bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &text)
 {
+  // Abandon very large messages if the heap is too tight to safely queue a
+  // copy for every connected client.  This avoids allocation failures inside
+  // ESPAsyncWebServer's framing code, which can otherwise emit truncated
+  // frames and cause browser-side "Invalid frame header" disconnects.
+  const size_t textLen = text.length();
+  if (textLen > 512) {
+    size_t minFree = textLen * 2 + 4096;
+    if (ESP.getFreeHeap() < minFree) {
+      Log(WARN, "%s heap too low (%u free) for %u byte WS broadcast, skipping", _LOG_, ESP.getFreeHeap(), (unsigned)textLen);
+      return false;
+    }
+  }
+
+  String sanitized = text;
+  sanitizeUtf8InPlace(sanitized);
+  const char *data = sanitized.c_str();
+  size_t len = sanitized.length();
+
   // Entferne verwaiste Clients (z.B. TCP tot aber WS-Status noch CONNECTED),
   // bevor wir Nachrichten in deren interne Queue stellen.
   ws->cleanupClients();
@@ -1357,12 +1488,18 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
       if (!client.canSend())
         continue;
       try {
-        if (client.text(text.c_str())) {
+        if (client.text(data, len)) {
           anySent = true;
         }
       } catch (...) {
       }
-      yield();
+      // Give the TCP/WS stack time to actually enqueue the frame before
+      // we push the next message.  Rapid back-to-back sends can cause
+      // ESPAsyncWebServer to corrupt frame boundaries (observed as op=0
+      // continuation frames without a preceding text frame).
+      for (int wait = 0; wait < 5 && !client.canSend(); ++wait) {
+        yield();
+      }
     }
   } catch (...) {
     return false;
@@ -1462,7 +1599,7 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     serializeJson(doc, dataStr);
     sanitizeUtf8InPlace(dataStr);
     Log(DBG, "%s %s", _LOG_, dataStr.c_str());
-    client->text(dataStr.c_str());
+    client->text(dataStr.c_str(), dataStr.length());
 
     client->ping();
     if (itemMap.find(client->id()) != itemMap.end()) {
