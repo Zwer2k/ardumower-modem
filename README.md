@@ -88,6 +88,12 @@ The web interface provides full insight and control over the ArduMower.
 
 ### Dashboard
 
+#### Main Dashboard
+
+![Main Dashboard](docs/screenshots/main-dashboard.png)
+
+The redesigned main dashboard gives a quick overview of the most important mower status values: battery voltage and current charge current, mowing duration and distance, CPU temperature, free heap, position, GPS solution status, obstacle counters, and a compact MiniMap showing the loaded map, perimeter, docking station, and driven track.
+
 #### Status
 
 ![Status](docs/screenshots/status.png)
