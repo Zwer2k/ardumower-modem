@@ -168,6 +168,7 @@ namespace ArduMower
       virtual bool dock();
       virtual bool finishAndRestartEnabled(bool enabled);
       virtual bool mowerEnabled(bool enabled);
+      virtual bool mowerAuto();
       virtual bool setFixTimeout(int timeout);
       virtual bool setWaypoint(float waypoint);
       virtual bool skipWaypoint();

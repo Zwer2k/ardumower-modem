@@ -494,14 +494,30 @@ void MowerAdapter::finalizeInterceptedMap() {
   _map.timestamp = millis();
   updateCurrentMapMeta();
 
-  // Abgefangene Karte anhand des Hashes mit gespeicherten Karten abgleichen
+  // Abgefangene Karte anhand des Hashes mit gespeicherten Karten abgleichen.
+  // Ziel: Existierende Karte nur auswählen, nicht überschreiben. Neue Karte
+  // anlegen, wenn der Hash noch nicht bekannt ist.
   String existingId = _mapManager.findByHash(_currentMapHash);
   if (existingId.length() > 0) {
-    _mapManager.setActive(existingId);
-    Log(INFO, "%sfinalizeInterceptedMap: abgefangene Karte passt zu gespeicherter ID %s", _LOG_, existingId.c_str());
+    // Bekannte Geometrie -> existierenden Eintrag laden und aktiv setzen
+    if (loadMap(existingId)) {
+      _mapManager.setActive(existingId);
+      Log(INFO, "%sfinalizeInterceptedMap: abgefangene Karte passt zu gespeicherter ID %s", _LOG_, existingId.c_str());
+    } else {
+      Log(WARN, "%sfinalizeInterceptedMap: passende Karte %s gefunden, laden fehlgeschlagen", _LOG_, existingId.c_str());
+    }
   } else {
+    // Neue Geometrie -> als neue Karte speichern. Aktive ID kurz zurücksetzen,
+    // damit MapManager::save nicht versehentlich eine aktive Karte überschreibt.
     _mapManager.setActive("");
-    Log(INFO, "%sfinalizeInterceptedMap: abgefangene Karte unbekannt (hash=%s), keine Auswahl", _LOG_, _currentMapHash.c_str());
+    String newId = _mapManager.save(_map, "", 0.0);
+    if (newId.length() > 0) {
+      _currentMapId = newId;
+      _mapManager.setActive(newId);
+      Log(INFO, "%sfinalizeInterceptedMap: neue Karte '%s' angelegt", _LOG_, newId.c_str());
+    } else {
+      Log(ERR, "%sfinalizeInterceptedMap: speichern der neuen Karte fehlgeschlagen", _LOG_);
+    }
   }
   _mapListDirty = true;
   tempWaypointsBuffer.clear();
@@ -604,6 +620,13 @@ bool MowerAdapter::mowerEnabled(bool enabled)
   String command = "AT+C," + String(enabled ? "1" : "0") + ",-1,-1,-1,-1,-1,-1,-1";
 
   return sendCommand(command);
+}
+
+// leave mow motor state to mowing operation (AT+C,-1,...)
+bool MowerAdapter::mowerAuto()
+{
+  Log(DBG, "%smowerAuto", _LOG_CMD_);
+  return sendCommand("AT+C,-1,-1,-1,-1,-1,-1,-1,-1");
 }
 
 // activate and deactivate finish and restart

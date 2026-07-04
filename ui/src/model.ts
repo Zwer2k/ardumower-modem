@@ -353,6 +353,7 @@ export enum RequestDataType {
   navigateTo,
   setMap,
   uploadMap,
+  robotCommand,
   setMowSettings,
   requestMowSettings,
   clearWaypoints,

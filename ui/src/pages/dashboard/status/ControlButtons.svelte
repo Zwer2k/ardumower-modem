@@ -120,6 +120,17 @@
             send('tuneParam', { index, value: val });
         };
     }
+
+    let motorState = $state<boolean | null>(null); // null=neutral/auto, false=force off, true=force on
+
+    function cycleMowerMotor() {
+        if (motorState === null) motorState = false;
+        else if (motorState === false) motorState = true;
+        else motorState = null;
+
+        // neutral sends null -> backend restores mower-driven motor control
+        send('mowerEnabled', { enabled: motorState });
+    }
 </script>
 
 <div class="rc-controls">
@@ -136,10 +147,10 @@
         <button title="Request Status" onclick={() => send('requestStatus')}><ChartLine /></button>
     </div>
     <div class="toggle-row">
-        <label class="toggle-label">
-            <input type="checkbox" checked={desiredState?.mower_motor_enabled ?? false}
-                   onchange={(e) => send('mowerEnabled', { enabled: e.currentTarget.checked })} />
-            Mow Motor
+        <label class="toggle-label tristate-label">
+            <input type="checkbox" indeterminate={motorState === null} checked={motorState === true}
+                   onclick={cycleMowerMotor} />
+            <span class="tristate-text">Mow Motor {motorState === null ? '(auto)' : motorState ? '(on)' : '(off)'}</span>
         </label>
         <label class="toggle-label">
             <input type="checkbox" checked={desiredState?.finish_and_restart ?? false}
@@ -153,7 +164,6 @@
         </label>
     </div>
 
-    <!-- Sliders -->
     <div class="slider-section">
         <label class="slider-group">
             <span class="slider-label">Speed</span>

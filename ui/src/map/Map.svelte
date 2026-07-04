@@ -100,11 +100,24 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     }
   }
 
-  $: mapOptions = $socketStore.maps.map((m) => ({
-    id: m.id,
-    text: `${m.name} (${m.area.toFixed(1)} m²)${m.id === $socketStore.activeMapId ? ' ★ default' : ''}`,
-  }));
-  $: selectedMapId = $socketStore.currentMapId || $socketStore.activeMapId || "";
+  $: mapOptions = (() => {
+    const seen = new Set<string>();
+    const opts: { id: string; text: string }[] = [];
+    for (const m of $socketStore.maps) {
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      opts.push({
+        id: m.id,
+        text: `${m.name} (${m.area.toFixed(1)} m²)${m.id === $socketStore.activeMapId ? ' ★ default' : ''}`,
+      });
+    }
+    return opts;
+  })();
+  $: selectedMapId = (() => {
+    const baseId = $socketStore.currentMapId || $socketStore.activeMapId || "";
+    const idx = mapOptions.findIndex((o) => o.id === baseId);
+    return idx >= 0 ? baseId + '-' + idx : "";
+  })();
   $: effectiveMapId = $socketStore.currentMapId || $socketStore.activeMapId || "";
   $: effectiveMap = $socketStore.maps.find((m) => m.id === effectiveMapId);
   $: effectiveMapName = effectiveMap?.name || "";
@@ -819,9 +832,15 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
             {:else}
               <Dropdown
                 placeholder="Select map"
-                items={mapOptions}
+                items={mapOptions.map((o, i) => ({ ...o, id: o.id + '-' + i }))}
                 selectedId={selectedMapId}
-                on:select={onSelectMap}
+                on:select={(e) => {
+                  const rawId = e.detail?.selectedId;
+                  if (rawId) {
+                    const id = rawId.replace(/-\d+$/, '');
+                    socketService.sendLoadMap(id);
+                  }
+                }}
               />
             {/if}
           </div>

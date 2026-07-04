@@ -571,6 +571,14 @@ class SocketService {
     this.sendMessage(req);
   }
 
+  sendCommand(action: string, payload?: Record<string, any>) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.robotCommand,
+      data: { action, ...(payload || {}) },
+    };
+    this.sendMessage(req);
+  }
+
   disconnect() {
     this.reconnect = false;
     this.clearAllTimers();

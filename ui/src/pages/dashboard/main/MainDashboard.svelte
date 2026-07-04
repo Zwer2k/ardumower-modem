@@ -11,14 +11,23 @@
     import MiniMap from './MiniMap.svelte';
     import { MapStore } from '../../../map/service';
 
+    let sensorTimeout: ReturnType<typeof setTimeout> | null = null;
     $effect(() => {
         if (!browser) return;
         const dashboard = $page.url?.searchParams?.get('dashboard');
         if (dashboard === 'main') {
-            socketService.requestSensorSummary();
+            if (sensorTimeout) clearTimeout(sensorTimeout);
+            sensorTimeout = setTimeout(() => socketService.requestSensorSummary(), 250);
         } else {
+            if (sensorTimeout) {
+                clearTimeout(sensorTimeout);
+                sensorTimeout = null;
+            }
             socketService.stopSensorSummary();
         }
+        return () => {
+            if (sensorTimeout) clearTimeout(sensorTimeout);
+        };
     });
 
     function jobColor(job: number | undefined): string {
@@ -51,16 +60,15 @@
 
     function solutionLabel(solution: number | undefined): string {
         switch (solution) {
-            case 0: return 'None';
-            case 1: return '3D';
-            case 2: return 'RTK float';
-            case 3: return 'RTK fixed';
+            case 0: return 'invalid';
+            case 1: return 'float';
+            case 2: return 'fix';
             default: return '—';
         }
     }
 
     function sendCmd(action: string) {
-        socketService.sendCommand({ action });
+        socketService.sendCommand(action);
     }
 </script>
 
@@ -72,7 +80,7 @@
         {@const desc = $socketStore.valueDescriptions}
         {@const pos = state?.position}
         {@const totalPoints = ($MapStore?.map?.waypoints?.points?.length ?? 0)}
-        {@const currentPoint = (pos?.mow_point_index ?? -1) >= 0 ? pos.mow_point_index + 1 : 0}
+        {@const currentPoint = (pos?.mow_point_index ?? -1) >= 0 ? (pos?.mow_point_index ?? -1) + 1 : 0}
         {@const storedCrc = $socketStore?.currentMapMeta?.crc ?? 0}
         {@const mowerCrc = state?.map_crc ?? 0}
         {@const hasMapData = ($MapStore?.map?.perimeter?.points?.length ?? 0) > 0}
@@ -154,7 +162,7 @@
             </Column><!--
             --><Column sm={4} md={8} lg={6} class="map-col">
                 <Tile class="map-tile">
-                    <MiniMap mapCrc={state?.map_crc} mowPointIndex={pos?.mow_point_index ?? -1} />
+                    <MiniMap mowPointIndex={pos?.mow_point_index ?? -1} />
                 </Tile>
             </Column>
         </Row>
