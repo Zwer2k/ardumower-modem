@@ -82,9 +82,11 @@ namespace ArduMower
           ArduMower::Domain::Robot::StateSource &source);
         void handleData(RequestDataType dataType, JsonDocument &jsonData);
         bool sendText(String text);
+        bool sendTextRaw(String text);
         void ping();
         AwsClientStatus status();
         uint32_t clientId() { return _clientId; }
+        AsyncWebSocketClient* client() { return _client; }
         ~UiSocketItem();
       
       private:
@@ -173,10 +175,16 @@ namespace ArduMower
         uint32_t lastWsConnectionEvent() const { return _lastWsConnectionEvent; }
         void markClientActivity() { _lastClientActivity = millis(); }
         void markWsConnectionEvent() { _lastWsConnectionEvent = millis(); }
+        bool isMapChunkSendActive() const { return mapChunkSendState.active; }
+        bool isClientReceivingChunk(uint32_t clientId) const;
+
+        // Direct send used only by map chunks so they are not blocked by the
+        // per-client serialization guard.
+        bool sendMapChunkText(uint32_t clientId, const String& text);
 
         // Defer first map chunk send after a connect so the TCP/WS queues are
         // ready and we do not corrupt the first few frames.
-        static const uint32_t mapSendDelayMs = 500;
+        static const uint32_t mapSendDelayMs = 1000;
         uint32_t _mapSendPendingUntil = 0;
 #ifdef MOWER_TERMINAL
         void sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks = 0xFFFF);
@@ -199,6 +207,12 @@ namespace ArduMower
         uint32_t gpsDetailsRefCount = 0;
 #endif
         uint32_t sensorSummaryRefCount = 0;
+
+        // Track deferred messages that were dropped during an active map chunk send.
+        bool _mapListPending = false;
+        bool _drivenTrackPending = false;
+        bool _flashProgressPending = false;
+        int _flashProgressPct = 0;
 
       private:
         void startMapChunkSend(UiSocketItem* sendTo, bool force);

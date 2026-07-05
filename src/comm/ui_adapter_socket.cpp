@@ -249,9 +249,12 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
       Log(DBG, "%s setMap: parsed perimeter=%d exclusions=%d dockpoints=%d waypoints=%d rotation=%.1f", _LOG_,
           map.perimeter.size(), map.exclusions.size(), map.dockpoints.size(), map.waypoints.size(), map.rotation);
       _socketHandler->setMap(map);
-      // Aktualisierte Karte sofort an alle verbundenen Clients senden.
-      // Laufenden Chunk-Versand abbrechen, damit die neue Karte übertragen wird.
+      // Abort any running chunk transfer before broadcasting the new map so the
+      // new fragmented transfer starts on a clean frame boundary.
       _socketHandler->abortMapChunkSend();
+      // Give the TCP/WebSocket stack one scheduler tick to drain the abort
+      // before we enqueue a fresh fragmented map transfer.
+      yield();
       _socketHandler->sendData(ResponseDataType::map, NULL, true);
     }
     break;
@@ -293,6 +296,7 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
     String id = jsonData["id"] | "";
     if (_source.loadMap(id)) {
       _socketHandler->abortMapChunkSend();
+      yield();
       _socketHandler->sendData(ResponseDataType::map, NULL, true);
       _socketHandler->sendMapList(NULL);
     }
@@ -343,6 +347,16 @@ UiSocketItem::~UiSocketItem()
 }
 
 bool UiSocketItem::sendText(String text)
+{
+  // If this client is the target of a chunked map transfer, do not interleave
+  // other frames. Broadcast chunks (clientId==0) block all clients.
+  if (_socketHandler->isClientReceivingChunk(_clientId))
+    return false;
+
+  return sendTextRaw(text);
+}
+
+bool UiSocketItem::sendTextRaw(String text)
 {
   auto* liveClient = _socketHandler->wsClient(_clientId);
   if (liveClient == nullptr) {
@@ -924,13 +938,32 @@ void UiSocketHandler::processMapChunkSend() {
       mapChunkSendState.active = false;
       oldDataTimestamp[ResponseDataType::map] = map.timestamp;
       map.endRead();
+      // Flush any non-map messages that were queued while the chunked transfer
+      // was running. This keeps the WebSocket frame stream unfragmented.
+      if (_mapListPending) {
+        _mapListPending = false;
+        sendMapList(NULL);
+      }
+      if (_drivenTrackPending) {
+        _drivenTrackPending = false;
+        sendDrivenTrack(NULL);
+      }
+      if (_flashProgressPending) {
+        _flashProgressPending = false;
+        JsonDocument doc;
+        auto status = doc["status"].to<JsonObject>();
+        status["progress"] = _flashProgressPct;
+        String json;
+        serializeJson(doc, json);
+        sendTextAllWithRetry(_ws, json);
+      }
       break;
   }
 }
 
 // Hilfsfunktion: Sende einen Chunk eines MapPoint-Vektors
 bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize, bool reset) {
-  const size_t maxJsonSize = 2048;
+  const size_t maxJsonSize = 1024;
   size_t total = points.size();
   if (!reset && (startIdx > total || (startIdx == total && total > 0))) return false;
   // Vor Serialisierung prüfen ob Ziel-Client sendefähig ist
@@ -999,19 +1032,19 @@ bool UiSocketHandler::sendMapChunk(MapPointType pointType, const std::vector<Ard
     if (it == itemMap.end()) {
       // client disconnected while transfer was in-flight – fall back to broadcast
       Log(DBG, "%s sendMapChunk: client %u gone, broadcasting", _LOG_, clientId);
-      if (!sendTextAllWithRetry(_ws, stateStr)) {
-        Log(ERR, "%s sendData failed", _LOG_);
+      if (!sendMapChunkText(0, stateStr)) {
+        Log(ERR, "%s sendMapChunk broadcast failed", _LOG_);
         _ws->cleanupClients();
         return false;
       }
-    } else if (!it->second->sendText(stateStr)) {
-      Log(ERR, "%s sendData failed", _LOG_);
+    } else if (!sendMapChunkText(clientId, stateStr)) {
+      Log(ERR, "%s sendMapChunk to client %u failed", _LOG_, clientId);
       _ws->cleanupClients();
       return false;
     }
   } else {
-    if (!sendTextAllWithRetry(_ws, stateStr)) {
-      Log(ERR, "%s sendData failed", _LOG_);
+    if (!sendMapChunkText(0, stateStr)) {
+      Log(ERR, "%s sendMapChunk broadcast failed", _LOG_);
       _ws->cleanupClients();
       return false;
     }
@@ -1024,9 +1057,6 @@ void UiSocketHandler::logToUiLoop()
   if (!logToUi.hasData()) return;
   uint32_t now = millis();
   if (now - _lastLogSend < 100) return;
-
-  // Pausiere Log-Versand während Map-Chunk-Transfer aktiv ist
-  if (mapChunkSendState.active) return;
 
   for (auto &c : _ws->getClients()) {
     if (c.status() == WS_CONNECTED && !c.canSend())
@@ -1042,9 +1072,16 @@ void UiSocketHandler::broadcastFlashProgress(size_t current, size_t total)
   int pct = (total > 0) ? (current * 100 / total) : 0;
   int clients = countConnectedClients();
   Log(DBG, "UiSocket::broadcastFlashProgress(pct=%d, clients=%d)", pct, clients);
-  if (clients == 0) return;
-  // Pausiere während Map-Chunk-Transfer aktiv ist
-  if (mapChunkSendState.active) return;
+  if (clients == 0) {
+    _flashProgressPending = false;
+    return;
+  }
+  if (mapChunkSendState.active) {
+    _flashProgressPending = true;
+    _flashProgressPct = pct;
+    return;
+  }
+  _flashProgressPending = false;
   JsonDocument doc;
   auto status = doc["status"].to<JsonObject>();
   status["progress"] = pct;
@@ -1192,6 +1229,7 @@ void UiSocketHandler::clearWaypoints() {
   map.waypoints.clear();
   _source.setMap(map);
   abortMapChunkSend();
+  yield();
   sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
   Log(INFO, "%s clearWaypoints: waypoints cleared, map broadcast", _LOG_);
@@ -1243,6 +1281,7 @@ void UiSocketHandler::processCalculateWaypoints() {
 #endif
   _source.setMap(map);
   abortMapChunkSend();
+  yield();
   sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
   Log(INFO, "%s processCalculateWaypoints: %d waypoints generated, map broadcast", _LOG_, map.waypoints.size());
@@ -1258,6 +1297,9 @@ void UiSocketHandler::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
 void UiSocketHandler::abortMapChunkSend() {
   if (mapChunkSendState.active) {
     mapChunkSendState.active = false;
+    // Release the read lock that was acquired in startMapChunkSend().
+    // Otherwise subsequent map operations can deadlock.
+    mapChunkSendState.snapshot.endRead();
     Log(DBG, "%s abortMapChunkSend: ongoing chunk send aborted", _LOG_);
   }
 }
@@ -1273,8 +1315,6 @@ static bool sendJsonDoc(UiSocketItem *item, JsonDocument &doc)
 
 void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks)
 {
-  // Pausiere Puffer-Log-Versand während Map-Chunk-Transfer aktiv ist
-  if (mapChunkSendState.active) return;
   uint16_t chunks = 0;
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
@@ -1294,8 +1334,6 @@ void UiSocketHandler::sendBufferedLogTo(UiSocketItem* item, uint16_t maxChunks)
 #ifdef MOWER_TERMINAL
 void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChunks)
 {
-  // Pausiere Terminal-Log-Versand während Map-Chunk-Transfer aktiv ist
-  if (mapChunkSendState.active) return;
   uint16_t chunks = 0;
   uint16_t offset = 0;
   const uint16_t chunkSize = 20;
@@ -1315,10 +1353,6 @@ void UiSocketHandler::sendBufferedTerminalTo(UiSocketItem* item, uint16_t maxChu
 template<typename T>
 void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, T data, bool force)
 {
-  // Serialize all non-map traffic while a chunked map transfer is in progress.
-  if (dataType != ResponseDataType::map && mapChunkSendState.active) {
-    return;
-  }
   if (!force && (data.timestamp == 0 || data.timestamp == oldDataTimestamp[dataType])) {
     return;
   }
@@ -1450,8 +1484,62 @@ void UiSocketHandler::sendDrivenTrack(UiSocketItem *sendTo)
   }
 }
 
+bool UiSocketHandler::isClientReceivingChunk(uint32_t clientId) const {
+  if (!mapChunkSendState.active) return false;
+  // Broadcast chunks (clientId==0) block all clients; targeted chunks only
+  // block the receiving client.
+  return (mapChunkSendState.clientId == 0) || (mapChunkSendState.clientId == clientId);
+}
+
+// Direct send used by map chunks so they are not blocked by the
+// per-client serialization guard. Must not be used for non-map traffic.
+bool UiSocketHandler::sendMapChunkText(uint32_t clientId, const String& text) {
+  size_t textLen = text.length();
+  if (textLen > 512) {
+    size_t minFree = textLen * 2 + 4096;
+    if (ESP.getFreeHeap() < minFree) {
+      Log(WARN, "%s sendMapChunkText heap too low (%u free) for %u byte payload, skipping", _LOG_, ESP.getFreeHeap(), (unsigned)textLen);
+      return false;
+    }
+  }
+
+  const char *data = text.c_str();
+  size_t len = text.length();
+  bool anySent = false;
+  if (clientId > 0) {
+    auto it = itemMap.find(clientId);
+    if (it != itemMap.end()) {
+      AsyncWebSocketClient *client = it->second->client();
+      if (client != NULL && client->status() == WS_CONNECTED && client->canSend() && client->text(data, len)) {
+        anySent = true;
+        // Wait briefly for the TCP/WS stack to enqueue the frame before the
+        // next chunk is sent. Rapid back-to-back sends can corrupt frame
+        // boundaries in ESPAsyncWebServer.
+        for (int wait = 0; wait < 5 && !client->canSend(); ++wait) {
+          yield();
+        }
+      }
+    }
+  } else {
+    for (auto &client : _ws->getClients()) {
+      if (client.status() == WS_CONNECTED && client.canSend() && client.text(data, len)) {
+        anySent = true;
+        for (int wait = 0; wait < 5 && !client.canSend(); ++wait) {
+          yield();
+        }
+      }
+    }
+  }
+  if (anySent) markClientActivity();
+  return anySent;
+}
+
 bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &text)
 {
+  // Per-client serialization: skip clients that are currently receiving a
+  // chunked map transfer. A broadcast chunk (clientId==0) blocks every client.
+  // Map chunks themselves use sendMapChunkText() and bypass this guard.
+
   // Abandon very large messages if the heap is too tight to safely queue a
   // copy for every connected client.  This avoids allocation failures inside
   // ESPAsyncWebServer's framing code, which can otherwise emit truncated
@@ -1485,6 +1573,9 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
       if (status != WS_CONNECTED)
         continue;
       anyConnected = true;
+      // Skip clients that are currently the target of a chunked map transfer.
+      if (isClientReceivingChunk(client.id()))
+        continue;
       if (!client.canSend())
         continue;
       try {
