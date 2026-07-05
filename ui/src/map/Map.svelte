@@ -58,6 +58,8 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   let pendingName = "";
   let showManage = false;
   let showCalculate = false;
+  let selectedMapId: string = "";
+  let dropdownSelectedId: string = ""; // tatsächlich in der Dropdown ausgewählte Karte
 
   function closePanels() {
     showManage = false;
@@ -113,11 +115,14 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     }
     return opts;
   })();
-  $: selectedMapId = (() => {
+  function syncSelectedMapId() {
     const baseId = $socketStore.currentMapId || $socketStore.activeMapId || "";
     const idx = mapOptions.findIndex((o) => o.id === baseId);
-    return idx >= 0 ? baseId + '-' + idx : "";
-  })();
+    selectedMapId = idx >= 0 ? baseId + '-' + idx : "";
+    if (!dropdownSelectedId && baseId) dropdownSelectedId = baseId;
+  }
+  $: mapOptions, syncSelectedMapId();
+
   $: effectiveMapId = $socketStore.currentMapId || $socketStore.activeMapId || "";
   $: effectiveMap = $socketStore.maps.find((m) => m.id === effectiveMapId);
   $: effectiveMapName = effectiveMap?.name || "";
@@ -134,10 +139,12 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   });
 
   function onSelectMap(e: CustomEvent) {
-    const id = e.detail?.selectedId;
-    if (id) {
-      socketService.sendLoadMap(id);
-    }
+    const rawId = e.detail?.selectedId;
+    if (!rawId) return;
+    const id = rawId.replace(/-\d+$/, '');
+    selectedMapId = rawId;
+    dropdownSelectedId = id;
+    socketService.sendLoadMap(id);
   }
 
   function onSaveMap() {
@@ -161,16 +168,22 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   }
 
   function onDeleteMap() {
-    if (!effectiveMapId) return;
+    const target = dropdownSelectedId ||
+      selectedMapId.replace(/-\d+$/, '') ||
+      effectiveMapId;
+    if (!target) return;
     if (confirm("Karte wirklich löschen?")) {
-      socketService.sendDeleteMap(effectiveMapId);
+      socketService.sendDeleteMap(target);
       pendingName = "";
     }
   }
 
   function onSetDefaultMap() {
-    if (!effectiveMapId) return;
-    socketService.sendSetActiveMap(effectiveMapId);
+    const target = dropdownSelectedId ||
+      selectedMapId.replace(/-\d+$/, '') ||
+      effectiveMapId;
+    if (!target) return;
+    socketService.sendSetActiveMap(target);
   }
 
   // ─── Point counts per segment ─────────────────────────────────────────────
@@ -838,6 +851,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
                   const rawId = e.detail?.selectedId;
                   if (rawId) {
                     const id = rawId.replace(/-\d+$/, '');
+                    dropdownSelectedId = id;
                     socketService.sendLoadMap(id);
                   }
                 }}
