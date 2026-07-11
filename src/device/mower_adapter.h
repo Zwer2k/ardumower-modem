@@ -78,6 +78,27 @@ namespace ArduMower
       int _currentMapCrc = 0;
       double _currentMapArea = 0.0;
 
+      // Transiente (RAM-only) Karten: erscheinen im Dropdown, werden aber nicht
+      // automatisch in SPIFFS persistiert. Das vermeidet Flash-Verschleiß bei
+      // jedem "New Map" oder abgefangenem Kartentransfer.
+      struct TransientMap {
+        String id;
+        String name;
+        double area = 0.0;
+        String hash;
+        int crc = 0;
+        double rotation = 0.0;
+        uint32_t timestamp = 0;
+        ArduMower::Domain::Robot::MowerMap map;
+      };
+      std::vector<TransientMap> _transientMaps;
+      uint32_t _transientIdCounter = 0;
+      String allocateTransientId();
+      String findOrCreateTransientMap(const ArduMower::Domain::Robot::MowerMap &map, const String &name, double rotation);
+      const TransientMap* findTransientMap(const String &id) const;
+      bool removeTransientMap(const String &id);
+      void updateTransientMapMeta(const String &id, const ArduMower::Domain::Robot::MowerMap &map, double rotation);
+
       void updateCurrentMapMeta();
       // Cache für rohe Antwort-Strings (mit Checksumme) – für HTTP-Cache-Serving
       String _cachedRawState;
@@ -137,6 +158,9 @@ namespace ArduMower
       virtual ArduMower::Domain::Robot::GpsDetails *gpsDetailsP() { return &_gpsDetails; }
       virtual ArduMower::Domain::Robot::UbxResponse *ubxResponseP() { return &_ubxResponse; }
       virtual ArduMower::Domain::Robot::MowerMap mowerMap() { return _map; }
+      virtual void beginMowerMapRead() override { _map.beginRead(); }
+      virtual void endMowerMapRead() override { _map.endRead(); }
+      virtual bool isMowerMapReading() override { return _map.isReading(); }
       virtual ArduMower::Domain::Robot::MowSettings mowSettings() { return _mowSettings; }
       virtual ArduMower::Domain::Robot::MowSettings *mowSettingsP() { return &_mowSettings; }
 

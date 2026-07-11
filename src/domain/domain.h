@@ -358,6 +358,7 @@ namespace ArduMower
         int crc = 0;
         double rotation = 0.0;
         uint32_t timestamp = 0;
+        bool unsaved = false;
       };
 
       class StateSource
@@ -384,6 +385,12 @@ namespace ArduMower
         virtual ArduMower::Domain::Robot::MowerMap mowerMap() = 0;
         virtual void setMap(const ArduMower::Domain::Robot::MowerMap &map) = 0;
         virtual void setMowSettings(const MowSettings &s) = 0;
+
+        // Read-lock the real map while a chunked transfer is in progress.
+        // Default empty implementations keep subclasses without this concept working.
+        virtual void beginMowerMapRead() {}
+        virtual void endMowerMapRead() {}
+        virtual bool isMowerMapReading() { return false; }
 
         // Karten-Verwaltung (optional, Standardimplementierungen liefern leere Werte)
         virtual std::vector<MapInfo> mapList() { return {}; }
