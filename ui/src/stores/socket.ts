@@ -68,6 +68,7 @@ export interface SocketState {
   activeMapId: string;
   currentMapId: string;
   currentMapMeta: { hash: string; crc: number; area: number; rotation: number } | null;
+  currentMapUnsaved: boolean;
   isLoadingMap: boolean;
   isNewMap: boolean;
 }
@@ -93,6 +94,7 @@ const initialState: SocketState = {
   activeMapId: "",
   currentMapId: "",
   currentMapMeta: null,
+  currentMapUnsaved: false,
   isLoadingMap: false,
   isNewMap: false,
 };
@@ -352,6 +354,8 @@ class SocketService {
                   const wasDeletingMap = get(mwf).state === "deleting";
                   newState.currentMapId = listData.currentId || "";
                   newState.isLoadingMap = false;
+                  const currentMapEntry = newState.maps.find((m) => m.id === newState.currentMapId);
+                  newState.currentMapUnsaved = currentMapEntry?.unsaved || false;
                   console.log("[socket] mapList", {
                     currentId: listData.currentId,
                     previousMapId,

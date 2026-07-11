@@ -1264,6 +1264,7 @@ void UiSocketHandler::clearWaypoints() {
   yield();
   sendWaypointsDirect(map.waypoints, ts);
   sendData(ResponseDataType::map, NULL, true);
+  sendMapList(NULL);
   Log(INFO, "%s clearWaypoints: waypoints cleared, map broadcast", _LOG_);
   sendProgress("clear", 100, "Complete");
   sendData(ResponseDataType::mowerState, NULL, true);
@@ -1293,7 +1294,6 @@ void UiSocketHandler::processCalculateWaypoints() {
 
   using namespace ArduMower::Domain::Robot;
   auto map = _calculateWaypointsMap;
-  uint32_t ts = _calculateWaypointsTimestamp;
 
   map.waypoints.clear();
 #ifdef ENABLE_MAP
@@ -1315,6 +1315,7 @@ void UiSocketHandler::processCalculateWaypoints() {
   abortMapChunkSend();
   yield();
   sendData(ResponseDataType::map, NULL, true);
+  sendMapList(NULL);
   Log(INFO, "%s processCalculateWaypoints: %d waypoints generated, map broadcast", _LOG_, map.waypoints.size());
   sendProgress("calculate", 100, "Complete");
   sendData(ResponseDataType::mowerState, NULL, true);

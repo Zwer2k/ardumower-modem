@@ -327,11 +327,13 @@ export interface MapMeta {
   crc: number;
   rotation: number;
   timestamp: number;
+  unsaved: boolean;
 }
 
 export interface MapListData {
   activeId: string;
   currentId?: string;
+  unsaved?: boolean;
   maps: MapMeta[];
 }
 

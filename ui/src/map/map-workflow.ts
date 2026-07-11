@@ -518,8 +518,9 @@ export function recalculateIsMapDirty() {
     $workflow.renameMode &&
     $workflow.pendingName !== "" &&
     $workflow.pendingName !== effectiveMap.name;
+  const backendUnsaved = $socket.currentMapUnsaved;
 
-  isMapDirty.set(geometryDirty || rotationDirty || nameDirty);
+  isMapDirty.set(geometryDirty || rotationDirty || nameDirty || backendUnsaved);
 }
 
 // Interne Subscriptions: wenn sich Karte oder Rotation ändert, muss der

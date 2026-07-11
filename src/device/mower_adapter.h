@@ -77,6 +77,7 @@ namespace ArduMower
       String _currentMapHash;
       int _currentMapCrc = 0;
       double _currentMapArea = 0.0;
+      bool _currentMapUnsaved = false;
 
       // Transiente (RAM-only) Karten: erscheinen im Dropdown, werden aber nicht
       // automatisch in SPIFFS persistiert. Das vermeidet Flash-Verschleiß bei

@@ -106,6 +106,8 @@ void MowerAdapter::setMap(const ArduMower::Domain::Robot::MowerMap &map) {
   }
   _map = map;
   _map.timestamp = millis();
+  _currentMapUnsaved = true;
+  _mapListDirty = true;
   updateCurrentMapMeta();
   Log(INFO, "%ssetMap: perimeter=%d exclusions=%d dockpoints=%d waypoints=%d hash=%s area=%.1f",
       _LOG_, _map.perimeter.size(), _map.exclusions.size(), _map.dockpoints.size(), _map.waypoints.size(),
@@ -142,6 +144,9 @@ std::vector<ArduMower::Domain::Robot::MapInfo> MowerAdapter::mapList() {
     info.crc = m.crc;
     info.rotation = m.rotation;
     info.timestamp = m.timestamp;
+    if (_currentMapUnsaved && info.id == _currentMapId) {
+      info.unsaved = true;
+    }
     result.push_back(info);
   }
   return result;
@@ -164,6 +169,7 @@ String MowerAdapter::saveMap(const String &name, double rotation) {
   String id = _mapManager.save(_map, name, _currentMapId, rotation);
   if (id.length() > 0) {
     _currentMapId = id;
+    _currentMapUnsaved = false;
     _mapListDirty = true;
     Log(INFO, "%ssaveMap: Karte gespeichert als %s", _LOG_, id.c_str());
   }
@@ -188,6 +194,7 @@ bool MowerAdapter::loadMap(const String &id) {
   _currentMapHash = _mapManager.computeHash(_map);
   _currentMapArea = _mapManager.computeArea(_map);
   _currentMapCrc = _mapManager.getCrc(id);
+  _currentMapUnsaved = false;
   Log(INFO, "%sloadMap: Karte %s geladen, CRC %d (aus SPIFFS)", _LOG_, id.c_str(), _currentMapCrc);
   _mapListDirty = true;
   return true;
@@ -232,6 +239,7 @@ bool MowerAdapter::discardMap() {
   _currentMapId = "";
   _map = ArduMower::Domain::Robot::MowerMap();
   _map.timestamp = millis();
+  _currentMapUnsaved = true;
   updateCurrentMapMeta();
   _mapListDirty = true;
   Log(INFO, "%sdiscardMap: aktuelle Karte verworfen, neue leere Karte im RAM", _LOG_);
@@ -530,6 +538,7 @@ void MowerAdapter::finalizeInterceptedMap() {
   _map.timestamp = millis();
   _mapListDirty = true;
   updateCurrentMapMeta();
+  _currentMapUnsaved = true;
 
   // Vergleiche die abgefangene Geometrie mit den gespeicherten Karten. Wenn
   // eine identische Karte bereits existiert, laden wir deren Meta-Daten
