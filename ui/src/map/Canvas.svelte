@@ -18,7 +18,7 @@
   $: cx = vx + vw / 2;
   $: cy = vy + vh / 2;
 
-  $: transformStr = `rotate(${$MapStore.presentation.rotation + compassRotation}, ${cx}, ${cy})`;
+  $: transformStr = `rotate(${compassRotation}, ${cx}, ${cy})`;
 
   let svg: SVGSVGElement;
   let g: SVGGElement;

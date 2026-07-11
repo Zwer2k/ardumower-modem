@@ -166,6 +166,7 @@ export interface State {
   map_crc: number;
   progressPct?: number;
   progressMsg?: string;
+  progressOp?: string;
 }
 
 export interface SensorSummary {
@@ -363,6 +364,7 @@ export enum RequestDataType {
   saveMap,
   renameMap,
   deleteMap,
+  discardMap,
   setActiveMap,
 }
 
@@ -405,5 +407,17 @@ export interface MapSetData {
 
 export interface RequestSocketMessage {
   type: RequestDataType;
-  data: ModemLogSettings | ConsoleRequestData | JoystickMoveData | NavigateToData | MapSetData | Record<string, never>;
+  data:
+    | ModemLogSettings
+    | ConsoleRequestData
+    | JoystickMoveData
+    | NavigateToData
+    | MapSetData
+    | MowSettingsData
+    | { id: string }
+    | { id: string; name: string }
+    | { name: string; rotation: number }
+    | { action: string; [key: string]: any }
+    | { hex: string }
+    | Record<string, never>;
 }

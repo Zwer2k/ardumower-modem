@@ -196,7 +196,7 @@ namespace ArduMower {
             return meta->crc;
         }
 
-        String MapManager::save(const ArduMower::Domain::Robot::MowerMap &map, const String &name, double rotation) {
+        String MapManager::save(const ArduMower::Domain::Robot::MowerMap &map, const String &name, const String &currentId, double rotation) {
             if (!_initialized && !begin()) return "";
 
             if (!isMapValid(map)) {
@@ -218,22 +218,25 @@ namespace ArduMower {
             MapMeta *meta = nullptr;
             String fileName;
 
-            // Wenn eine Karte aktiv ist, wird diese überschrieben (stabiler Slot).
-            if (_index.activeId.length() > 0) {
-                meta = findMeta(_index.activeId);
+            // 1. Wenn eine aktuell geladene Karte existiert, diese aktualisieren (Update).
+            if (currentId.length() > 0) {
+                meta = findMeta(currentId);
+                if (meta) {
+                    fileName = meta->file;
+                    meta->hash = hash;
+                    meta->crc = crc;
+                    meta->area = area;
+                    meta->rotation = rotation;
+                    meta->timestamp = millis();
+                    if (name.length() > 0) meta->name = displayName;
+                    Log(INFO, "%s save: Karte '%s' (%s) aktualisiert", _LOG_, meta->name.c_str(), meta->id.c_str());
+                } else {
+                    Log(WARN, "%s save: currentId %s nicht gefunden, erstelle neue Karte", _LOG_, currentId.c_str());
+                }
             }
 
-            if (meta) {
-                fileName = meta->file;
-                meta->hash = hash;
-                meta->crc = crc;
-                meta->area = area;
-                meta->rotation = rotation;
-                meta->timestamp = millis();
-                if (name.length() > 0) meta->name = displayName;
-                Log(INFO, "%s save: Karte '%s' (%s) aktualisiert", _LOG_, meta->name.c_str(), meta->id.c_str());
-            } else {
-                // Keine aktive Karte: prüfen, ob gleiche Geometrie bereits existiert
+            // 2. Keine aktuelle Karte: prüfen, ob gleiche Geometrie bereits existiert
+            if (!meta) {
                 for (auto &m : _index.maps) {
                     if (m.hash == hash) {
                         meta = &m;
@@ -275,7 +278,7 @@ namespace ArduMower {
 
             JsonDocument indexDoc;
             JsonObject indexRoot = indexDoc.to<JsonObject>();
-            indexRoot["activeId"] = hash;
+            indexRoot["activeId"] = _index.activeId;
             indexRoot["nextFileId"] = _index.nextFileId;
             JsonArray mapsArr = indexRoot["maps"].to<JsonArray>();
             for (const auto &m : _index.maps) {
@@ -300,7 +303,16 @@ namespace ArduMower {
             file.close();
 
             // Aktiv setzen und Index speichern
-            if (meta) _index.activeId = meta->id;
+            // Hinweis: activeId wird nur beim ersten Speichern gesetzt, wenn
+            // bisher keine aktive Karte existiert. Ansonsten bleibt die aktive
+            // Karte unverändert, damit "Speichern" nicht gleichzeitig die
+            // Default-Karte wechselt. Explizite Aktivierung erfolgt über
+            // setActiveMap.
+            if (meta) {
+              if (_index.activeId.length() == 0) {
+                _index.activeId = meta->id;
+              }
+            }
             saveIndex();
 
             return meta ? meta->id : "";

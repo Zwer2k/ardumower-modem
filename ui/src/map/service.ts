@@ -1,4 +1,4 @@
-import { writable, derived } from "svelte/store";
+import { writable, derived, get } from "svelte/store";
 import type {
   Map,
   MapPresentation,
@@ -19,6 +19,7 @@ import {
 } from "./map-chunk-buffer";
 
 export const drivenTrackStore = writable<DrivenTrackData | null>(null);
+export const currentMapRotationStore = writable<number>(0);
 
 export interface StoredMap {
   map: Map;
@@ -28,13 +29,13 @@ export interface StoredMap {
 }
 // MapStore is now derived from socketStore
 // Initialize with empty map so $MapStore is always defined
-const emptyMap: Map = {
+export const emptyMap: Map = {
   perimeter: { points: [] },
   exclusions: [],
   dockpoints: { points: [] },
   waypoints: { points: [] },
 };
-const emptyPresentation: MapPresentation = {
+export const emptyPresentation: MapPresentation = {
   boundary: { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } },
   center: { x: 0, y: 0 },
   rotation: 0,
@@ -65,9 +66,9 @@ const allMapPoints = (m: Map): Point[] => {
 
 const calculatePresentation = (
   m: Map,
+  rotation: number = 0,
   p: PresentationTuningParameters = presentationParameterTuning,
 ): MapPresentation => {
-  const rotation = 0;
   const pointsRotated: Point[] = rotatePointsAroundOrigin(
     allMapPoints(m),
     deg2rad(rotation),
@@ -181,7 +182,8 @@ function updateMapStore() {
   let lastSerialized: string | null = null;
 
   function setMap() {
-    const presentation = calculatePresentation(map);
+    const rotation = get(currentMapRotationStore);
+    const presentation = calculatePresentation(map, rotation);
     const serialized = JSON.stringify({ map, presentation });
     if (serialized === lastSerialized) return;
     lastSerialized = serialized;
@@ -205,6 +207,9 @@ function updateMapStore() {
   });
   waypointsStore.subscribe((arr) => {
     map.waypoints = { points: arr.map(({ X, Y }) => ({ x: X, y: -Y })) };
+    setMap();
+  });
+  currentMapRotationStore.subscribe(() => {
     setMap();
   });
 }

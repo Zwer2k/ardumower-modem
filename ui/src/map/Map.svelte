@@ -19,7 +19,8 @@
   import IconUpload from "carbon-icons-svelte/lib/Upload.svelte";
   import IconSave from "carbon-icons-svelte/lib/Save.svelte";
   import IconStar from "carbon-icons-svelte/lib/Star.svelte";
-import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
+  import IconNew from "carbon-icons-svelte/lib/DocumentAdd.svelte";
+  import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   import IconCheckmark from "carbon-icons-svelte/lib/Checkmark.svelte";
   import IconClose from "carbon-icons-svelte/lib/Close.svelte";
   import IconSettings from "carbon-icons-svelte/lib/Settings.svelte";
@@ -34,8 +35,10 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   import Waypoints from "./Waypoints.svelte";
   import Dockpoints from "./Dockpoints.svelte";
   import MowerPosition from "./MowerPosition.svelte";
-  import { MapStore } from "./service";
+  import { MapStore, emptyMap, emptyPresentation, currentMapRotationStore } from "./service";
   import { socketStore, socketService } from "../stores/socket";
+  import { mapMetaStore } from "../stores/socket";
+  import { mapWorkflowStore, isMapDirty } from "./map-workflow";
   import MowSettingsDialog from "./MowSettingsDialog.svelte";
 
   interface EditItem {
@@ -54,12 +57,10 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   let editEdge = false;
 
   // ─── Map management ────────────────────────────────────────────────────────
-  let isRenameMode = false;
-  let pendingName = "";
   let showManage = false;
   let showCalculate = false;
   let selectedMapId: string = "";
-  let dropdownSelectedId: string = ""; // tatsächlich in der Dropdown ausgewählte Karte
+  let dropdownSelectedId: string = "";
 
   function closePanels() {
     showManage = false;
@@ -76,7 +77,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
       edit = false;
       showCalculate = false;
       stopDraw();
-      isRenameMode = false;
     }
   }
 
@@ -105,6 +105,14 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   $: mapOptions = (() => {
     const seen = new Set<string>();
     const opts: { id: string; text: string }[] = [];
+    const isNew = $socketStore.isNewMap || $mapWorkflowStore.state === "creating";
+    if (isNew) {
+      const name = $mapWorkflowStore.pendingName || `Karte ${$socketStore.maps.length + 1}`;
+      opts.push({
+        id: "__unsaved__",
+        text: `${name} (unsaved)`,
+      });
+    }
     for (const m of $socketStore.maps) {
       if (seen.has(m.id)) continue;
       seen.add(m.id);
@@ -115,74 +123,121 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     }
     return opts;
   })();
-  function syncSelectedMapId() {
-    const baseId = $socketStore.currentMapId || $socketStore.activeMapId || "";
-    const idx = mapOptions.findIndex((o) => o.id === baseId);
-    selectedMapId = idx >= 0 ? baseId + '-' + idx : "";
-    if (!dropdownSelectedId && baseId) dropdownSelectedId = baseId;
-  }
-  $: mapOptions, syncSelectedMapId();
 
-  $: effectiveMapId = $socketStore.currentMapId || $socketStore.activeMapId || "";
+  // Dropdown-Selektion an Backend-Zustand binden, aber nicht überschreiben,
+  // wenn der Benutzer gerade im Rename-Modus ist oder eine Karte geladen wird.
+  $: {
+    const isNew = $socketStore.isNewMap || $mapWorkflowStore.state === "creating";
+    const baseId = isNew ? "__unsaved__" : ($socketStore.currentMapId || "");
+    if (!$mapWorkflowStore.renameMode && $mapWorkflowStore.state !== "loading") {
+      selectedMapId = baseId;
+      dropdownSelectedId = baseId;
+    }
+  }
+
+  $: effectiveMapId = $socketStore.currentMapId || "";
   $: effectiveMap = $socketStore.maps.find((m) => m.id === effectiveMapId);
   $: effectiveMapName = effectiveMap?.name || "";
-  $: currentHash = $socketStore.currentMapMeta?.hash || "";
-  $: effectiveMapHash = effectiveMap?.hash || "";
-  $: geometryDirty = currentHash !== "" && currentHash !== effectiveMapHash;
-  $: rotationDirty = !!effectiveMap && compassRotation !== effectiveMap.rotation;
-  $: nameDirty = pendingName !== "" && pendingName !== effectiveMapName;
-  $: isDirty = geometryDirty || rotationDirty || nameDirty;
-  $: canRename = ($MapStore.map?.perimeter.points.length ?? 0) >= 3;
+  $: isDirty = $isMapDirty;
+  $: canRename = ($MapStore.map?.perimeter.points.length ?? 0) >= 3 && !!effectiveMapId;
+  $: workflowBusy = $mapWorkflowStore.state === "loading" || $mapWorkflowStore.state === "saving" || $mapWorkflowStore.state === "renaming" || $mapWorkflowStore.state === "deleting";
 
   onMount(() => {
     socketService.sendListMaps();
   });
 
   function onSelectMap(e: CustomEvent) {
-    const rawId = e.detail?.selectedId;
-    if (!rawId) return;
-    const id = rawId.replace(/-\d+$/, '');
-    selectedMapId = rawId;
+    const id = e.detail?.selectedId;
+    if (!id) return;
+    selectedMapId = id;
     dropdownSelectedId = id;
+    if (id === "__unsaved__") return;
+    // Wenn für diese ID bereits eine Ladeanfrage läuft, nichts tun (verhindert
+    // Doppel-Anfragen, falls das Dropdown ein zweites on:select feuert).
+    if ($mapWorkflowStore.state === "loading" && id === $mapWorkflowStore.pendingLoadId) return;
+    mapWorkflowStore.startLoadMap(id);
     socketService.sendLoadMap(id);
   }
 
+  function onNewMap() {
+    const defaultName = `Karte ${$socketStore.maps.length + 1}`;
+    compassRotation = 0;
+    socketService.sendDiscardMap();
+    mapWorkflowStore.startNewMap(defaultName);
+    showManage = true;
+  }
+
+  $: if (
+    ($socketStore.currentMapMeta && !$socketStore.currentMapId) &&
+    !$mapWorkflowStore.renameMode &&
+    $mapWorkflowStore.state !== "loading" &&
+    $mapWorkflowStore.state !== "saving" &&
+    $mapWorkflowStore.state !== "deleting" &&
+    !$socketStore.isLoadingMap &&
+    $mapWorkflowStore.pendingName === ""
+  ) {
+    const defaultName = `Karte ${$socketStore.maps.length + 1}`;
+    mapWorkflowStore.startNewMap(defaultName);
+    showManage = true;
+  }
+
   function onSaveMap() {
-    const name = pendingName || effectiveMapName || `Karte ${$socketStore.maps.length + 1}`;
+    const name = $mapWorkflowStore.pendingName || effectiveMapName || `Karte ${$socketStore.maps.length + 1}`;
+    mapWorkflowStore.startSaveMap(name, compassRotation);
     socketService.sendSaveMap(name, compassRotation);
-    pendingName = "";
   }
 
   function startRename() {
-    pendingName = effectiveMapName;
-    isRenameMode = true;
+    mapWorkflowStore.startRename(effectiveMapName);
   }
 
   function confirmRename() {
-    isRenameMode = false;
+    const result = mapWorkflowStore.confirmRename($socketStore.currentMapId, effectiveMapName);
+    if (result.action === "save") {
+      socketService.sendSaveMap(result.name, compassRotation);
+    } else if (result.action === "rename") {
+      socketService.sendRenameMap($socketStore.currentMapId, result.name);
+    }
   }
 
   function cancelRename() {
-    pendingName = effectiveMapName;
-    isRenameMode = false;
+    mapWorkflowStore.cancelRename(effectiveMapName);
   }
 
   function onDeleteMap() {
-    const target = dropdownSelectedId ||
-      selectedMapId.replace(/-\d+$/, '') ||
-      effectiveMapId;
-    if (!target) return;
+    const target = dropdownSelectedId || effectiveMapId;
+    if (!target || target === "__unsaved__") return;
     if (confirm("Karte wirklich löschen?")) {
+      mapWorkflowStore.startDeleteMap(target);
+      // Gelöschte Karte sofort aus dem lokalen State entfernen, damit das
+      // Dropdown nicht erst auf die Backend-Antwort warten muss.
+      socketStore.update((s) => {
+        const nextMaps = s.maps.filter((m) => m.id !== target);
+        const nextCurrentMapId = s.currentMapId === target ? "" : s.currentMapId;
+        const nextActiveMapId = s.activeMapId === target ? "" : s.activeMapId;
+        return {
+          ...s,
+          maps: nextMaps,
+          currentMapId: nextCurrentMapId,
+          currentMapMeta: nextCurrentMapId ? s.currentMapMeta : null,
+          activeMapId: nextActiveMapId,
+          isNewMap: nextCurrentMapId ? s.isNewMap : false,
+        };
+      });
+      // Auswahl auf die aktuell geladene Karte oder leer zurücksetzen, falls
+      // die gelöschte Karte im Dropdown ausgewählt war.
+      if (dropdownSelectedId === target) {
+        const fallbackId = effectiveMapId !== target ? effectiveMapId : "";
+        selectedMapId = fallbackId;
+        dropdownSelectedId = fallbackId;
+      }
       socketService.sendDeleteMap(target);
-      pendingName = "";
     }
   }
 
   function onSetDefaultMap() {
-    const target = dropdownSelectedId ||
-      selectedMapId.replace(/-\d+$/, '') ||
-      effectiveMapId;
-    if (!target) return;
+    const target = dropdownSelectedId || effectiveMapId;
+    if (!target || target === "__unsaved__") return;
     socketService.sendSetActiveMap(target);
   }
 
@@ -194,12 +249,12 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   $: waypointsPoints = $MapStore.map?.waypoints.points.length ?? 0;
   $: totalPoints = perimeterPoints + dockpointsPoints + waypointsPoints + exclusionPoints.reduce((a, b) => a + b, 0);
 
-  $: nearPos = mowerPos && mowerPos.x !== 0 && mowerPos.y !== 0
+  $: nearPos = !!(mowerPos && mowerPos.x !== 0 && mowerPos.y !== 0
     && $MapStore.map?.perimeter.points.some(pt => {
         const dx = pt.x - mowerPos.x;
         const dy = pt.y + mowerPos.y;
         return dx * dx + dy * dy < 0.0025; // 5cm
-      });
+      }));
 
   let drawActive = false;
   let drawArea: 'perimeter' | 'exclusion' | 'dockpoints' | 'waypoints' | null = null;
@@ -837,33 +892,26 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
       <Row class="map-toolbar-main">
         <div class="toolbar-main-group">
           <div class="toolbar-dropdown">
-            {#if isRenameMode}
+            {#if $mapWorkflowStore.renameMode}
               <TextInput
                 placeholder="Map name"
-                bind:value={pendingName}
+                bind:value={$mapWorkflowStore.pendingName}
               />
             {:else}
               <Dropdown
                 placeholder="Select map"
-                items={mapOptions.map((o, i) => ({ ...o, id: o.id + '-' + i }))}
+                items={mapOptions}
                 selectedId={selectedMapId}
-                on:select={(e) => {
-                  const rawId = e.detail?.selectedId;
-                  if (rawId) {
-                    const id = rawId.replace(/-\d+$/, '');
-                    dropdownSelectedId = id;
-                    socketService.sendLoadMap(id);
-                  }
-                }}
+                on:select={onSelectMap}
               />
             {/if}
           </div>
           <div class="toolbar-btn-row">
-            {#if isRenameMode}
+            {#if $mapWorkflowStore.renameMode}
               <Button
                 kind="primary"
                 size="small"
-                disabled={!pendingName || pendingName === effectiveMapName}
+                disabled={!$mapWorkflowStore.pendingName || $mapWorkflowStore.pendingName === effectiveMapName}
                 on:click={confirmRename}
                 icon={IconCheckmark}
                 iconDescription="Confirm rename"
@@ -944,7 +992,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="primary"
                 size="small"
-                disabled={!isDirty || isRenameMode}
+                disabled={!isDirty || $mapWorkflowStore.renameMode || workflowBusy}
                 on:click={onSaveMap}
                 icon={IconSave}
                 iconDescription="Save map"
@@ -954,7 +1002,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="secondary"
                 size="small"
-                disabled={!canRename || isRenameMode}
+                disabled={!canRename || $mapWorkflowStore.renameMode || workflowBusy}
                 icon={IconPen}
                 iconDescription="Rename map"
                 on:click={startRename}
@@ -964,7 +1012,7 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="danger"
                 size="small"
-                disabled={!effectiveMapId || isRenameMode}
+                disabled={!effectiveMapId || $mapWorkflowStore.renameMode || workflowBusy}
                 on:click={onDeleteMap}
                 icon={IconTrashCan}
                 iconDescription="Delete map"
@@ -974,15 +1022,25 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
               <Button
                 kind="tertiary"
                 size="small"
-                disabled={!effectiveMapId || isRenameMode}
+                disabled={!effectiveMapId || $mapWorkflowStore.renameMode || workflowBusy}
                 on:click={onSetDefaultMap}
                 icon={IconStar}
                 iconDescription="Set as default map"
               >
                 <span class="btn-label">Default</span>
               </Button>
-              {#if nameDirty}
-                <span class="pending-map-name" title="Neuer Name, noch nicht gespeichert">→ {pendingName}</span>
+              <Button
+                kind="secondary"
+                size="small"
+                disabled={$mapWorkflowStore.renameMode || workflowBusy}
+                on:click={onNewMap}
+                icon={IconNew}
+                iconDescription="New map"
+              >
+                <span class="btn-label">New</span>
+              </Button>
+              {#if $mapWorkflowStore.pendingName && $mapWorkflowStore.pendingName !== effectiveMapName}
+                <span class="pending-map-name" title="Neuer Name, noch nicht gespeichert">→ {$mapWorkflowStore.pendingName}</span>
               {/if}
             </div>
           </Column>
@@ -1318,11 +1376,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
     flex-wrap: nowrap;
   }
 
-  .map-edit-row {
-    align-items: center;
-    gap: 0.25rem;
-    flex-wrap: nowrap !important;
-  }
   .edit-combo {
     flex: 1 1 auto;
     min-width: 0;
@@ -1333,11 +1386,6 @@ import IconTools from "carbon-icons-svelte/lib/Tools.svelte";
   }
   .edit-actions {
     flex: 0 0 auto;
-  }
-
-  .map-mgmt-row {
-    margin-bottom: 0.5rem;
-    align-items: flex-end;
   }
 
   .pending-map-name {

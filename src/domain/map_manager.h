@@ -28,10 +28,10 @@ namespace ArduMower {
             bool begin();
 
             // Speichert die übergebene Karte unter dem angegebenen Namen.
-            // Ist bereits eine Karte aktiv, wird diese überschrieben (stabiler Slot).
-            // Existiert keine aktive Karte, aber eine Karte mit gleichem Hash, wird diese aktualisiert.
+            // Ist currentId nicht leer, wird die Karte mit dieser ID überschrieben (Update).
+            // Ansonsten wird eine neue Karte erstellt (oder eine Karte mit gleichem Hash aktualisiert).
             // Rückgabe: ID oder leerer String bei Fehler.
-            String save(const ArduMower::Domain::Robot::MowerMap &map, const String &name, double rotation = 0.0);
+            String save(const ArduMower::Domain::Robot::MowerMap &map, const String &name, const String &currentId = "", double rotation = 0.0);
 
             bool load(const String &id, ArduMower::Domain::Robot::MowerMap &out);
             bool loadActive(ArduMower::Domain::Robot::MowerMap &out);

@@ -161,7 +161,7 @@ String MowerAdapter::saveMap(const String &name, double rotation) {
     return "";
   }
   _map.rotation = rotation;
-  String id = _mapManager.save(_map, name, rotation);
+  String id = _mapManager.save(_map, name, _currentMapId, rotation);
   if (id.length() > 0) {
     _currentMapId = id;
     _mapListDirty = true;
@@ -171,8 +171,14 @@ String MowerAdapter::saveMap(const String &name, double rotation) {
 }
 
 bool MowerAdapter::loadMap(const String &id) {
+  // Warte kurz, bis kein Lesevorgang auf _map läuft (max 100ms)
+  int waitCount = 0;
+  while (_map.isReading() && waitCount < 10) {
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    waitCount++;
+  }
   if (_map.isReading()) {
-    Log(WARN, "%sloadMap: Map-Lesevorgang läuft, laden abgelehnt", _LOG_);
+    Log(WARN, "%sloadMap: Map-Lesevorgang läuft noch, laden abgelehnt", _LOG_);
     return false;
   }
   ArduMower::Domain::Robot::MowerMap loaded;
@@ -196,9 +202,39 @@ bool MowerAdapter::renameMap(const String &id, const String &name) {
 
 bool MowerAdapter::deleteMap(const String &id) {
   if (!_mapManager.remove(id)) return false;
-  if (_currentMapId == id) _currentMapId = "";
+  if (_currentMapId == id) {
+    // Gelöschte Karte war gerade geladen: aktiv gespeicherte Karte wieder
+    //herstellen, falls möglich, sonst auf leere Karte zurücksetzen.
+    ArduMower::Domain::Robot::MowerMap loaded;
+    if (_mapManager.loadActive(loaded)) {
+      _currentMapId = _mapManager.activeId();
+      _map = loaded;
+    } else {
+      _currentMapId = "";
+      _map = ArduMower::Domain::Robot::MowerMap();
+      _map.timestamp = millis();
+    }
+    updateCurrentMapMeta();
+  }
   _mapListDirty = true;
   Log(INFO, "%sdeleteMap: Karte %s gelöscht", _LOG_, id.c_str());
+  return true;
+}
+
+bool MowerAdapter::discardMap() {
+  if (_map.isReading()) {
+    Log(WARN, "%sdiscardMap: Map-Lesevorgang läuft, verwerfen abgelehnt", _LOG_);
+    return false;
+  }
+  // Unsaved/abgefangene Karte im RAM durch eine leere Karte ersetzen. Damit
+  // bleibt Frontend und Backend konsistent, wenn der Benutzer "New Map"
+  // auswählt und eine neue Karte zeichnet.
+  _currentMapId = "";
+  _map = ArduMower::Domain::Robot::MowerMap();
+  _map.timestamp = millis();
+  updateCurrentMapMeta();
+  _mapListDirty = true;
+  Log(INFO, "%sdiscardMap: aktuelle Karte verworfen, neue leere Karte im RAM", _LOG_);
   return true;
 }
 
@@ -492,33 +528,27 @@ void MowerAdapter::finalizeInterceptedMap() {
   }
   Log(DBG, "%sfinalizeInterceptedMap: Map vollständig, sende an Client", _LOG_);
   _map.timestamp = millis();
+  _mapListDirty = true;
   updateCurrentMapMeta();
 
-  // Abgefangene Karte anhand des Hashes mit gespeicherten Karten abgleichen.
-  // Ziel: Existierende Karte nur auswählen, nicht überschreiben. Neue Karte
-  // anlegen, wenn der Hash noch nicht bekannt ist.
-  String existingId = _mapManager.findByHash(_currentMapHash);
+  // Vergleiche die abgefangene Geometrie mit den gespeicherten Karten. Wenn
+  // eine identische Karte bereits existiert, laden wir deren Meta-Daten
+  // (Name, Rotation) und verwenden deren ID, damit der UI-Zustand konsistent
+  // bleibt und keine Dubletten entstehen.
+  String hash = _currentMapHash;
+  String existingId = _mapManager.findByHash(hash);
   if (existingId.length() > 0) {
-    // Bekannte Geometrie -> existierenden Eintrag laden und aktiv setzen
-    if (loadMap(existingId)) {
-      _mapManager.setActive(existingId);
-      Log(INFO, "%sfinalizeInterceptedMap: abgefangene Karte passt zu gespeicherter ID %s", _LOG_, existingId.c_str());
-    } else {
-      Log(WARN, "%sfinalizeInterceptedMap: passende Karte %s gefunden, laden fehlgeschlagen", _LOG_, existingId.c_str());
-    }
+    Log(INFO, "%sfinalizeInterceptedMap: Karte bereits bekannt (%s), lade gespeicherte Version", _LOG_, existingId.c_str());
+    loadMap(existingId);
   } else {
-    // Neue Geometrie -> als neue Karte speichern. Aktive ID kurz zurücksetzen,
-    // damit MapManager::save nicht versehentlich eine aktive Karte überschreibt.
-    _mapManager.setActive("");
-    String newId = _mapManager.save(_map, "", 0.0);
-    if (newId.length() > 0) {
-      _currentMapId = newId;
-      _mapManager.setActive(newId);
-      Log(INFO, "%sfinalizeInterceptedMap: neue Karte '%s' angelegt", _LOG_, newId.c_str());
-    } else {
-      Log(ERR, "%sfinalizeInterceptedMap: speichern der neuen Karte fehlgeschlagen", _LOG_);
-    }
+    Log(INFO, "%sfinalizeInterceptedMap: neue Karte im RAM, noch nicht gespeichert", _LOG_);
+    _currentMapId = ""; // abgefangene Karte ist neu, nicht gespeichert
   }
+
+  // Abgefangene Karte nur im RAM übernehmen, NICHT automatisch in SPIFFS
+  // speichern oder als Default setzen. Das verhindert versehentliche
+  // Flash-Schreibvorgänge bei jedem Kartentransfer. Persistierung erfolgt
+  // nur noch über den expliziten Save-Button in der UI.
   _mapListDirty = true;
   tempWaypointsBuffer.clear();
   tempExclusionSizes.clear();

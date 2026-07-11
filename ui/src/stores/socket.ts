@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { browser } from "$app/environment";
 import type {
   ModemLog,
@@ -25,7 +25,27 @@ import type { DrivenTrackData } from "../model";
 import { handleMapChunk, waypointsStore, resetMapChunkBuffer } from "../map/map-chunk-buffer";
 import { MapPointType } from "../map/map-chunk-buffer";
 import { mowSettingsStore } from "../map/mow-settings";
-import { drivenTrackStore } from "../map/service";
+import { drivenTrackStore, currentMapRotationStore } from "../map/service";
+import type { MapWorkflowStore } from "../map/map-workflow";
+
+let mapWorkflowStore: MapWorkflowStore | null = null;
+async function getMapWorkflowStore(): Promise<MapWorkflowStore> {
+  if (!mapWorkflowStore) {
+    mapWorkflowStore = (await import("../map/map-workflow")).mapWorkflowStore;
+  }
+  return mapWorkflowStore;
+}
+
+let recalculateIsMapDirty: (() => void) | null = null;
+async function getRecalculateIsMapDirty(): Promise<() => void> {
+  if (!recalculateIsMapDirty) {
+    recalculateIsMapDirty = (await import("../map/map-workflow")).recalculateIsMapDirty;
+    const workflow = await getMapWorkflowStore();
+    workflow.setSocketStateProvider(() => get(socketStore));
+    workflow.setSocketUpdate((fn) => socketStore.update(fn));
+  }
+  return recalculateIsMapDirty;
+}
 
 export interface SocketState {
   socket: WebSocket | null;
@@ -48,6 +68,8 @@ export interface SocketState {
   activeMapId: string;
   currentMapId: string;
   currentMapMeta: { hash: string; crc: number; area: number; rotation: number } | null;
+  isLoadingMap: boolean;
+  isNewMap: boolean;
 }
 
 const initialState: SocketState = {
@@ -71,9 +93,14 @@ const initialState: SocketState = {
   activeMapId: "",
   currentMapId: "",
   currentMapMeta: null,
+  isLoadingMap: false,
+  isNewMap: false,
 };
 
 export const socketStore = writable<SocketState>(initialState);
+if (typeof window !== "undefined") {
+  (window as any).socketStore = socketStore;
+}
 
 /** Dedizierter Store für MotorPlot-Daten. Wird im WS-Handler befüllt und
  *  ist NICHT von clearConsoleLines() betroffen (vermeidet Race Condition
@@ -170,29 +197,9 @@ class SocketService {
 
           socketStore.update((s) => ({ ...s, connected: true }));
 
-          // Pending-Nachrichten senden, die während der Verbindungslosigkeit aufgelaufen sind
-          const pending = this.pendingMessages;
-          this.pendingMessages = [];
-          for (const msg of pending) {
-            if (socket.readyState === WebSocket.OPEN) {
-              socket.send(JSON.stringify(msg));
-            }
-          }
-
-          // Aktuelle MowSettings vom Backend abrufen
-          this.requestMowSettings();
-        });
-
-        socket.addEventListener("close", (event) => {
-          this.clearAllTimers();
-
-          socketStore.update((s) => {
-            // Nur überschreiben, wenn dieser Socket noch der aktuelle ist
-            if (s.socket === socket) {
-              return { ...s, socket: null, connected: false };
-            }
-            return s;
-          });
+  // Map-Workflow-Store frühzeitig laden, damit setSocketUpdate und
+  // setSocketStateProvider registriert sind, bevor der Benutzer interagiert.
+  getRecalculateIsMapDirty().catch(() => {});
 
           if (
             this.reconnect &&
@@ -229,10 +236,18 @@ class SocketService {
           }
         });
 
-        socket.addEventListener("message", (message: any) => {
+        socket.addEventListener("message", async (message: any) => {
           this.lastMessageTime = Date.now();
           try {
             let jsonData = JSON.parse(message.data);
+            let workflowRotationToSet: number | null = null;
+            let workflowNewMapReceived = false;
+            let workflowFinishSaveMap: { id: string; name: string; rotation: number } | null = null;
+            let workflowFinishLoadMap: { id: string; name: string; rotation: number } | null = null;
+            let workflowLoadFailed = false;
+            let workflowFinishDelete = false;
+            const mwf = await getMapWorkflowStore();
+
             socketStore.update((state) => {
               const newState = { ...state };
               switch (jsonData.type) {
@@ -302,6 +317,21 @@ class SocketService {
                     const meta = { hash: data.meta.hash, crc: data.meta.crc || 0, area: data.meta.area, rotation: data.meta.rotation || 0 };
                     newState.currentMapMeta = meta;
                     mapMetaStore.set(meta);
+                    currentMapRotationStore.set(meta.rotation);
+                    // Wenn wir gerade eine Karte laden, merken wir uns die Rotation
+                    // und beenden den Ladezustand, sobald mapList ankommt.
+                    if (newState.isLoadingMap) {
+                      workflowRotationToSet = meta.rotation;
+                    }
+                    // Abgefangene/neue Karte erkennen: Meta ist da, aber keine
+                    // currentMapId und wir befinden uns nicht im Lade-Modus.
+                    // Während einer Löschoperation darf dieser Pfad nicht
+                    // auslösen, sonst springt die UI in den Rename-Modus für
+                    // eine gerade gelöschte Karte.
+                    if (!newState.currentMapId && !newState.isLoadingMap && !wasDeletingMap) {
+                      newState.isNewMap = true;
+                      workflowNewMapReceived = true;
+                    }
                   }
                   // Map-Chunk-Logik: Chunks sammeln, MapStore wird im Buffer gesetzt
                   if (
@@ -317,7 +347,45 @@ class SocketService {
                   const listData = jsonData.data as MapListData;
                   newState.maps = listData.maps || [];
                   newState.activeMapId = listData.activeId || "";
-                  newState.currentMapId = listData.currentId || listData.activeId || "";
+                  const previousMapId = newState.currentMapId;
+                  const wasLoadingMap = newState.isLoadingMap;
+                  const wasDeletingMap = get(mwf).state === "deleting";
+                  newState.currentMapId = listData.currentId || "";
+                  newState.isLoadingMap = false;
+                  console.log("[socket] mapList", {
+                    currentId: listData.currentId,
+                    previousMapId,
+                    wasLoadingMap,
+                    isLoadingMap: newState.isLoadingMap,
+                  });
+                  if (newState.currentMapId) {
+                    newState.isNewMap = false;
+                    const map = newState.maps.find((m) => m.id === newState.currentMapId);
+                    if (map) {
+                      workflowFinishSaveMap = { id: map.id, name: map.name, rotation: map.rotation };
+                      // finishLoadMap muss immer aufgerufen werden, wenn wir gerade
+                      // eine Karte geladen haben, auch wenn die ID gleich geblieben ist.
+                      // Sonst bleibt der Workflow im "loading"-Zustand hängen und "New"
+                      // bleibt deaktiviert.
+                      if (wasLoadingMap || previousMapId !== newState.currentMapId) {
+                        workflowFinishLoadMap = { id: map.id, name: map.name, rotation: map.rotation };
+                      }
+                    }
+                  } else if (newState.isNewMap) {
+                    workflowNewMapReceived = true;
+                  } else if (wasLoadingMap) {
+                    // Laden hat keine currentMapId geliefert -> Zustand zurücksetzen,
+                    // damit der Workflow nicht ewig in "loading" bleibt. Gleichzeitig
+                    // currentMapId/meta leeren, damit die UI nicht auf einer Karte
+                    // hängt, die im Backend nicht mehr geladen ist.
+                    newState.currentMapId = "";
+                    newState.currentMapMeta = null;
+                    newState.isNewMap = false;
+                    workflowLoadFailed = true;
+                  }
+                  if (wasDeletingMap) {
+                    workflowFinishDelete = true;
+                  }
                   break;
                 }
                 case ResponseDataType.sensorSummary:
@@ -339,6 +407,31 @@ class SocketService {
               }
               return newState;
             });
+
+            // Map-Workflow-Updates außerhalb von socketStore.update ausführen,
+            // um zirkuläre Imports und asynchrone Store-Updates zu vermeiden.
+            if (workflowRotationToSet !== null) {
+              mwf.update((w) => ({ ...w, lastBackendRotation: workflowRotationToSet! }));
+            }
+            if (workflowNewMapReceived) {
+              const mapsCount = socketStore ? get(socketStore).maps.length + 1 : 1;
+              mwf.onNewMapReceived(`Karte ${mapsCount}`);
+            }
+            if (workflowFinishSaveMap) {
+              mwf.finishSaveMap(workflowFinishSaveMap.id, workflowFinishSaveMap.name, workflowFinishSaveMap.rotation);
+            }
+            if (workflowFinishLoadMap) {
+              mwf.finishLoadMap(workflowFinishLoadMap.id, workflowFinishLoadMap.name, workflowFinishLoadMap.rotation);
+            }
+            if (workflowLoadFailed) {
+              mwf.setError("Karte konnte nicht geladen werden");
+            }
+            if (workflowFinishDelete) {
+              mwf.finishDelete();
+            }
+
+            const recalc = await getRecalculateIsMapDirty();
+            recalc();
           } catch (error) {
             console.error(
               "[Socket] Error parsing message:",
@@ -532,6 +625,12 @@ class SocketService {
   }
 
   sendLoadMap(id: string) {
+    // currentMapId sofort auf die Ziel-ID setzen, damit das Frontend während
+    // des Ladens weiß, welche Karte geladen wird, und finishLoadMap korrekt
+    // ausgelöst wird. startLoadMap versucht denselben Zustand über updateSocket
+    // zu setzen, falls das Workflow-Store bereits registriert ist.
+    socketStore.update((s) => ({ ...s, currentMapMeta: null, currentMapId: id, isLoadingMap: true, isNewMap: false }));
+    mapMetaStore.set(null);
     const req: RequestSocketMessage = {
       type: RequestDataType.loadMap,
       data: { id },
@@ -540,6 +639,11 @@ class SocketService {
   }
 
   sendSaveMap(name: string, rotation: number = 0) {
+    // Während des Speicherns temporär den unsaved-Zustand zurücksetzen, damit
+    // das Dropdown nicht zwischenzeitlich einen ungültigen Eintrag anzeigt.
+    // Die Rotation wird beibehalten, da sie gerade gespeichert wird.
+    socketStore.update((s) => ({ ...s, currentMapMeta: null, isLoadingMap: false, isNewMap: false }));
+    mapMetaStore.set(null);
     const req: RequestSocketMessage = {
       type: RequestDataType.saveMap,
       data: { name, rotation },
@@ -559,6 +663,14 @@ class SocketService {
     const req: RequestSocketMessage = {
       type: RequestDataType.deleteMap,
       data: { id },
+    };
+    this.sendMessage(req);
+  }
+
+  sendDiscardMap() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.discardMap,
+      data: {},
     };
     this.sendMessage(req);
   }

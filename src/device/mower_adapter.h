@@ -150,6 +150,7 @@ namespace ArduMower
       virtual bool loadMap(const String &id) override;
       virtual bool renameMap(const String &id, const String &name) override;
       virtual bool deleteMap(const String &id) override;
+      virtual bool discardMap() override;
       virtual bool setActiveMap(const String &id) override;
       virtual String currentMapHash() override;
       virtual int currentMapCrc() override;

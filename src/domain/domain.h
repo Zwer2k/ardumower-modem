@@ -396,6 +396,7 @@ namespace ArduMower
         virtual bool renameMap(const String &id, const String &name) { (void)id; (void)name; return false; }
         virtual bool deleteMap(const String &id) { (void)id; return false; }
         virtual bool setActiveMap(const String &id) { (void)id; return false; }
+        virtual bool discardMap() { return false; }
         virtual String currentMapHash() { return ""; }
         virtual int currentMapCrc() { return 0; }
         virtual double currentMapArea() { return 0.0; }

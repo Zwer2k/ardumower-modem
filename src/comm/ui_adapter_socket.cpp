@@ -299,6 +299,17 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
       yield();
       _socketHandler->sendData(ResponseDataType::map, NULL, true);
       _socketHandler->sendMapList(NULL);
+    } else {
+      // Laden ist fehlgeschlagen (z.B. Datei nicht vorhanden oder Map wird
+      // gerade gelesen). Aktuelle Karte verwerfen, damit mapList eine leere
+      // currentId liefert und das Frontend den Ladezustand sauber verlassen
+      // kann. Andernfalls bleibt der Workflow im Frontend in "loading" und
+      // die Manage-Map-Buttons dauerhaft deaktiviert.
+      _source.discardMap();
+      _socketHandler->abortMapChunkSend();
+      yield();
+      _socketHandler->sendData(ResponseDataType::map, NULL, true);
+      _socketHandler->sendMapList(NULL);
     }
     break;
   }
@@ -324,6 +335,19 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
    case RequestDataType::deleteMap: {
     String id = jsonData["id"] | "";
     if (_source.deleteMap(id)) {
+      _socketHandler->abortMapChunkSend();
+      yield();
+      _socketHandler->sendData(ResponseDataType::map, NULL, true);
+      _socketHandler->sendMapList(NULL);
+    }
+    break;
+  }
+
+   case RequestDataType::discardMap: {
+    if (_source.discardMap()) {
+      _socketHandler->abortMapChunkSend();
+      yield();
+      _socketHandler->sendData(ResponseDataType::map, NULL, true);
       _socketHandler->sendMapList(NULL);
     }
     break;
