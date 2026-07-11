@@ -101,6 +101,7 @@ namespace ArduMower
         bool active = false;
         uint32_t clientId = 0;
         uint32_t timestamp = 0;
+        uint32_t transferId = 0;  // Eindeutige ID pro Map-Transfer; inkrementiert bei startMapChunkSend
         int phase = 0;
         size_t exclusionIdx = 0;
         size_t idx = 0;
@@ -218,7 +219,7 @@ namespace ArduMower
       private:
         void startMapChunkSend(UiSocketItem* sendTo, bool force);
         void processMapChunkSend();
-        bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize, bool reset = false);
+        bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize, bool reset, size_t &nextIdx);
         AsyncWebSocket *_ws;
 
         uint32_t lastVersionRequestTimestamp = 0;
