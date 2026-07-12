@@ -501,7 +501,7 @@ export function recalculateIsMapDirty() {
         backendMapSnapshot: get(MapStore),
         snapshotReady: true,
       }));
-    }, 300);
+    }, 0);
   }
 
   // Solange der Snapshot noch nicht fertig ist, gilt die Karte als nicht-dirty

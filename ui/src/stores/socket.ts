@@ -202,53 +202,81 @@ class SocketService {
   // Map-Workflow-Store frühzeitig laden, damit setSocketUpdate und
   // setSocketStateProvider registriert sind, bevor der Benutzer interagiert.
   getRecalculateIsMapDirty().catch(() => {});
+        });
+
+        socket.addEventListener("error", (error) => {
+          // Fehler führen in der Regel zu einem close-Event, daher kümmert
+          // sich der close-Handler um den Reconnect. Hier nur Timer stoppen.
+          if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+          }
+          if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+          }
+          if (this.livenessInterval) {
+            clearInterval(this.livenessInterval);
+            this.livenessInterval = null;
+          }
+          // Socket im close-Handler auf null setzen; hier nur explizit
+          // schließen, falls der Browser kein close-Event feuert.
+          try { socket.close(); } catch (_) {}
+        });
+
+        socket.addEventListener("close", () => {
+          // Ignoriere Events von veralteten Sockets
+          let isCurrent = false;
+          socketStore.update((s) => {
+            isCurrent = s.socket === socket;
+            return s;
+          });
+          if (!isCurrent) {
+            return;
+          }
+
+          this.clearAllTimers();
+          socketStore.update((s) => ({ ...s, socket: null, connected: false }));
 
           if (
             this.reconnect &&
-            this.reconnectAttempts < this.maxReconnectAttempts &&
-            this.isPageVisible
+            this.isPageVisible &&
+            this.reconnectAttempts < this.maxReconnectAttempts
           ) {
             this.reconnectAttempts++;
             const delay = Math.min(
               1000 * Math.pow(2, this.reconnectAttempts - 1),
               30000,
             );
-
             this.restartTimer = setTimeout(() => {
               this.connect();
             }, delay);
-          } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          }
-        });
-
-        socket.addEventListener("error", (error) => {
-          this.clearAllTimers();
-          if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-          }
-          socketStore.update((s) => {
-            if (s.socket === socket) {
-              return { ...s, socket: null, connected: false };
-            }
-            return s;
-          });
-          if (socket) {
-            try { socket.close(); } catch (_) {}
           }
         });
 
         socket.addEventListener("message", async (message: any) => {
           this.lastMessageTime = Date.now();
           try {
-            let jsonData = JSON.parse(message.data);
+            const jsonData = JSON.parse(message.data);
+            const msgType = jsonData.type as ResponseDataType;
+
+            // Map-Workflow-Store wird nur bei Map-relevanten Nachrichten
+            // gebraucht; bei allen anderen Nachrichten (z. B. Upload-Progress
+            // über mowerConsole) sparen wir den Import und vermeiden
+            // unnötige Verzögerungen.
+            let mwf: MapWorkflowStore | null = null;
+            let wasDeletingMap = false;
+            if (msgType === ResponseDataType.map || msgType === ResponseDataType.mapList) {
+              mwf = await getMapWorkflowStore();
+              wasDeletingMap = get(mwf).state === "deleting";
+            }
+
             let workflowRotationToSet: number | null = null;
             let workflowNewMapReceived = false;
             let workflowFinishSaveMap: { id: string; name: string; rotation: number } | null = null;
             let workflowFinishLoadMap: { id: string; name: string; rotation: number } | null = null;
             let workflowLoadFailed = false;
             let workflowFinishDelete = false;
-            const mwf = await getMapWorkflowStore();
 
             socketStore.update((state) => {
               const newState = { ...state };
@@ -351,7 +379,6 @@ class SocketService {
                   newState.activeMapId = listData.activeId || "";
                   const previousMapId = newState.currentMapId;
                   const wasLoadingMap = newState.isLoadingMap;
-                  const wasDeletingMap = get(mwf).state === "deleting";
                   newState.currentMapId = listData.currentId || "";
                   newState.isLoadingMap = false;
                   const currentMapEntry = newState.maps.find((m) => m.id === newState.currentMapId);
@@ -434,8 +461,18 @@ class SocketService {
               mwf.finishDelete();
             }
 
-            const recalc = await getRecalculateIsMapDirty();
-            recalc();
+            // Dirty-Check nur auslösen, wenn sich etwas Map-relevantes
+            // geändert hat. Für jedes mowerConsole-Upload-Update oder
+            // jede Stats-Nachricht würde das unnötig Last erzeugen und die
+            // UI ausbremsen.
+            if (
+              msgType === ResponseDataType.map ||
+              msgType === ResponseDataType.mapList ||
+              (msgType === ResponseDataType.mowerState && jsonData.progressOp)
+            ) {
+              const recalc = await getRecalculateIsMapDirty();
+              recalc();
+            }
           } catch (error) {
             console.error(
               "[Socket] Error parsing message:",
