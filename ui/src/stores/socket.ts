@@ -317,9 +317,15 @@ class SocketService {
                     newState.modemLog = newState.modemLog.slice(-1000);
                   }
                   break;
-                case ResponseDataType.mowerConsole:
+                case ResponseDataType.mowerConsole: {
                   const incomingLines = (jsonData.data as ConsoleResponseData)
                     .lines;
+                  // Mower-Firmware-Upload sendet Fortschritt als StatusMessage
+                  // (ohne lines). Solche Nachrichten ignorieren, damit der
+                  // Upload-Dialog in FirmwareUpload.svelte sie verarbeitet.
+                  if (!Array.isArray(incomingLines)) {
+                    break;
+                  }
                   newState.consoleLines = [
                     ...newState.consoleLines,
                     ...incomingLines,
@@ -333,6 +339,7 @@ class SocketService {
                     ...incomingLines,
                   ]);
                   break;
+                }
                 case ResponseDataType.map: {
                   const data = jsonData.data as any;
                   if (data && data.reset) {
