@@ -8,6 +8,7 @@
   export let waypointsId: string;
   export let edit: boolean = false;
   export let editItemId: null | string = null;
+  export let drawActive: boolean = false;
   export let onMove: (points: PointType[]) => void = () => {};
 
   function updatePoint(index: number, x: number, y: number) {
@@ -45,6 +46,7 @@
       value={point}
       mapItemId={waypointsId + "-point-" + index}
       bind:editItemId
+      {drawActive}
       strokeChoose="blue"
       r={0.11}
       on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}

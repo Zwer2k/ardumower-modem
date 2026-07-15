@@ -2,7 +2,6 @@
   import { Button, ComboBox, Row } from "carbon-components-svelte";
   import IconPen from "carbon-icons-svelte/lib/Pen.svelte";
   import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
-  import IconCut from "carbon-icons-svelte/lib/Cut.svelte";
   import IconAdd from "carbon-icons-svelte/lib/Add.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import type { EditItem } from "../interactions/map-edit";
@@ -24,7 +23,6 @@
   export let shouldFilterItem: (item: EditItem, value: string) => boolean;
 
   function handleSelect(e: CustomEvent) {
-    selectedId = e.detail?.selectedId ?? null;
     onSelect(e);
   }
 </script>
@@ -32,7 +30,7 @@
 <Row class="map-edit-row">
   <div class="edit-combo">
     <ComboBox
-      disabled={!edit}
+      disabled={!edit || drawActive}
       placeholder="Select item to edit"
       items={editItems}
       selectedId={selectedId}
@@ -54,7 +52,7 @@
       <Button
         kind="tertiary"
         size="small"
-        disabled={!editEdge}
+        disabled={drawActive || !editEdge}
         icon={IconSplit}
         iconDescription="Split"
         on:click={onSplitClick}
@@ -62,14 +60,7 @@
       <Button
         kind="tertiary"
         size="small"
-        disabled={!editEdge}
-        icon={IconCut}
-        iconDescription="Cut"
-      />
-      <Button
-        kind="tertiary"
-        size="small"
-        disabled={!mowerPos || nearPos}
+        disabled={drawActive || !mowerPos || nearPos}
         icon={IconAdd}
         iconDescription="Add"
         on:click={onAddClick}
@@ -79,7 +70,7 @@
       <Button
         kind="danger"
         size="small"
-        disabled={!edit || !editPoint}
+        disabled={drawActive || !edit || !editPoint}
         on:click={onDeleteClick}
         icon={IconTrashCan}
         iconDescription="Delete"

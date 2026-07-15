@@ -9,6 +9,7 @@
   export let perimiterId: string;
   export let edit: boolean = false;
   export let editItemId: null | string = null;
+  export let drawActive: boolean = false;
 
   export let onMove: (points: PointType[]) => void = () => {};
 
@@ -36,6 +37,7 @@
       value={point}
       mapItemId={perimiterId + "-point-" + index}
       bind:editItemId
+      {drawActive}
       r={0.11}
       on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}
     />

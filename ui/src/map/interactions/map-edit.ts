@@ -306,6 +306,28 @@ export function splitEdgeByEditItemId(editItemId: string): string | null {
   return prefix + "-point-" + (edgeIndex + 1);
 }
 
+export function buildPointId(editItemId: string | null, index: number): string | null {
+  if (!editItemId) return null;
+  const edgeMatch = editItemId.match(/^(.*)-edge-([0-9]+)$/);
+  const pointMatch = editItemId.match(/^(.*)-point-([0-9]+)$/);
+  const prefix = edgeMatch ? edgeMatch[1] : pointMatch ? pointMatch[1] : null;
+  if (!prefix) return null;
+  return prefix + "-point-" + index;
+}
+
+export function buildInitialCandidates(
+  area: "perimeter" | "exclusion" | "dockpoints" | "waypoints",
+  exclusionIndex: number | undefined,
+  begin: Point,
+  end: Point,
+  midPoint: Point
+): DrawCandidate[] {
+  return [
+    { area, exclusionIndex, begin, end: midPoint },
+    { area, exclusionIndex, begin: midPoint, end },
+  ];
+}
+
 export function addPointAtMowerPosition(mowerPos: { x: number; y: number } | null, editItemId: string | null, editEdge: boolean): number | null {
   if (!mowerPos) return null;
   const gpsPt: Point = { x: mowerPos.x, y: -mowerPos.y };
@@ -370,6 +392,8 @@ export function startDrawMode(
 ): {
   area: "perimeter" | "exclusion" | "dockpoints" | "waypoints";
   exclusionIndex?: number;
+  begin: Point;
+  end: Point;
   midPoint: Point;
   newPointId: string;
 } | null {
@@ -398,7 +422,7 @@ export function startDrawMode(
   newPts.splice(edgeIndex + 1, 0, midPoint);
   setPoints(newPts, area, exclusionIndex);
 
-  return { area, exclusionIndex, midPoint, newPointId: prefix + "-point-" + (edgeIndex + 1) };
+  return { area, exclusionIndex, begin, end, midPoint, newPointId: prefix + "-point-" + (edgeIndex + 1) };
 }
 
 export function moveFloatingPoint(
@@ -491,11 +515,21 @@ export function placeFloatingPoint(
 
   const newCandidates = [
     ...drawCandidates.filter((c) => c !== best && c.begin !== oldFloating && c.end !== oldFloating),
-    { area, exclusionIndex, begin: end, end: newFloating },
+    { area, exclusionIndex, begin, end: newFloating },
     { area, exclusionIndex, begin: newFloating, end },
   ];
 
   return { drawArea: area, drawExclusionIndex: exclusionIndex, drawCandidates: newCandidates, floatingPoint: newFloating };
+}
+
+export function findPointIndex(
+  drawArea: "perimeter" | "exclusion" | "dockpoints" | "waypoints" | null,
+  drawExclusionIndex: number | undefined,
+  point: Point
+): number {
+  if (!drawArea) return -1;
+  const pts = getPoints(get(MapStore).map, drawArea, drawExclusionIndex);
+  return pts.indexOf(point);
 }
 
 export function removeFloatingPoint(

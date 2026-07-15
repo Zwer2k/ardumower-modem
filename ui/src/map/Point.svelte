@@ -15,6 +15,7 @@
   export let fill = "transparent";
   export let fillActive = "transparent";
   export let fillPassive = "transparent";
+  export let drawActive: boolean = false;
   export let strokeWidth = 0.035;
   export let r = 0.18;
 
@@ -28,14 +29,27 @@
   let hovered = false;
 
   $: stroke =
-    mapItemId === editItemId
-      ? strokeActive
-      : hovered
-        ? "blue"
+    isDragging
+      ? "black"
+      : drawActive
+        ? strokePassive
+        : mapItemId === editItemId
+          ? strokeActive
+          : hovered
+            ? "blue"
+            : editItemId === null
+              ? strokeChoose
+              : strokePassive;
+  $: fill =
+    isDragging
+      ? "black"
+      : drawActive
+        ? fillPassive
         : editItemId === null
-          ? strokeChoose
-          : strokePassive;
-  $: fill = editItemId === null ? fillActive : mapItemId === editItemId ? fillActive : fillPassive;
+          ? fillActive
+          : mapItemId === editItemId
+            ? fillActive
+            : fillPassive;
 
   function click() {
     editItemId = mapItemId

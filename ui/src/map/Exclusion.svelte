@@ -8,6 +8,7 @@
   export let exclusionId: string;
   export let edit: boolean = false;
   export let editItemId: null | string = null;
+  export let drawActive: boolean = false;
 
   export let onMove: (points: PointType[]) => void = () => {};
 
@@ -40,6 +41,7 @@
       value={point}
       mapItemId={exclusionId + "-point-" + index}
       bind:editItemId
+      {drawActive}
       on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}
     />
   {/each}
