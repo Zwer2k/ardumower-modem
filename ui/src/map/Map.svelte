@@ -28,9 +28,13 @@ import { setMapDirty } from "./services/map-sync";
     addPointAtMowerPosition,
     startDrawMode,
     moveFloatingPoint,
-    switchToCandidate,
+    placeFloatingPoint,
     findCrossedCandidate,
+    switchToCandidate,
+    findPointIndex,
     removeFloatingPoint,
+    buildPointId,
+    buildInitialCandidates,
     type EditItem,
   } from "./interactions/map-edit";
   import { createGotoState } from "./interactions/map-goto";
@@ -46,6 +50,10 @@ import { setMapDirty } from "./services/map-sync";
 
   let editPoint = false;
   let editEdge = false;
+
+  $: editPoint = edit && !!editItemId && editItemId.indexOf("-point-") !== -1;
+  $: editEdge = edit && !!editItemId && editItemId.indexOf("-edge-") !== -1;
+  $: selectedId = editItemId;
 
   // ─── Map management ────────────────────────────────────────────────────────
   let showManage = false;
@@ -164,6 +172,7 @@ import { setMapDirty } from "./services/map-sync";
     }
     selectedMapId = id;
     dropdownSelectedId = id;
+    stopDraw();
     mapWorkflowStore.startLoadMap(id);
     socketService.sendLoadMap(id);
   }
@@ -182,6 +191,7 @@ import { setMapDirty } from "./services/map-sync";
         mapWorkflowStore.resetDirtyState();
       }
     }
+    stopDraw();
     const defaultName = `Karte ${$socketStore.maps.length + 1}`;
     compassState.reset();
     socketService.sendDiscardMap();
@@ -223,6 +233,7 @@ import { setMapDirty } from "./services/map-sync";
       kind: "danger",
     });
     if (!choice) return;
+    stopDraw();
     if (target === "__unsaved__" || $socketStore.isNewMap) {
       mapWorkflowStore.resetDirtyState();
       socketService.sendDiscardMap();
@@ -318,14 +329,8 @@ import { setMapDirty } from "./services/map-sync";
 
   $: editItems = $MapStore && $MapStore.map ? buildEditItems($MapStore.map) : [];
 
-  function updateButtonAvailability() {
-    editPoint = edit && !!editItemId && editItemId.indexOf("-point-") !== -1;
-    editEdge = edit && !!editItemId && editItemId.indexOf("-edge-") !== -1;
-  }
-
   function selectEditItem(e: CustomEvent) {
-    selectedId = editItemId = e.detail?.selectedId ?? null;
-    updateButtonAvailability();
+    editItemId = e.detail?.selectedId ?? null;
   }
 
   function shouldFilterItem(item: { text: string }, value: string) {
@@ -334,37 +339,31 @@ import { setMapDirty } from "./services/map-sync";
 
   function clearEditItem() {
     editItemId = null;
-    selectedId = null;
-    updateButtonAvailability();
   }
 
   function onDeleteClick() {
     if (!editItemId) return;
-    const result = deletePointByEditItemId($MapStore.map, editItemId);
-    if (result) {
-      MapStore.update((store) => ({ ...store, map: result.map }));
-    }
+    deletePointByEditItemId(editItemId);
   }
 
   function selectNewPoint(id: string) {
-    selectedId = editItemId = id;
-    updateButtonAvailability();
+    editItemId = id;
   }
 
   function onSplitClick() {
-    const result = splitEdgeByEditItemId($MapStore.map, editItemId);
-    if (result) {
-      MapStore.update((store) => ({ ...store, map: result.map }));
-      selectNewPoint(result.newPointId);
+    if (!editItemId) return;
+    const newPointId = splitEdgeByEditItemId(editItemId);
+    if (newPointId) {
+      selectNewPoint(newPointId);
     }
   }
 
   function onAddClick() {
     if (!mowerPos) return;
-    const result = addPointAtMowerPosition($MapStore.map, editItemId, editEdge, mowerPos);
-    if (result) {
-      MapStore.update((store) => ({ ...store, map: result.map }));
-      selectNewPoint(result.newPointId);
+    const index = addPointAtMowerPosition(mowerPos, editItemId, editEdge);
+    if (index !== null) {
+      const newPointId = buildPointId(editItemId, index);
+      if (newPointId) selectNewPoint(newPointId);
     }
   }
 
@@ -373,24 +372,27 @@ import { setMapDirty } from "./services/map-sync";
       stopDraw();
       return;
     }
-    const result = startDrawMode($MapStore.map, editItemId);
+    if (!editItemId) return;
+    const result = startDrawMode(editItemId);
     if (!result) return;
-    MapStore.update((store) => ({ ...store, map: result.map }));
     drawActive = true;
-    drawArea = result.drawArea;
-    drawExclusionIndex = result.drawExclusionIndex;
-    drawCandidates = result.drawCandidates;
-    floatingPoint = result.floatingPoint;
+    drawArea = result.area;
+    drawExclusionIndex = result.exclusionIndex;
+    floatingPoint = result.midPoint;
+    drawCandidates = buildInitialCandidates(
+      result.area,
+      result.exclusionIndex,
+      result.begin,
+      result.end,
+      result.midPoint
+    );
     selectNewPoint(result.newPointId);
   }
 
   function stopDraw() {
     if (!drawActive) return;
     if (floatingPoint && drawArea) {
-      MapStore.update((store) => ({
-        ...store,
-        map: removeFloatingPoint(store.map, drawArea, floatingPoint, drawExclusionIndex),
-      }));
+      removeFloatingPoint(drawArea, drawExclusionIndex, floatingPoint);
     }
     drawActive = false;
     drawArea = null;
@@ -415,60 +417,90 @@ import { setMapDirty } from "./services/map-sync";
   function onDrawMapClick(event: CustomEvent<{ x: number; y: number }>) {
     if (!drawActive || !floatingPoint || drawCandidates.length === 0) return;
     const { x, y } = event.detail;
-    const result = findCrossedCandidate(
-      $MapStore.map,
+
+    const crossed = findCrossedCandidate(
+      x,
+      y,
       drawArea,
       drawExclusionIndex,
-      drawCandidates,
       floatingPoint,
-      x,
-      y
+      drawCandidates
     );
-    if (result?.candidate) {
-      switchToCandidate(
-        $MapStore.map,
+    if (crossed) {
+      const switched = switchToCandidate(
+        crossed,
+        floatingPoint,
         drawArea,
         drawExclusionIndex,
-        drawCandidates,
-        floatingPoint,
-        result.candidate
+        drawCandidates
       );
-      drawArea = result.nextArea;
-      drawExclusionIndex = result.nextExclusionIndex;
-      drawCandidates = result.nextCandidates;
-      floatingPoint = result.nextFloating;
-      MapStore.update((store) => ({ ...store, map: result.map }));
+      if (switched) {
+        drawArea = switched.drawArea;
+        drawExclusionIndex = switched.drawExclusionIndex;
+        drawCandidates = switched.drawCandidates;
+        floatingPoint = switched.floatingPoint;
+      }
+    }
+
+    const placeResult = placeFloatingPoint(
+      x,
+      y,
+      drawArea,
+      drawExclusionIndex,
+      floatingPoint,
+      drawCandidates
+    );
+    if (placeResult) {
+      drawArea = placeResult.drawArea;
+      drawExclusionIndex = placeResult.drawExclusionIndex;
+      drawCandidates = placeResult.drawCandidates;
+      floatingPoint = placeResult.floatingPoint;
+      const idx = findPointIndex(drawArea, drawExclusionIndex, floatingPoint);
+      const newPointId = buildPointId(editItemId, idx);
+      if (newPointId) selectNewPoint(newPointId);
     }
   }
 
   function onMouseMove(event: CustomEvent<{ x: number; y: number }>) {
     if (!drawActive || !floatingPoint) return;
     const { x, y } = event.detail;
-    const result = findCrossedCandidate(
-      $MapStore.map,
+
+    const crossed = findCrossedCandidate(
+      x,
+      y,
       drawArea,
       drawExclusionIndex,
-      drawCandidates,
       floatingPoint,
-      x,
-      y
+      drawCandidates
     );
-    if (result?.candidate) {
-      switchToCandidate(
-        $MapStore.map,
+    if (crossed) {
+      const switched = switchToCandidate(
+        crossed,
+        floatingPoint,
         drawArea,
         drawExclusionIndex,
-        drawCandidates,
-        floatingPoint,
-        result.candidate
+        drawCandidates
       );
-      drawArea = result.nextArea;
-      drawExclusionIndex = result.nextExclusionIndex;
-      drawCandidates = result.nextCandidates;
-      floatingPoint = result.nextFloating;
-      MapStore.update((store) => ({ ...store, map: result.map }));
+      if (switched) {
+        drawArea = switched.drawArea;
+        drawExclusionIndex = switched.drawExclusionIndex;
+        drawCandidates = switched.drawCandidates;
+        floatingPoint = switched.floatingPoint;
+      }
     }
-    moveFloatingPoint(MapStore, drawArea, drawExclusionIndex, floatingPoint, x, y);
+
+    const moveResult = moveFloatingPoint(
+      x,
+      y,
+      drawArea,
+      drawExclusionIndex,
+      floatingPoint,
+      drawCandidates
+    );
+    if (moveResult) {
+      floatingPoint = moveResult.newFloatingPoint;
+      drawCandidates = moveResult.newCandidates;
+    }
   }
 
   // ─── Sync-Status: CRC aus Metadaten ────────────────────────────────────────
@@ -660,6 +692,7 @@ import { setMapDirty } from "./services/map-sync";
           value={$MapStore.map.perimeter}
           perimiterId="map-0-perimeter"
           {edit}
+          {drawActive}
           bind:editItemId
           onMove={(points) => {
             MapStore.update((s) => ({
@@ -677,6 +710,7 @@ import { setMapDirty } from "./services/map-sync";
             value={exclusion}
             exclusionId={"map-0-exclusion-" + index}
             {edit}
+            {drawActive}
             bind:editItemId
             onMove={(points) => {
               MapStore.update((s) => {
@@ -696,6 +730,7 @@ import { setMapDirty } from "./services/map-sync";
           value={$MapStore.map.waypoints}
           waypointsId="map-0-waypoints"
           {edit}
+          {drawActive}
           bind:editItemId
           onMove={(points) => {
             MapStore.update((s) => ({
@@ -712,6 +747,7 @@ import { setMapDirty } from "./services/map-sync";
           value={$MapStore.map.dockpoints}
           dockpointsId="map-0-dockpoints"
           {edit}
+          {drawActive}
           bind:editItemId
           onMove={(points) => {
             MapStore.update((s) => ({
