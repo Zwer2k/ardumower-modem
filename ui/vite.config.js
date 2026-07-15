@@ -30,8 +30,25 @@ export default defineConfig(({ mode }) => {
 					},
 					'/ws': {
 						target: `ws://${espDevIp}`,
-						ws: true, // Wichtig für WebSocket-Proxying
-						changeOrigin: true, // Empfohlen für Cross-Origin-Szenarien
+						ws: true,
+						changeOrigin: true,
+						// Prevent Vite from injecting its own HMR client WebSocket
+						// upgrade handling. The app opens its own WS to /ws, so we
+						// only need a plain TCP-level proxy.
+						rewriteWsOrigin: false,
+						// Keep the proxy alive for long-running connections and
+						// avoid premature socket resets when the ESP pauses briefly.
+						configure: (proxy, options) => {
+							proxy.on('error', (err, req, res) => {
+								// Suppress noisy ECONNRESET/EPIPE logs that would otherwise
+								// flood the dev-server console. These are expected when the
+								// ESP reboots or closes idle connections.
+								if (err && err.code && ['ECONNRESET', 'EPIPE', 'ETIMEDOUT'].includes(err.code)) {
+									return;
+								}
+								console.warn('[vite ws proxy] error:', err.message);
+							});
+						},
 					},
 				},
 			}

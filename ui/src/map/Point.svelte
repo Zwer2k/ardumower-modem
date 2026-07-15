@@ -44,7 +44,9 @@
   let isDragging = false;
 
   function onMouseDown(event: MouseEvent) {
-    if (!dragContext) return;
+    if (!dragContext) {
+      return;
+    }
     event.stopPropagation();
     editItemId = mapItemId;
     isDragging = true;
@@ -52,9 +54,7 @@
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging || !dragContext) return;
       const [x, y] = pointer(e, dragContext.contentGroup);
-      value.x = x;
-      value.y = y;
-      dispatch("move");
+      dispatch("move", { x, y });
     };
 
     const handleMouseUp = () => {

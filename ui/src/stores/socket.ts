@@ -26,26 +26,27 @@ import { handleMapChunk, waypointsStore, resetMapChunkBuffer } from "../map/map-
 import { MapPointType } from "../map/map-chunk-buffer";
 import { mowSettingsStore } from "../map/mow-settings";
 import { drivenTrackStore, currentMapRotationStore } from "../map/service";
-import type { MapWorkflowStore } from "../map/map-workflow";
+import { mapWorkflowStore } from "../map/workflow/map-workflow-store";
+import type { MapWorkflowStore, MapWorkflowState } from "../map/workflow/map-workflow-store";
 
-let mapWorkflowStore: MapWorkflowStore | null = null;
-async function getMapWorkflowStore(): Promise<MapWorkflowStore> {
-  if (!mapWorkflowStore) {
-    mapWorkflowStore = (await import("../map/map-workflow")).mapWorkflowStore;
+let workflowModule: any = null;
+async function getWorkflowModule(): Promise<any> {
+  if (!workflowModule) {
+    workflowModule = await import("../map/map-workflow");
   }
+  return workflowModule;
+}
+
+async function getMapWorkflowStore(): Promise<MapWorkflowStore> {
   return mapWorkflowStore;
 }
 
-let recalculateIsMapDirty: (() => void) | null = null;
-async function getRecalculateIsMapDirty(): Promise<() => void> {
-  if (!recalculateIsMapDirty) {
-    recalculateIsMapDirty = (await import("../map/map-workflow")).recalculateIsMapDirty;
-    const workflow = await getMapWorkflowStore();
-    workflow.setSocketStateProvider(() => get(socketStore));
-    workflow.setSocketUpdate((fn) => socketStore.update(fn));
-  }
-  return recalculateIsMapDirty;
+function initMapWorkflowBindings() {
+  mapWorkflowStore.setSocketStateProvider(() => get(socketStore));
+  mapWorkflowStore.setSocketUpdate((fn) => socketStore.update(fn));
 }
+
+export type { SocketState };
 
 export interface SocketState {
   socket: WebSocket | null;
@@ -201,7 +202,8 @@ class SocketService {
 
   // Map-Workflow-Store frühzeitig laden, damit setSocketUpdate und
   // setSocketStateProvider registriert sind, bevor der Benutzer interagiert.
-  getRecalculateIsMapDirty().catch(() => {});
+  initMapWorkflowBindings();
+  getMapWorkflowStore().catch(() => {});
         });
 
         socket.addEventListener("error", (error) => {
@@ -265,10 +267,12 @@ class SocketService {
             // über mowerConsole) sparen wir den Import und vermeiden
             // unnötige Verzögerungen.
             let mwf: MapWorkflowStore | null = null;
+            let workflowState: MapWorkflowState | null = null;
             let wasDeletingMap = false;
             if (msgType === ResponseDataType.map || msgType === ResponseDataType.mapList) {
-              mwf = await getMapWorkflowStore();
-              wasDeletingMap = get(mwf).state === "deleting";
+              mwf = mapWorkflowStore;
+              workflowState = get(mwf).state;
+              wasDeletingMap = workflowState === "deleting";
             }
 
             let workflowRotationToSet: number | null = null;
@@ -390,17 +394,17 @@ class SocketService {
                   newState.isLoadingMap = false;
                   const currentMapEntry = newState.maps.find((m) => m.id === newState.currentMapId);
                   newState.currentMapUnsaved = currentMapEntry?.unsaved || false;
-                  console.log("[socket] mapList", {
-                    currentId: listData.currentId,
-                    previousMapId,
-                    wasLoadingMap,
-                    isLoadingMap: newState.isLoadingMap,
-                  });
                   if (newState.currentMapId) {
                     newState.isNewMap = false;
                     const map = newState.maps.find((m) => m.id === newState.currentMapId);
                     if (map) {
-                      workflowFinishSaveMap = { id: map.id, name: map.name, rotation: map.rotation };
+                      // finishSaveMap nur auslösen, wenn der Workflow gerade
+                      // auf das Speichern wartet. Andernfalls würde jede
+                      // eingehende mapList den Snapshot überschreiben und den
+                      // Dirty-Status ungewollt zurücksetzen.
+                      if (workflowState === "saving" || workflowState === "renaming") {
+                        workflowFinishSaveMap = { id: map.id, name: map.name, rotation: map.rotation };
+                      }
                       // finishLoadMap muss immer aufgerufen werden, wenn wir gerade
                       // eine Karte geladen haben, auch wenn die ID gleich geblieben ist.
                       // Sonst bleibt der Workflow im "loading"-Zustand hängen und "New"
@@ -468,18 +472,9 @@ class SocketService {
               mwf.finishDelete();
             }
 
-            // Dirty-Check nur auslösen, wenn sich etwas Map-relevantes
-            // geändert hat. Für jedes mowerConsole-Upload-Update oder
-            // jede Stats-Nachricht würde das unnötig Last erzeugen und die
-            // UI ausbremsen.
-            if (
-              msgType === ResponseDataType.map ||
-              msgType === ResponseDataType.mapList ||
-              (msgType === ResponseDataType.mowerState && jsonData.progressOp)
-            ) {
-              const recalc = await getRecalculateIsMapDirty();
-              recalc();
-            }
+            // Map-relevante Nachrichten: nichts mehr automatisch
+            // berechnen; Dirty-Status wird explizit von UI-Aktionen und
+            // Speichern/Verwerfen gesteuert.
           } catch (error) {
             console.error(
               "[Socket] Error parsing message:",

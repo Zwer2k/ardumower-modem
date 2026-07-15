@@ -76,6 +76,7 @@ namespace ArduMower
 
       class UiSocketItem
       {
+        friend class UiSocketHandler;
       public:
         UiSocketItem(
           UiSocketHandler *socketHandler,
@@ -179,6 +180,8 @@ namespace ArduMower
         void markWsConnectionEvent() { _lastWsConnectionEvent = millis(); }
         bool isMapChunkSendActive() const { return mapChunkSendState.active; }
         bool isClientReceivingChunk(uint32_t clientId) const;
+        bool lockSendMutex() { return _sendMutex != NULL && xSemaphoreTake(_sendMutex, pdMS_TO_TICKS(100)) == pdTRUE; }
+        void unlockSendMutex() { if (_sendMutex != NULL) xSemaphoreGive(_sendMutex); }
 
         // Direct send used only by map chunks so they are not blocked by the
         // per-client serialization guard.
@@ -221,6 +224,11 @@ namespace ArduMower
         void processMapChunkSend();
         bool sendMapChunk(MapPointType pointType, const std::vector<ArduMower::Domain::Robot::MapPoint>& points, uint32_t timestamp, uint32_t clientId, int exclusionIdx, size_t startIdx, size_t blockSize, bool reset, size_t &nextIdx);
         AsyncWebSocket *_ws;
+
+        // Mutex für WebSocket-Sendeoperationen. ESPAsyncWebServer ist nicht
+        // threadsicher; parallele/verschachtelte sends können Frame-Boundaries
+        // korruptieren ("previous message is unfinished" im Browser).
+        SemaphoreHandle_t _sendMutex;
 
         uint32_t lastVersionRequestTimestamp = 0;
         uint32_t oldDataTimestamp[ResponseDataType::responseDataTypeLength];

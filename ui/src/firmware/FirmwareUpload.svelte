@@ -51,6 +51,9 @@
     fileSize = 0;
     flashProgress = null;
     flashStatus = null;
+    flashError = null;
+    stopReconnecting();
+    stopWatchdog();
     closeWebSocket();
     if (ref) {
       ref.value = '';
@@ -63,130 +66,188 @@
 
   let flashProgress: number | null = null;
   let flashStatus: FirmwareFlashStatus | null = null;
+  let flashError: string | null = null;
   let ws: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  let watchdogStartedAt: number | null = null;
 
-  function initWebSocket() {
-    console.log('WebSocket initialisieren');
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      return; // Already connected
+  const FLASH_WATCHDOG_MS = 5 * 60 * 1000; // 5 minutes max for a flash
+  const RECONNECT_BASE_MS = 500;
+  const RECONNECT_MAX_MS = 8000;
+  let reconnectAttempt = 0;
+
+  function stopReconnecting() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
     }
-    
+    reconnectAttempt = 0;
+  }
+
+  function stopWatchdog() {
+    if (watchdogTimer) {
+      clearTimeout(watchdogTimer);
+      watchdogTimer = null;
+    }
+    watchdogStartedAt = null;
+  }
+
+  function startWatchdog() {
+    stopWatchdog();
+    watchdogStartedAt = Date.now();
+    watchdogTimer = setTimeout(() => {
+      if (flashStatus !== FirmwareFlashStatus.success) {
+        console.error('[FirmwareUpload] flash watchdog timeout');
+        flashError = 'Zeitüberschreitung beim Flashen';
+        flashStatus = FirmwareFlashStatus.error;
+        closeWebSocket();
+      }
+    }, FLASH_WATCHDOG_MS);
+  }
+
+  function scheduleReconnect() {
+    if (flashStatus === FirmwareFlashStatus.success || flashStatus === FirmwareFlashStatus.error) return;
+    stopReconnecting();
+    const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt), RECONNECT_MAX_MS);
+    reconnectAttempt += 1;
+    console.log('[FirmwareUpload] scheduling reconnect in', delay, 'ms (attempt', reconnectAttempt, ')');
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connectWebSocket();
+    }, delay);
+  }
+
+  function connectWebSocket() {
+    console.log('[FirmwareUpload] connectWebSocket');
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    closeWebSocket();
+
     const host = location.host;
-    ws = new WebSocket("ws://" + host + "/ws");
+    try {
+      ws = new WebSocket('ws://' + host + '/ws');
+    } catch (err) {
+      console.error('[FirmwareUpload] WebSocket construction failed:', err);
+      scheduleReconnect();
+      return;
+    }
 
     ws.onopen = (event) => {
-      console.log('WebSocket verbunden', event);
-      flashStatus = FirmwareFlashStatus.clear; // Set to clear instead of null to indicate flashing started
-      // Don't reset flashProgress here - let it be set by incoming messages
+      console.log('[FirmwareUpload] WebSocket open', event);
+      reconnectAttempt = 0;
+      if (flashStatus !== FirmwareFlashStatus.success) {
+        flashStatus = FirmwareFlashStatus.clear;
+      }
+      if (watchdogStartedAt === null) {
+        startWatchdog();
+      }
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('WebSocket Nachricht empfangen:', data);
-        console.log('Upload Type:', uploadType);
-        console.log('Data structure:', {
-          hasProgress: typeof data.progress === 'number',
-          hasStatus: !!data.status,
-          hasStatusProgress: data.status && typeof data.status.progress === 'number',
-          hasDataProgress: data.data && typeof data.data.progress === 'number',
-          dataContent: data.data
-        });
-        
-        // For mower uploads: check multiple possible formats
+        console.log('[FirmwareUpload] WebSocket message:', data);
+
+        let progress: number | null = null;
+
         if (uploadType === FirmwareUploadType.mower) {
-          let progress = null;
-          
-          // Direct format: {"progress": 85}
           if (typeof data.progress === 'number') {
             progress = data.progress;
-          }
-          // Nested in data: {"type": 5, "data": {"progress": 85}}
-          else if (data.data && typeof data.data.progress === 'number') {
+          } else if (data.data && typeof data.data.progress === 'number') {
             progress = data.data.progress;
           }
-          
-          if (progress !== null) {
-            console.log('Mower progress update:', progress);
-            flashProgress = progress;
-            
-            if (flashProgress !== null && flashProgress >= 100) {
-              flashStatus = FirmwareFlashStatus.success;
-              closeWebSocket();
-            } else if (flashProgress !== null && flashProgress > 0) {
-              flashStatus = FirmwareFlashStatus.clear; // In Progress
-            }
-          }
+        } else if (uploadType === FirmwareUploadType.modem && data && data.status && typeof data.status.progress === 'number') {
+          progress = data.status.progress;
         }
-        // For modem uploads: nested format {"status": {"progress": 85}}
-        else if (uploadType === FirmwareUploadType.modem && data && data.status && typeof data.status.progress === 'number') {
-          console.log('Modem progress update:', data.status.progress);
-          flashProgress = data.status.progress;
-          
-          if (flashProgress !== null && flashProgress >= 100) {
+
+        if (progress !== null) {
+          flashProgress = Math.max(0, Math.min(100, progress));
+          if (flashProgress >= 100) {
             flashStatus = FirmwareFlashStatus.success;
+            stopReconnecting();
+            stopWatchdog();
             closeWebSocket();
-          } else if (flashProgress !== null && flashProgress > 0) {
-            flashStatus = FirmwareFlashStatus.clear; // In Progress
+          } else if (flashStatus !== FirmwareFlashStatus.success) {
+            flashStatus = FirmwareFlashStatus.clear;
           }
+          return;
         }
-        // Fehler-Status prüfen
-        else if (data && data.error) {
-          console.error('Flash Fehler:', data.error);
+
+        if (data && data.error) {
+          console.error('[FirmwareUpload] flash error from backend:', data.error);
+          flashError = data.error;
           flashStatus = FirmwareFlashStatus.error;
+          stopReconnecting();
+          stopWatchdog();
           closeWebSocket();
-        } else {
-          console.log('Unbekanntes WebSocket-Nachrichtenformat oder Upload-Typ');
         }
       } catch (error) {
-        console.error('Fehler beim Parsen der WebSocket-Nachricht:', error);
-        flashStatus = FirmwareFlashStatus.error;
+        console.error('[FirmwareUpload] error parsing WebSocket message:', error);
       }
     };
 
     ws.onclose = (event) => {
-      console.log('WebSocket getrennt', event);
+      console.log('[FirmwareUpload] WebSocket close', event.code, event.reason);
       ws = null;
+      if (flashStatus !== FirmwareFlashStatus.success && flashStatus !== FirmwareFlashStatus.error) {
+        scheduleReconnect();
+      }
     };
 
     ws.onerror = (error) => {
-      console.error('WebSocket Fehler:', error);
-      flashStatus = FirmwareFlashStatus.error;
+      console.error('[FirmwareUpload] WebSocket error:', error);
+      ws = null;
+      if (flashStatus !== FirmwareFlashStatus.success && flashStatus !== FirmwareFlashStatus.error) {
+        scheduleReconnect();
+      }
     };
   }
 
   function closeWebSocket() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.close();
+    stopReconnecting();
+    if (ws) {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        try {
+          ws.close();
+        } catch (_) {
+          // ignore
+        }
+      }
+      ws = null;
     }
-    ws = null;
   }
 
   function close() {
-    const isSuccess = ($uploaderStatus === FirmwareUploadStatus.success && uploadType === FirmwareUploadType.modem) || 
-                     (flashStatus === FirmwareFlashStatus.success && uploadType === FirmwareUploadType.mower);
-    
-    if (isSuccess)
-      document.location.reload()
+    const isSuccess =
+      ($uploaderStatus === FirmwareUploadStatus.success && uploadType === FirmwareUploadType.modem) ||
+      (flashStatus === FirmwareFlashStatus.success && uploadType === FirmwareUploadType.mower);
+
+    if (isSuccess) document.location.reload();
     resetUploadState();
   }
 
   let uploaderStatus: Readable<FirmwareUploadStatus> = uploader.status;
   let uploaderProgress: Readable<number> = uploader.progress;
 
-  // Reaktiv: WebSocket starten je nach Upload-Typ
   $: if (uploadType === FirmwareUploadType.modem && $uploaderStatus === FirmwareUploadStatus.expectReboot) {
-    initWebSocket();
+    connectWebSocket();
   } else if (uploadType === FirmwareUploadType.mower && $uploaderStatus === FirmwareUploadStatus.success) {
-    initWebSocket();
+    connectWebSocket();
   }
 
   $: if (uploadType === FirmwareUploadType.modem && $uploaderStatus === FirmwareUploadStatus.success) {
     flashProgress = 100;
     flashStatus = FirmwareFlashStatus.success;
+    stopReconnecting();
+    stopWatchdog();
+    closeWebSocket();
   }
 
   onDestroy(() => {
+    stopReconnecting();
+    stopWatchdog();
     closeWebSocket();
   });
 </script>
@@ -292,12 +353,12 @@
     {/if}
     {#if $uploaderStatus === FirmwareUploadStatus.success && uploadType === FirmwareUploadType.mower && flashStatus !== FirmwareFlashStatus.success}
       <p>The {uploadType} firmware has been uploaded successfully.</p>
-      <p>Flashing {uploadType} firmware in progress...</p>
+      <p>Flashing {uploadType} firmware in progress... {flashError ? `(${flashError})` : ''}</p>
     {/if}
     
     {#if $uploaderStatus === FirmwareUploadStatus.expectReboot && uploadType === FirmwareUploadType.modem}
       <p>The {uploadType} firmware has been uploaded successfully.</p>
-      <p>Waiting for the {uploadType} to restart...</p>
+      <p>Waiting for the {uploadType} to restart... {flashError ? `(${flashError})` : ''}</p>
       {#if flashProgress != null && flashProgress > 0}
         <p>Flashing firmware in progress...</p>
       {/if}
@@ -306,6 +367,13 @@
     {#if $uploaderStatus === FirmwareUploadStatus.error}
       <p>The {uploadType} firmware update failed!</p>
       <p>The error message is <i>{uploader.error}</i></p>
+    {/if}
+
+    {#if flashStatus === FirmwareFlashStatus.error}
+      <p>The {uploadType} firmware flash failed!</p>
+      {#if flashError}
+        <p>The error message is <i>{flashError}</i></p>
+      {/if}
     {/if}
 
     {#if ($uploaderStatus === FirmwareUploadStatus.success && uploadType === FirmwareUploadType.modem) || 
@@ -318,7 +386,8 @@
     primaryButtonText="Close"
     primaryButtonDisabled={!(
       ($uploaderStatus === FirmwareUploadStatus.success && uploadType === FirmwareUploadType.modem) || 
-      (flashStatus === FirmwareFlashStatus.success && uploadType === FirmwareUploadType.mower)
+      (flashStatus === FirmwareFlashStatus.success && uploadType === FirmwareUploadType.mower) ||
+      (flashStatus === FirmwareFlashStatus.error)
     )}
   />
 </ComposedModal>

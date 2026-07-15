@@ -1,6 +1,6 @@
 <script lang="ts">
   import { pointsToEdges } from "./geometry";
-  import type { Dockpoints as DockpointsModel } from "./model";
+  import type { Dockpoints as DockpointsModel, Point as PointType } from "./model";
   import Point from "./Point.svelte";
   import Edge from "./Edge.svelte";
 
@@ -8,6 +8,15 @@
   export let dockpointsId: string;
   export let edit: boolean = false;
   export let editItemId: null | string = null;
+  export let onMove: (points: PointType[]) => void = () => {};
+
+  function updatePoint(index: number, x: number, y: number) {
+    value = {
+      ...value,
+      points: value.points.map((p, i) => i === index ? { x, y } : p),
+    };
+    onMove(value.points);
+  }
 </script>
 
 {#if value.points.length > 1}
@@ -27,7 +36,7 @@
       bind:editItemId
       strokeChoose="orange"
       r={0.11}
-      on:move={() => value = value}
+      on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}
     />
   {/each}
   {#each pointsToEdges(value.points) as edge, index}

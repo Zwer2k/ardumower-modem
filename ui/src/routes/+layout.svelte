@@ -21,6 +21,7 @@
     import { Busy } from "../stores/busy";
     import SaveDiscard from "../widget/SaveDiscard.svelte";
     import Toasts from "../widget/Toasts.svelte";
+    import ConfirmDialog from "../widget/ConfirmDialog.svelte";
     import { ToastNotification } from 'carbon-components-svelte';
     import { toastStore } from '../stores/toast';
     import type { ToastData } from '../stores/toast';
@@ -144,6 +145,7 @@
     {@render children()}
 </Content>
 <HelpDialog bind:open={helpOpen} />
+<ConfirmDialog />
 
 <style lang="scss">
 

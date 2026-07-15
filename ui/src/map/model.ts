@@ -9,20 +9,16 @@ export interface Edge {
 }
 
 export interface Area {
-  points: Point[]
+  points: Point[];
 }
 
-export interface Perimeter extends Area {
-}
+export interface Perimeter extends Area {}
 
-export interface Exclusion extends Area {
-}
+export interface Exclusion extends Area {}
 
-export interface Dockpoints extends Area {
-}
+export interface Dockpoints extends Area {}
 
-export interface Waypoints extends Area {
-}
+export interface Waypoints extends Area {}
 
 export interface Map {
   perimeter: Perimeter;
@@ -33,10 +29,20 @@ export interface Map {
 
 export interface MapPresentation {
   boundary: {
-    a: Point,
-    b: Point,
-  }
-  center: Point
-  rotation: number
-  viewBox: string
+    a: Point;
+    b: Point;
+  };
+  center: Point;
+  rotation: number;
+  viewBox: string;
 }
+
+export type MapArea = "perimeter" | "exclusion" | "dockpoints" | "waypoints";
+
+export interface MapSelection {
+  area: MapArea;
+  exclusionIndex?: number;
+  index: number;
+  type: "point" | "edge";
+}
+

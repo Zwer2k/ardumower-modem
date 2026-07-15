@@ -39,7 +39,6 @@ export const exclusionsStore = writable<MapPoint[][]>([]);
 export const mapChunkProgress = writable<{ received: number; total: number; label: string } | null>(null);
 
 export function handleMapChunk(chunk: MapChunk) {
-  //console.log('[MapChunkBuffer] handleMapChunk received:', chunk);
   function resetType(type: MapPointType) {
     switch (type) {
       case MapPointType.Perimeter:
@@ -81,7 +80,6 @@ export function handleMapChunk(chunk: MapChunk) {
       buffer[chunk.startIndex + i] = chunk.points[i];
     }
     const filled = buffer.filter(Boolean).length;
-    //console.log(`[MapChunkBuffer] ${chunk.pointType} buffer filled:`, filled, total);
     if (filled === total) {
       store.set([...buffer]);
     }
@@ -104,7 +102,6 @@ export function handleMapChunk(chunk: MapChunk) {
     return;
   }
 
-  //console.log('[MapChunkBuffer] Handling chunk for pointType:', chunk.pointType);
   let progressLabel = '';
   switch (chunk.pointType) {
     case MapPointType.Perimeter:

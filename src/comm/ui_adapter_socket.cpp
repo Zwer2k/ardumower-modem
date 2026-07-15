@@ -317,6 +317,10 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
    case RequestDataType::saveMap: {
     String name = jsonData["name"] | "";
     double rotation = jsonData["rotation"] | 0.0;
+    // After a save the backend may send an updated map (hash changes). Abort
+    // any ongoing chunk transfer so the new map snapshot can be sent cleanly.
+    _socketHandler->abortMapChunkSend();
+    yield();
     if (_source.saveMap(name, rotation).length() > 0) {
       _socketHandler->sendMapList(NULL);
     }
@@ -326,6 +330,8 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
    case RequestDataType::renameMap: {
     String id = jsonData["id"] | "";
     String name = jsonData["name"] | "";
+    _socketHandler->abortMapChunkSend();
+    yield();
     if (_source.renameMap(id, name)) {
       _socketHandler->sendMapList(NULL);
     }
@@ -396,10 +402,14 @@ bool UiSocketItem::sendTextRaw(String text)
   if (!_client->canSend())
     return false;
 
+  if (!_socketHandler->lockSendMutex())
+    return false;
+
   sanitizeUtf8InPlace(text);
   const char *data = text.c_str();
   size_t len = text.length();
 
+  bool result = false;
   for (int attempt = 0; attempt < 3; ++attempt) {
     try {
       if (_client->text(data, len)) {
@@ -412,21 +422,28 @@ bool UiSocketItem::sendTextRaw(String text)
           yield();
           vTaskDelay(1 / portTICK_PERIOD_MS);
         }
-        return true;
+        result = true;
+        break;
       }
     } catch (...) {
-      return false;
+      break;
     }
     yield();
     vTaskDelay(1 / portTICK_PERIOD_MS);
   }
-  return false;
+  _socketHandler->unlockSendMutex();
+  return result;
 }
 
 void UiSocketItem::ping()
 {
-  if (_client != NULL && _client->status() != WS_DISCONNECTED)
-    _client->ping();
+  if (_client == NULL || _client->status() == WS_DISCONNECTED)
+    return;
+
+  if (!_socketHandler->lockSendMutex())
+    return;
+  _client->ping();
+  _socketHandler->unlockSendMutex();
 }
 
 AwsClientStatus UiSocketItem::status()
@@ -448,6 +465,7 @@ UiSocketHandler::UiSocketHandler(
   : _terminal(terminal), _server(server), _source(source), _cmd(cmd), _mowerUpdater(mowerUpdater)
 {
   _ws = new AsyncWebSocket("/ws");
+  _sendMutex = xSemaphoreCreateMutex();
 
   for (int i=0; i < ResponseDataType::responseDataTypeLength; i++) {
     oldDataTimestamp[i] = 0;
@@ -474,6 +492,7 @@ UiSocketHandler::UiSocketHandler(
   : _server(server), _source(source), _cmd(cmd), _mowerUpdater(mowerUpdater)
 {
   _ws = new AsyncWebSocket("/ws");
+  _sendMutex = xSemaphoreCreateMutex();
 
   for (int i=0; i < ResponseDataType::responseDataTypeLength; i++) {
     oldDataTimestamp[i] = 0;
@@ -493,6 +512,10 @@ void UiSocketHandler::uploadStatusHandler(byte progress)
 
 UiSocketHandler::~UiSocketHandler() 
 {   
+  if (_sendMutex != NULL) {
+    vSemaphoreDelete(_sendMutex);
+    _sendMutex = NULL;
+  }
   delete _ws;
 }
 
@@ -1332,6 +1355,11 @@ void UiSocketHandler::abortMapChunkSend() {
     // Release the read lock that was acquired in startMapChunkSend().
     // Otherwise subsequent map operations can deadlock.
     _source.endMowerMapRead();
+    // Reset pending flags so we don't send stale data that could overlap
+    // with the fresh map transfer triggered after the abort.
+    _mapListPending = false;
+    _drivenTrackPending = false;
+    _flashProgressPending = false;
     Log(DBG, "%s abortMapChunkSend: ongoing chunk send aborted", _LOG_);
   }
 }
@@ -1452,6 +1480,16 @@ void UiSocketHandler::sendData(ResponseDataType dataType, UiSocketItem *sendTo, 
 
 void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
 {
+  // Do not interleave map-list broadcasts with an ongoing fragmented map
+  // chunk transfer. A text frame in the middle of a fragmented message
+  // violates the WebSocket framing and causes browser-side disconnects
+  // ("previous message is unfinished"). Defer the broadcast until the
+  // chunked transfer is complete.
+  if (sendTo == NULL && mapChunkSendState.active) {
+    _mapListPending = true;
+    return;
+  }
+
   auto list = _source.mapList();
   String activeId = _source.activeMapId();
   String currentId = _source.currentMapId();
@@ -1498,6 +1536,11 @@ void UiSocketHandler::sendDrivenTrack(UiSocketItem *sendTo)
   if (countConnectedClients() == 0 && sendTo == NULL) return;
   if (_track.size() == 0) return;
 
+  if (sendTo == NULL && mapChunkSendState.active) {
+    _drivenTrackPending = true;
+    return;
+  }
+
   JsonDocument doc;
   doc["type"] = ResponseDataType::drivenTrack;
   doc["timestamp"] = millis();
@@ -1536,6 +1579,9 @@ bool UiSocketHandler::sendMapChunkText(uint32_t clientId, const String& text) {
     }
   }
 
+  if (!lockSendMutex())
+    return false;
+
   const char *data = text.c_str();
   size_t len = text.length();
   bool anySent = false;
@@ -1564,6 +1610,7 @@ bool UiSocketHandler::sendMapChunkText(uint32_t clientId, const String& text) {
     }
   }
   if (anySent) markClientActivity();
+  unlockSendMutex();
   return anySent;
 }
 
@@ -1585,6 +1632,9 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
       return false;
     }
   }
+
+  if (!lockSendMutex())
+    return false;
 
   String sanitized = text;
   sanitizeUtf8InPlace(sanitized);
@@ -1626,8 +1676,10 @@ bool UiSocketHandler::sendTextAllWithRetry(AsyncWebSocket *ws, const String &tex
       }
     }
   } catch (...) {
+    unlockSendMutex();
     return false;
   }
+  unlockSendMutex();
   if (anySent) markClientActivity();
   if (!anyConnected) return true;
   return anySent;
@@ -1661,6 +1713,16 @@ void UiSocketHandler::pingClients()
 {
   if (millis() - lastclientPing < clientPingInterval)
     return;
+
+  // Do not send control pings while a fragmented map transfer is in progress.
+  // A ping frame in the middle of a fragmented text message corrupts the
+  // WebSocket frame stream ("previous message is unfinished"). The periodic
+  // mowerState/map traffic already marks the client as active, so skipping a
+  // ping cycle is harmless.
+  if (mapChunkSendState.active) {
+    lastclientPing = millis();
+    return;
+  }
 
   //_ws->pingAll();
   
@@ -1725,7 +1787,13 @@ void UiSocketHandler::wsEvent(AsyncWebSocket *server, AsyncWebSocketClient *clie
     Log(DBG, "%s %s", _LOG_, dataStr.c_str());
     client->text(dataStr.c_str(), dataStr.length());
 
+    // Keep the connection alive. The browser/Vite proxy may not answer the
+    // low-level ping, so the client layer is configured to not require it.
     client->ping();
+    // Disable the library's automatic keep-alive; we manage our own ping
+    // interval in pingClients() and do not want overlapping pings.
+    client->keepAlivePeriod(0);
+
     if (itemMap.find(client->id()) != itemMap.end()) {
       delete itemMap[client->id()];
       itemMap.erase(client->id());
