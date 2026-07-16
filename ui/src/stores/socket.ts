@@ -279,6 +279,7 @@ class SocketService {
             let workflowRotationToSet: number | null = null;
             let workflowNewMapReceived = false;
             let workflowFinishSaveMap: { id: string; name: string; rotation: number } | null = null;
+            let workflowFinishRename: { id: string; name: string } | null = null;
             let workflowFinishLoadMap: { id: string; name: string; rotation: number } | null = null;
             let workflowLoadFailed = false;
             let workflowFinishDelete = false;
@@ -395,9 +396,11 @@ class SocketService {
                   newState.isLoadingMap = false;
                   const currentMapEntry = newState.maps.find((m) => m.id === newState.currentMapId);
                   newState.currentMapUnsaved = currentMapEntry?.unsaved || false;
-                  if (newState.currentMapUnsaved) {
-                    setMapDirty(true);
-                  }
+                  // Der Backend-Flag ist der maßgebliche dirty-Status. Er muss
+                  // immer synchronisiert werden, auch beim initialen Browser-Reload
+                  // oder nach einem finishLoadMap, damit ein unsaved Zustand erhalten
+                  // bleibt.
+                  setMapDirty(newState.currentMapUnsaved);
                   if (newState.currentMapId) {
                     newState.isNewMap = false;
                     const map = newState.maps.find((m) => m.id === newState.currentMapId);
@@ -406,8 +409,13 @@ class SocketService {
                       // auf das Speichern wartet. Andernfalls würde jede
                       // eingehende mapList den Snapshot überschreiben und den
                       // Dirty-Status ungewollt zurücksetzen.
-                      if (workflowState === "saving" || workflowState === "renaming") {
+                      if (workflowState === "saving") {
                         workflowFinishSaveMap = { id: map.id, name: map.name, rotation: map.rotation };
+                      }
+                      // Rename wird wie eine Bearbeitung behandelt: Name
+                      // aktualisieren, aber Dirty-Status bleibt erhalten.
+                      if (workflowState === "renaming") {
+                        workflowFinishRename = { id: map.id, name: map.name };
                       }
                       // finishLoadMap muss immer aufgerufen werden, wenn wir gerade
                       // eine Karte geladen haben, auch wenn die ID gleich geblieben ist.
@@ -465,6 +473,9 @@ class SocketService {
             }
             if (workflowFinishSaveMap) {
               mwf.finishSaveMap(workflowFinishSaveMap.id, workflowFinishSaveMap.name, workflowFinishSaveMap.rotation);
+            }
+            if (workflowFinishRename) {
+              mwf.finishRename(workflowFinishRename.name);
             }
             if (workflowFinishLoadMap) {
               mwf.finishLoadMap(workflowFinishLoadMap.id, workflowFinishLoadMap.name, workflowFinishLoadMap.rotation);

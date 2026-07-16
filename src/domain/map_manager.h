@@ -53,6 +53,8 @@ namespace ArduMower {
             int getCrc(const String &id) const;
             static bool isMapValid(const ArduMower::Domain::Robot::MowerMap &map);
 
+            String generateDefaultName() const;
+
         private:
             struct Index {
                 String activeId;
@@ -71,7 +73,6 @@ namespace ArduMower {
             String allocateFileName();
             MapMeta* findMeta(const String &id);
             const MapMeta* findMeta(const String &id) const;
-            String generateDefaultName() const;
             static double polygonArea(const std::vector<ArduMower::Domain::Robot::MapPoint> &poly);
         };
 

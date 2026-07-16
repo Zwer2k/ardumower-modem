@@ -149,7 +149,8 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
       error: null,
       pendingLoadId: "",
     }));
-    isMapDirty.set(false);
+    // Der dirty-Status wird nicht hier zurückgesetzt, sondern vom mapList-Handler
+    // in socket.ts anhand des Backend-Flags currentMapUnsaved synchronisiert.
   },
 
   startSaveMap(name: string, rotation: number) {
@@ -234,7 +235,8 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
       lastBackendMapName: name,
       error: null,
     }));
-    isMapDirty.set(false);
+    // Rename wird wie eine Bearbeitung behandelt: dirty bleibt erhalten,
+    // weil der Backend-Flag currentMapUnsaved den Status treibt.
   },
 
   cancelRename(currentName: string) {

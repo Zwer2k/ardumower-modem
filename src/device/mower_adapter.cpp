@@ -146,6 +146,9 @@ std::vector<ArduMower::Domain::Robot::MapInfo> MowerAdapter::mapList() {
     info.timestamp = m.timestamp;
     if (_currentMapUnsaved && info.id == _currentMapId) {
       info.unsaved = true;
+      if (_pendingRenameId == _currentMapId && _pendingRenameName.length() > 0) {
+        info.name = _pendingRenameName;
+      }
     }
     result.push_back(info);
   }
@@ -166,10 +169,16 @@ String MowerAdapter::saveMap(const String &name, double rotation) {
     return "";
   }
   _map.rotation = rotation;
-  String id = _mapManager.save(_map, name, _currentMapId, rotation);
+  String saveName = name;
+  if (saveName.length() == 0 && _pendingRenameId == _currentMapId && _pendingRenameName.length() > 0) {
+    saveName = _pendingRenameName;
+  }
+  String id = _mapManager.save(_map, saveName, _currentMapId, rotation);
   if (id.length() > 0) {
     _currentMapId = id;
     _currentMapUnsaved = false;
+    _pendingRenameId = "";
+    _pendingRenameName = "";
     _mapListDirty = true;
     Log(INFO, "%ssaveMap: Karte gespeichert als %s", _LOG_, id.c_str());
   }
@@ -195,15 +204,22 @@ bool MowerAdapter::loadMap(const String &id) {
   _currentMapArea = _mapManager.computeArea(_map);
   _currentMapCrc = _mapManager.getCrc(id);
   _currentMapUnsaved = false;
+  _pendingRenameId = "";
+  _pendingRenameName = "";
   Log(INFO, "%sloadMap: Karte %s geladen, CRC %d (aus SPIFFS)", _LOG_, id.c_str(), _currentMapCrc);
   _mapListDirty = true;
   return true;
 }
 
 bool MowerAdapter::renameMap(const String &id, const String &name) {
-  if (!_mapManager.rename(id, name)) return false;
+  if (id != _currentMapId) return false;
+  String newName = name;
+  if (newName.length() == 0) newName = _mapManager.generateDefaultName();
+  _pendingRenameId = id;
+  _pendingRenameName = newName;
+  _currentMapUnsaved = true;
   _mapListDirty = true;
-  Log(INFO, "%srenameMap: Karte %s umbenannt in '%s'", _LOG_, id.c_str(), name.c_str());
+  Log(INFO, "%srenameMap: Karte %s pending rename to '%s'", _LOG_, id.c_str(), newName.c_str());
   return true;
 }
 
@@ -240,6 +256,8 @@ bool MowerAdapter::discardMap() {
   _map = ArduMower::Domain::Robot::MowerMap();
   _map.timestamp = millis();
   _currentMapUnsaved = true;
+  _pendingRenameId = "";
+  _pendingRenameName = "";
   updateCurrentMapMeta();
   _mapListDirty = true;
   Log(INFO, "%sdiscardMap: aktuelle Karte verworfen, neue leere Karte im RAM", _LOG_);
