@@ -152,6 +152,24 @@ std::vector<ArduMower::Domain::Robot::MapInfo> MowerAdapter::mapList() {
     }
     result.push_back(info);
   }
+  // Transiente (RAM-only) Karten anzeigen, z. B. abgefangene Karten, die noch
+  // nicht in SPIFFS gespeichert wurden.
+  for (const auto &t : _transientMaps) {
+    if (t.id.length() == 0) continue;
+    ArduMower::Domain::Robot::MapInfo info;
+    info.id = t.id;
+    info.name = t.name;
+    info.area = t.area;
+    info.hash = t.hash;
+    info.crc = t.crc;
+    info.rotation = t.rotation;
+    info.timestamp = t.timestamp;
+    info.unsaved = true;
+    if (_currentMapUnsaved && info.id == _currentMapId && _pendingRenameId == _currentMapId && _pendingRenameName.length() > 0) {
+      info.name = _pendingRenameName;
+    }
+    result.push_back(info);
+  }
   return result;
 }
 
@@ -173,8 +191,16 @@ String MowerAdapter::saveMap(const String &name, double rotation) {
   if (saveName.length() == 0 && _pendingRenameId == _currentMapId && _pendingRenameName.length() > 0) {
     saveName = _pendingRenameName;
   }
-  String id = _mapManager.save(_map, saveName, _currentMapId, rotation);
+  String saveId = _currentMapId;
+  if (saveId.startsWith("__t_")) {
+    // Transiente Karte wird beim ersten Speichern in SPIFFS überführt.
+    saveId = "";
+  }
+  String id = _mapManager.save(_map, saveName, saveId, rotation);
   if (id.length() > 0) {
+    if (_currentMapId.startsWith("__t_")) {
+      removeTransientMap(_currentMapId);
+    }
     _currentMapId = id;
     _currentMapUnsaved = false;
     _pendingRenameId = "";
@@ -195,6 +221,25 @@ bool MowerAdapter::loadMap(const String &id) {
   if (_map.isReading()) {
     Log(WARN, "%sloadMap: Map-Lesevorgang läuft noch, laden abgelehnt", _LOG_);
     return false;
+  }
+  // Transiente (RAM-only) Karten aus dem lokalen Vektor laden.
+  if (id.startsWith("__t_")) {
+    const auto *t = findTransientMap(id);
+    if (!t) {
+      Log(WARN, "%sloadMap: transiente Karte %s nicht gefunden", _LOG_, id.c_str());
+      return false;
+    }
+    _currentMapId = id;
+    _map = t->map;
+    _currentMapHash = t->hash;
+    _currentMapArea = t->area;
+    _currentMapCrc = t->crc;
+    _currentMapUnsaved = true;
+    _pendingRenameId = "";
+    _pendingRenameName = "";
+    Log(INFO, "%sloadMap: transiente Karte %s geladen (unsaved)", _LOG_, id.c_str());
+    _mapListDirty = true;
+    return true;
   }
   ArduMower::Domain::Robot::MowerMap loaded;
   if (!_mapManager.load(id, loaded)) return false;
@@ -248,6 +293,10 @@ bool MowerAdapter::discardMap() {
   if (_map.isReading()) {
     Log(WARN, "%sdiscardMap: Map-Lesevorgang läuft, verwerfen abgelehnt", _LOG_);
     return false;
+  }
+  // Transiente Karte beim Verwerfen aus dem RAM entfernen.
+  if (_currentMapId.startsWith("__t_")) {
+    removeTransientMap(_currentMapId);
   }
   // Unsaved/abgefangene Karte im RAM durch eine leere Karte ersetzen. Damit
   // bleibt Frontend und Backend konsistent, wenn der Benutzer "New Map"
@@ -569,7 +618,20 @@ void MowerAdapter::finalizeInterceptedMap() {
     loadMap(existingId);
   } else {
     Log(INFO, "%sfinalizeInterceptedMap: neue Karte im RAM, noch nicht gespeichert", _LOG_);
-    _currentMapId = ""; // abgefangene Karte ist neu, nicht gespeichert
+    // Neue abgefangene Karte als transiente (RAM-only) Karte anlegen, damit
+    // sie im Dropdown erscheint und umbenannt werden kann, ohne sofort in
+    // SPIFFS geschrieben zu werden.
+    TransientMap t;
+    t.id = allocateTransientId();
+    t.name = _mapManager.generateDefaultName();
+    t.area = _currentMapArea;
+    t.hash = _currentMapHash;
+    t.crc = _currentMapCrc;
+    t.rotation = _map.rotation;
+    t.timestamp = _map.timestamp;
+    t.map = _map;
+    _transientMaps.push_back(t);
+    _currentMapId = t.id;
   }
 
   // Abgefangene Karte nur im RAM übernehmen, NICHT automatisch in SPIFFS
@@ -1842,4 +1904,60 @@ void processCSVResponse(const char* res, std::function<void(int, const char*, si
 void processCSVResponse(const String& res, std::function<void(int, const char*, size_t)> fn)
 {
   processCSVResponse(res.c_str(), fn);
+}
+
+// ===== Transiente (RAM-only) Karten =====
+
+static const char *TRANSIENT_ID_PREFIX = "__t_";
+
+String MowerAdapter::allocateTransientId() {
+  return String(TRANSIENT_ID_PREFIX) + String(_transientIdCounter++);
+}
+
+const MowerAdapter::TransientMap* MowerAdapter::findTransientMap(const String &id) const {
+  for (const auto &t : _transientMaps) {
+    if (t.id == id) return &t;
+  }
+  return nullptr;
+}
+
+String MowerAdapter::findOrCreateTransientMap(const ArduMower::Domain::Robot::MowerMap &map, const String &name, double rotation) {
+  String hash = _mapManager.computeHash(map);
+  for (const auto &t : _transientMaps) {
+    if (t.hash == hash) return t.id;
+  }
+  TransientMap t;
+  t.id = allocateTransientId();
+  t.name = name.length() > 0 ? name : _mapManager.generateDefaultName();
+  t.area = _mapManager.computeArea(map);
+  t.hash = hash;
+  t.crc = _mapManager.computeCrc(map);
+  t.rotation = rotation;
+  t.timestamp = map.timestamp;
+  t.map = map;
+  _transientMaps.push_back(t);
+  return t.id;
+}
+
+bool MowerAdapter::removeTransientMap(const String &id) {
+  for (auto it = _transientMaps.begin(); it != _transientMaps.end(); ++it) {
+    if (it->id == id) {
+      _transientMaps.erase(it);
+      return true;
+    }
+  }
+  return false;
+}
+
+void MowerAdapter::updateTransientMapMeta(const String &id, const ArduMower::Domain::Robot::MowerMap &map, double rotation) {
+  for (auto &t : _transientMaps) {
+    if (t.id == id) {
+      t.area = _mapManager.computeArea(map);
+      t.hash = _mapManager.computeHash(map);
+      t.crc = _mapManager.computeCrc(map);
+      t.rotation = rotation;
+      t.timestamp = map.timestamp;
+      break;
+    }
+  }
 }

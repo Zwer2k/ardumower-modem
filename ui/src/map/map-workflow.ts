@@ -212,7 +212,8 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
 
   confirmRename(currentMapId: string, currentName: string): { action: "save" | "rename" | "none"; name: string } {
     const w = get(mapWorkflowStore);
-    if (w.state === "creating" || !currentMapId) {
+    const isTransientId = (id: string) => id.startsWith("__t_");
+    if (w.state === "creating" || (!currentMapId && !isTransientId(currentMapId))) {
       mapWorkflowStore.update((wf) => ({ ...wf, state: "saving", renameMode: false, error: null }));
       return { action: "save", name: w.pendingName || currentName };
     }

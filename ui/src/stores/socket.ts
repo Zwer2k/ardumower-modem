@@ -371,7 +371,12 @@ class SocketService {
                     // Während einer Löschoperation darf dieser Pfad nicht
                     // auslösen, sonst springt die UI in den Rename-Modus für
                     // eine gerade gelöschte Karte.
-                    if (!newState.currentMapId && !newState.isLoadingMap && !wasDeletingMap) {
+                    // Abgefangene Karten bekommen im Backend eine Transient-ID
+                    // und erscheinen in der nächsten mapList; sie sollen hier
+                    // nicht als "neue Karte" behandelt werden. Nur wenn der
+                    // Frontend-Workflow bereits eine neue Karte angelegt hat
+                    // (isNewMap == true), handelt es sich um eine echte New-Map.
+                    if (!newState.currentMapId && !newState.isLoadingMap && !wasDeletingMap && newState.isNewMap) {
                       newState.isNewMap = true;
                       workflowNewMapReceived = true;
                     }
