@@ -1,7 +1,7 @@
 import { writable, get } from "svelte/store";
 import type { Writable } from "svelte/store";
 import type { Map, MapPresentation } from "./model";
-import type { DrivenTrackData, MapMeta } from "../model";
+import type { DrivenTrackData, MapMeta, MapSetData } from "../model";
 import {
   perimeterStore,
   dockpointsStore,
@@ -71,6 +71,16 @@ export function buildMapFromChunkStores(): Map {
     exclusions: get(exclusionsStore).map((arr) => ({ points: arr.map(toPoint) })),
     dockpoints: { points: get(dockpointsStore).map(toPoint) },
     waypoints: { points: get(waypointsStore).map(toPoint) },
+  };
+}
+
+export function buildMapSetData(map: Map, rotation: number = 0): MapSetData {
+  return {
+    perimeter: map.perimeter.points,
+    exclusions: map.exclusions.map((e) => e.points),
+    dockpoints: map.dockpoints.points,
+    waypoints: map.waypoints.points,
+    rotation,
   };
 }
 

@@ -8,7 +8,7 @@
   import Waypoints from "./Waypoints.svelte";
   import Dockpoints from "./Dockpoints.svelte";
   import MowerPosition from "./MowerPosition.svelte";
-  import { MapStore, cloneMap } from "./service";
+  import { MapStore, cloneMap, buildMapSetData } from "./service";
   import { socketStore, socketService } from "../stores/socket";
   import { openConfirm } from "../stores/confirm-dialog";
   import { mapWorkflowStore, isMapDirty } from "./map-workflow";
@@ -165,6 +165,7 @@ import { setMapDirty } from "./services/map-sync";
         cancelText: "Verwerfen",
       });
       if (choice) {
+        socketService.sendMap(buildMapSetData(get(MapStore).map, compassState.rotation));
         onSaveMap();
       } else {
         mapWorkflowStore.resetDirtyState();
@@ -186,6 +187,7 @@ import { setMapDirty } from "./services/map-sync";
         cancelText: "Verwerfen",
       });
       if (choice) {
+        socketService.sendMap(buildMapSetData(get(MapStore).map, compassState.rotation));
         onSaveMap();
       } else {
         mapWorkflowStore.resetDirtyState();

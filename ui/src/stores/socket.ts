@@ -27,6 +27,7 @@ import { MapPointType } from "../map/map-chunk-buffer";
 import { mowSettingsStore } from "../map/mow-settings";
 import { drivenTrackStore, currentMapRotationStore } from "../map/service";
 import { mapWorkflowStore } from "../map/workflow/map-workflow-store";
+import { setMapDirty } from "../map/services/map-sync";
 import type { MapWorkflowStore, MapWorkflowState } from "../map/workflow/map-workflow-store";
 
 let workflowModule: any = null;
@@ -394,6 +395,9 @@ class SocketService {
                   newState.isLoadingMap = false;
                   const currentMapEntry = newState.maps.find((m) => m.id === newState.currentMapId);
                   newState.currentMapUnsaved = currentMapEntry?.unsaved || false;
+                  if (newState.currentMapUnsaved) {
+                    setMapDirty(true);
+                  }
                   if (newState.currentMapId) {
                     newState.isNewMap = false;
                     const map = newState.maps.find((m) => m.id === newState.currentMapId);
