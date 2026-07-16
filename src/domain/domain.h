@@ -359,6 +359,7 @@ namespace ArduMower
         double rotation = 0.0;
         uint32_t timestamp = 0;
         bool unsaved = false;
+        bool requiresRename = false;
       };
 
       class StateSource

@@ -8,7 +8,8 @@ export type MapWorkflowState =
   | "saving"
   | "renaming"
   | "deleting"
-  | "creating";
+  | "creating"
+  | "intercepting";
 
 export interface MapWorkflow {
   state: MapWorkflowState;
@@ -25,6 +26,7 @@ export interface MapWorkflowStore extends Writable<MapWorkflow> {
   reset: () => void;
   startNewMap: (defaultName: string) => void;
   onNewMapReceived: (defaultName: string) => void;
+  startInterceptedMapRename: (defaultName: string, mapId?: string, name?: string, rotation?: number) => void;
   startLoadMap: (id: string) => void;
   finishLoadMap: (mapId: string, name: string, rotation: number) => void;
   startSaveMap: (name: string, rotation: number) => void;
@@ -63,6 +65,7 @@ export const mapWorkflowStore: MapWorkflowStore = {
   reset: () => set(initial),
   startNewMap: () => {},
   onNewMapReceived: () => {},
+  startInterceptedMapRename: () => {},
   startLoadMap: () => {},
   finishLoadMap: () => {},
   startSaveMap: () => {},

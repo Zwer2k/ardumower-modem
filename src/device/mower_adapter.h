@@ -92,6 +92,7 @@ namespace ArduMower
         int crc = 0;
         double rotation = 0.0;
         uint32_t timestamp = 0;
+        bool requiresRename = true;
         ArduMower::Domain::Robot::MowerMap map;
       };
       std::vector<TransientMap> _transientMaps;
@@ -101,6 +102,7 @@ namespace ArduMower
       const TransientMap* findTransientMap(const String &id) const;
       bool removeTransientMap(const String &id);
       void updateTransientMapMeta(const String &id, const ArduMower::Domain::Robot::MowerMap &map, double rotation);
+      bool isNameUsed(const String &name, const String &excludeId = "") const;
 
       void updateCurrentMapMeta();
       // Cache für rohe Antwort-Strings (mit Checksumme) – für HTTP-Cache-Serving

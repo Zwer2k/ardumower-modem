@@ -278,6 +278,8 @@ class SocketService {
 
             let workflowRotationToSet: number | null = null;
             let workflowNewMapReceived = false;
+            let workflowInterceptedMapReceived = false;
+            let workflowStartInterceptedMapRename: { id: string; name: string; rotation: number } | null = null;
             let workflowFinishSaveMap: { id: string; name: string; rotation: number } | null = null;
             let workflowFinishRename: { id: string; name: string } | null = null;
             let workflowFinishLoadMap: { id: string; name: string; rotation: number } | null = null;
@@ -371,14 +373,16 @@ class SocketService {
                     // Während einer Löschoperation darf dieser Pfad nicht
                     // auslösen, sonst springt die UI in den Rename-Modus für
                     // eine gerade gelöschte Karte.
-                    // Abgefangene Karten bekommen im Backend eine Transient-ID
-                    // und erscheinen in der nächsten mapList; sie sollen hier
-                    // nicht als "neue Karte" behandelt werden. Nur wenn der
-                    // Frontend-Workflow bereits eine neue Karte angelegt hat
-                    // (isNewMap == true), handelt es sich um eine echte New-Map.
-                    if (!newState.currentMapId && !newState.isLoadingMap && !wasDeletingMap && newState.isNewMap) {
-                      newState.isNewMap = true;
-                      workflowNewMapReceived = true;
+                    // Echte "New Map"-Workflows (isNewMap == true) bekommen
+                    // die bestehende Behandlung. Abgefangene Karten (ohne
+                    // isNewMap) bekommen eine eigene Rename-Abfrage, ohne
+                    // sofort in SPIFFS zu schreiben.
+                    if (!newState.currentMapId && !newState.isLoadingMap && !wasDeletingMap) {
+                      if (newState.isNewMap) {
+                        workflowNewMapReceived = true;
+                      } else {
+                        workflowInterceptedMapReceived = true;
+                      }
                     }
                   }
                   // Map-Chunk-Logik: Chunks sammeln, MapStore wird im Buffer gesetzt
@@ -429,6 +433,22 @@ class SocketService {
                       if (wasLoadingMap || previousMapId !== newState.currentMapId) {
                         workflowFinishLoadMap = { id: map.id, name: map.name, rotation: map.rotation };
                       }
+                      // Abgefangene Karte erkannt: wenn currentMapId eine
+                      // Transient-ID ist, neu geladen wurde UND das Backend
+                      // flaggt, dass sie noch einen Namen braucht, erst dann
+                      // wird der Rename-Dialog geöffnet. Nach dem ersten
+                      // Umbenennen wird requiresRename false, damit ein
+                      // Browser-Reload nicht erneut in den Rename-Modus
+                      // springt.
+                      if (newState.currentMapId.startsWith("__t_") &&
+                          (previousMapId !== newState.currentMapId || previousMapId === "") &&
+                          map.requiresRename) {
+                        workflowStartInterceptedMapRename = { id: map.id, name: map.name, rotation: map.rotation };
+                        // finishLoadMap würde renameMode im idle-Zustand
+                        // zurücksetzen; stattdessen starten wir den
+                        // Intercept-Workflow mit den Daten aus der Map-Liste.
+                        workflowFinishLoadMap = null;
+                      }
                     }
                   } else if (newState.isNewMap) {
                     workflowNewMapReceived = true;
@@ -471,6 +491,18 @@ class SocketService {
             // um zirkuläre Imports und asynchrone Store-Updates zu vermeiden.
             if (workflowRotationToSet !== null) {
               mwf.update((w) => ({ ...w, lastBackendRotation: workflowRotationToSet! }));
+            }
+            if (workflowInterceptedMapReceived) {
+              const mapsCount = socketStore ? get(socketStore).maps.length + 1 : 1;
+              mwf.startInterceptedMapRename(`Karte ${mapsCount}`);
+            }
+            if (workflowStartInterceptedMapRename) {
+              mwf.startInterceptedMapRename(
+                workflowStartInterceptedMapRename.name || `Karte ${socketStore ? get(socketStore).maps.length + 1 : 1}`,
+                workflowStartInterceptedMapRename.id,
+                workflowStartInterceptedMapRename.name,
+                workflowStartInterceptedMapRename.rotation,
+              );
             }
             if (workflowNewMapReceived) {
               const mapsCount = socketStore ? get(socketStore).maps.length + 1 : 1;

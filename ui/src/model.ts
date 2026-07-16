@@ -328,6 +328,7 @@ export interface MapMeta {
   rotation: number;
   timestamp: number;
   unsaved: boolean;
+  requiresRename?: boolean;
 }
 
 export interface MapListData {

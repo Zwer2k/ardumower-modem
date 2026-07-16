@@ -2,7 +2,8 @@ import { get } from "svelte/store";
 import { MapStore, emptyMap, emptyPresentation, currentMapRotationStore } from "./service";
 import { isMapDirty, setMapDirty } from "./services/map-sync";
 import { mapWorkflowStore, type MapWorkflowStore, type MapWorkflowState } from "./workflow/map-workflow-store";
-import type { SocketState } from "../../stores/socket";
+import type { SocketState } from "../stores/socket";
+import { Error as ErrorStore } from "../stores/error";
 
 let getSocketState: (() => SocketState) | null = null;
 let loadingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -18,6 +19,28 @@ function clearLoadingTimer() {
     clearTimeout(loadingTimer);
     loadingTimer = null;
   }
+}
+
+function isNameUsed(name: string, excludeId?: string): boolean {
+  const socketState = getSocketState ? getSocketState() : null;
+  if (!socketState) return false;
+  const maps = socketState.maps || [];
+  return maps.some((m) => m.name === name && (!excludeId || m.id !== excludeId));
+}
+
+function generateUniqueName(baseName: string, excludeId?: string): string {
+  if (!isNameUsed(baseName, excludeId)) return baseName;
+  // Versuche "Karte X" aus dem Basisnamen zu extrahieren, um den Zähler
+  // hochzusetzen, anstatt jedes Mal ein Suffix anzuhängen.
+  const match = baseName.match(/^(.*\D)(\d+)$/);
+  const prefix = match ? match[1].trimEnd() : baseName;
+  let counter = match ? parseInt(match[2], 10) + 1 : 2;
+  let candidate = `${prefix} ${counter}`;
+  while (isNameUsed(candidate, excludeId)) {
+    counter++;
+    candidate = `${prefix} ${counter}`;
+  }
+  return candidate;
 }
 
 function startLoadingTimer() {
@@ -76,6 +99,7 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
   },
 
   startNewMap(defaultName: string) {
+    const uniqueName = generateUniqueName(defaultName);
     MapStore.set({ map: emptyMap(), presentation: emptyPresentation() });
     currentMapRotationStore.set(0);
     updateSocket((s) => ({
@@ -88,7 +112,7 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
     mapWorkflowStore.update((w) => ({
       ...w,
       state: "creating",
-      pendingName: defaultName,
+      pendingName: uniqueName,
       renameMode: true,
       lastBackendMapId: "",
       lastBackendMapName: "",
@@ -110,6 +134,29 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
         error: null,
       };
     });
+  },
+
+  startInterceptedMapRename(defaultName: string, mapId?: string, name?: string, rotation?: number) {
+    // Abgefangene Karte: Rename-Modus sofort starten, aber kein isNewMap.
+    // Das Speichern in SPIFFS wird vermieden; stattdessen wird später
+    // nur ein renameMap an das Backend gesendet.
+    const uniqueName = generateUniqueName(defaultName, mapId);
+    updateSocket((s) => ({
+      ...s,
+      isNewMap: false,
+      isLoadingMap: false,
+    }));
+    mapWorkflowStore.update((w) => ({
+      ...w,
+      state: "intercepting",
+      pendingName: w.pendingName || uniqueName,
+      renameMode: true,
+      lastBackendMapId: mapId ?? "",
+      lastBackendMapName: name ?? "",
+      lastBackendRotation: rotation ?? 0,
+      error: null,
+      pendingLoadId: "",
+    }));
   },
 
   startLoadMap(id: string) {
@@ -138,17 +185,31 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
 
   finishLoadMap(mapId: string, name: string, rotation: number) {
     clearLoadingTimer();
-    mapWorkflowStore.update((w) => ({
-      ...w,
-      state: "idle",
-      pendingName: "",
-      renameMode: false,
-      lastBackendMapId: mapId,
-      lastBackendMapName: name,
-      lastBackendRotation: rotation,
-      error: null,
-      pendingLoadId: "",
-    }));
+    mapWorkflowStore.update((w) => {
+      // Während der Rename-Abfrage für eine abgefangene Karte darf die
+      // Map-Liste den Dialog nicht beenden. Meta/Id werden übernommen, der
+      // Rename-Modus bleibt aktiv.
+      if (w.state === "intercepting" && w.renameMode) {
+        return {
+          ...w,
+          lastBackendMapId: mapId,
+          lastBackendMapName: name,
+          lastBackendRotation: rotation,
+          error: null,
+        };
+      }
+      return {
+        ...w,
+        state: "idle",
+        pendingName: "",
+        renameMode: false,
+        lastBackendMapId: mapId,
+        lastBackendMapName: name,
+        lastBackendRotation: rotation,
+        error: null,
+        pendingLoadId: "",
+      };
+    });
     // Der dirty-Status wird nicht hier zurückgesetzt, sondern vom mapList-Handler
     // in socket.ts anhand des Backend-Flags currentMapUnsaved synchronisiert.
   },
@@ -213,9 +274,24 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
   confirmRename(currentMapId: string, currentName: string): { action: "save" | "rename" | "none"; name: string } {
     const w = get(mapWorkflowStore);
     const isTransientId = (id: string) => id.startsWith("__t_");
+    const requestedName = w.pendingName || currentName;
+    // Doppelte Namen verhindern, außer wenn der Name der aktuellen Karte
+    // unverändert bleibt.
+    if (requestedName !== currentName && isNameUsed(requestedName, currentMapId)) {
+      const message = `Name "${requestedName}" ist bereits vergeben.`;
+      mapWorkflowStore.update((wf) => ({ ...wf, error: message }));
+      ErrorStore.set(new Error(message));
+      return { action: "none", name: currentName };
+    }
+    // Abgefangene Karte: immer nur umbenennen, niemals speichern.
+    if (w.state === "intercepting") {
+      mapWorkflowStore.update((wf) => ({ ...wf, state: "renaming", renameMode: false, error: null }));
+      isMapDirty.set(true);
+      return { action: "rename", name: requestedName };
+    }
     if (w.state === "creating" || (!currentMapId && !isTransientId(currentMapId))) {
       mapWorkflowStore.update((wf) => ({ ...wf, state: "saving", renameMode: false, error: null }));
-      return { action: "save", name: w.pendingName || currentName };
+      return { action: "save", name: requestedName };
     }
     if (w.pendingName && w.pendingName !== currentName) {
       mapWorkflowStore.update((wf) => ({ ...wf, state: "renaming", renameMode: false, error: null }));
@@ -241,13 +317,21 @@ const workflowActions: Omit<MapWorkflowStore, "subscribe" | "set" | "update"> = 
   },
 
   cancelRename(currentName: string) {
+    const state = get(mapWorkflowStore).state;
     mapWorkflowStore.update((w) => ({
       ...w,
       pendingName: currentName,
       renameMode: false,
       error: null,
+      // Abgefangene Karte bleibt auch nach Abbruch der Rename-Abfrage
+      // im Workflow, damit sie weiterhin als unsaved behandelt wird.
+      state: state === "intercepting" ? "idle" : w.state,
     }));
-    isMapDirty.set(false);
+    // Dirty-Status wird nur für explizite, nicht-erzwungene Renames
+    // zurückgesetzt. Bei abgefangenen Karten bleibt er vom Backend gesteuert.
+    if (state !== "intercepting") {
+      isMapDirty.set(false);
+    }
   },
 
   startDeleteMap(id: string) {

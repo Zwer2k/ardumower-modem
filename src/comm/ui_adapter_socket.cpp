@@ -1511,6 +1511,7 @@ void UiSocketHandler::sendMapList(UiSocketItem *sendTo)
     obj["rotation"] = m.rotation;
     obj["timestamp"] = m.timestamp;
     obj["unsaved"] = m.unsaved;
+    obj["requiresRename"] = m.requiresRename;
   }
 
   String json;

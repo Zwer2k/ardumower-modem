@@ -104,7 +104,7 @@ import { setMapDirty } from "./services/map-sync";
   $: mapOptions = (() => {
     const seen = new Set<string>();
     const opts: { id: string; text: string }[] = [];
-    const isNew = $socketStore.isNewMap || $mapWorkflowStore.state === "creating";
+    const isNew = $socketStore.isNewMap || $mapWorkflowStore.state === "creating" || $mapWorkflowStore.state === "intercepting";
     if (isNew) {
       const name = $mapWorkflowStore.pendingName || `Karte ${$socketStore.maps.length + 1}`;
       opts.push({
@@ -124,7 +124,7 @@ import { setMapDirty } from "./services/map-sync";
   })();
 
   $: {
-    const isNew = $socketStore.isNewMap || $mapWorkflowStore.state === "creating";
+    const isNew = $socketStore.isNewMap || $mapWorkflowStore.state === "creating" || $mapWorkflowStore.state === "intercepting";
     const baseId = isNew ? "__unsaved__" : ($socketStore.currentMapId || "");
     if (!$mapWorkflowStore.renameMode && $mapWorkflowStore.state !== "loading") {
       selectedMapId = baseId;
@@ -274,25 +274,10 @@ import { setMapDirty } from "./services/map-sync";
       kind: "danger",
     });
     if (!choice) return;
+    // Das Backend übernimmt das Löschen und das anschließende Umschalten
+    // auf die erste verfügbare Karte. Es sendet eine aktualisierte mapList,
+    // die den socketStore und das Dropdown aktualisiert.
     mapWorkflowStore.startDeleteMap(target);
-    socketStore.update((s) => {
-      const nextMaps = s.maps.filter((m) => m.id !== target);
-      const nextCurrentMapId = s.currentMapId === target ? "" : s.currentMapId;
-      const nextActiveMapId = s.activeMapId === target ? "" : s.activeMapId;
-      return {
-        ...s,
-        maps: nextMaps,
-        currentMapId: nextCurrentMapId,
-        currentMapMeta: nextCurrentMapId ? s.currentMapMeta : null,
-        activeMapId: nextActiveMapId,
-        isNewMap: nextCurrentMapId ? s.isNewMap : false,
-      };
-    });
-    if (dropdownSelectedId === target) {
-      const fallbackId = effectiveMapId !== target ? effectiveMapId : "";
-      selectedMapId = fallbackId;
-      dropdownSelectedId = fallbackId;
-    }
     socketService.sendDeleteMap(target);
   }
 
@@ -594,7 +579,11 @@ import { setMapDirty } from "./services/map-sync";
             {showManage}
             {edit}
             {showCalculate}
-            canConfirmRename={!!$mapWorkflowStore.pendingName && $mapWorkflowStore.pendingName !== effectiveMapName}
+            canConfirmRename={!!$mapWorkflowStore.pendingName && (
+              $mapWorkflowStore.state === "creating" ||
+              $mapWorkflowStore.state === "intercepting" ||
+              $mapWorkflowStore.pendingName !== effectiveMapName
+            )}
             onUpload={() => socketService.sendUploadMap()}
             onToggleManage={toggleManage}
             onToggleEdit={toggleEdit}
