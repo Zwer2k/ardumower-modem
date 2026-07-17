@@ -18,6 +18,7 @@
   export let drawActive: boolean = false;
   export let strokeWidth = 0.035;
   export let r = 0.18;
+  export let hitR: number | null = null;
 
   interface DragContext {
     svg: SVGSVGElement;
@@ -85,7 +86,7 @@
 <circle
   cx={value.x}
   cy={value.y}
-  {r}
+  r={r}
   {stroke}
   {fill}
   stroke-width={strokeWidth}
@@ -98,3 +99,19 @@
 >
   <title>test</title>
 </circle>
+
+{#if hitR != null && hitR > r}
+  <circle
+    cx={value.x}
+    cy={value.y}
+    r={hitR}
+    fill="transparent"
+    stroke="transparent"
+    role="none"
+    on:click={click}
+    on:mousedown={onMouseDown}
+    on:mouseenter={() => (hovered = true)}
+    on:mouseleave={() => (hovered = false)}
+    style="cursor: move;"
+  />
+{/if}

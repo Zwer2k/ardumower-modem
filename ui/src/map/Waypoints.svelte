@@ -22,6 +22,8 @@
   const arrowSize = 0.06;
   const arrowHw = 0.03;
   const lineWidth = 0.015;
+  const pointRadius = 0.0115; // ~1.5 mm visible waypoint size in edit mode
+  const hitRadius = 0.031;     // larger invisible hit area for dragging
   $: arrowD = edgeArrowPath(value.points, arrowSize, arrowHw);
 </script>
 
@@ -36,9 +38,11 @@
   <path d={arrowD} stroke="blue" stroke-width={lineWidth} fill="none" stroke-linecap="round" stroke-linejoin="round" />
 {/if}
 
-{#each value.points as point, index}
-  <circle cx={point.x} cy={point.y} r="0.02" fill="blue" />
-{/each}
+{#if !edit}
+  {#each value.points as point, index}
+    <circle cx={point.x} cy={point.y} r={pointRadius} fill="blue" />
+  {/each}
+{/if}
 
 {#if edit}
   {#each value.points as point, index}
@@ -48,7 +52,11 @@
       bind:editItemId
       {drawActive}
       strokeChoose="blue"
-      r={0.11}
+      fill="blue"
+      fillActive="blue"
+      fillPassive="blue"
+      r={pointRadius}
+      hitR={hitRadius}
       on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}
     />
   {/each}
