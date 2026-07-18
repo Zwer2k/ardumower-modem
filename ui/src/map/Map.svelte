@@ -23,6 +23,8 @@ import { setMapDirty } from "./services/map-sync";
   import MapGotoOverlay from "./overlay/MapGotoOverlay.svelte";
   import {
     buildEditItems,
+    categoryFromEditItemId,
+    itemBelongsToCategory,
     deletePointByEditItemId,
     splitEdgeByEditItemId,
     addPointAtMowerPosition,
@@ -39,7 +41,7 @@ import { setMapDirty } from "./services/map-sync";
   } from "./interactions/map-edit";
   import { createGotoState } from "./interactions/map-goto";
   import { createCompassState } from "./interactions/map-compass";
-  import type { Point } from "./model";
+  import type { Point, MapArea } from "./model";
 
   let edit = false;
   let wasEditing = false;
@@ -47,6 +49,14 @@ import { setMapDirty } from "./services/map-sync";
   let selectedId: string | null = null;
   let editItemId: string | null = null;
   let editItems: EditItem[] = [];
+  const categoryOptions: { id: string; text: string }[] = [
+    { id: "perimeter", text: "Edit Perimeter" },
+    { id: "dockpoints", text: "Edit Dockingpoints" },
+    { id: "waypoints", text: "Edit Waypoints" },
+    { id: "exclusion", text: "Edit Exclusions" },
+  ];
+
+  let editCategory: MapArea = "perimeter";
 
   let editPoint = false;
   let editEdge = false;
@@ -314,7 +324,15 @@ import { setMapDirty } from "./services/map-sync";
   }> = [];
   let floatingPoint: Point | null = null;
 
-  $: editItems = $MapStore && $MapStore.map ? buildEditItems($MapStore.map) : [];
+  $: editItems = $MapStore && $MapStore.map ? buildEditItems($MapStore.map, editCategory) : [];
+
+  function selectEditCategory(e: CustomEvent) {
+    const id = e.detail?.selectedId as MapArea | undefined;
+    if (!id) return;
+    editCategory = id;
+    editItemId = null;
+    stopDraw();
+  }
 
   function selectEditItem(e: CustomEvent) {
     editItemId = e.detail?.selectedId ?? null;
@@ -347,7 +365,7 @@ import { setMapDirty } from "./services/map-sync";
 
   function onAddClick() {
     if (!mowerPos) return;
-    const index = addPointAtMowerPosition(mowerPos, editItemId, editEdge);
+    const index = addPointAtMowerPosition(mowerPos, editItemId, editEdge, editCategory);
     if (index !== null) {
       const newPointId = buildPointId(editItemId, index);
       if (newPointId) selectNewPoint(newPointId);
@@ -635,6 +653,8 @@ import { setMapDirty } from "./services/map-sync";
       {#if edit}
         <MapEditToolbar
           {edit}
+          {editCategory}
+          categoryItems={categoryOptions}
           {editItems}
           bind:selectedId
           {editPoint}
@@ -642,6 +662,7 @@ import { setMapDirty } from "./services/map-sync";
           {drawActive}
           {mowerPos}
           {nearPos}
+          onSelectCategory={selectEditCategory}
           onSelect={selectEditItem}
           onClear={clearEditItem}
           onDrawClick={onDrawClick}
@@ -683,6 +704,7 @@ import { setMapDirty } from "./services/map-sync";
           value={$MapStore.map.perimeter}
           perimiterId="map-0-perimeter"
           {edit}
+          {editCategory}
           {drawActive}
           bind:editItemId
           onMove={(points) => {
@@ -701,6 +723,7 @@ import { setMapDirty } from "./services/map-sync";
             value={exclusion}
             exclusionId={"map-0-exclusion-" + index}
             {edit}
+            {editCategory}
             {drawActive}
             bind:editItemId
             onMove={(points) => {
@@ -721,6 +744,7 @@ import { setMapDirty } from "./services/map-sync";
           value={$MapStore.map.waypoints}
           waypointsId="map-0-waypoints"
           {edit}
+          {editCategory}
           {drawActive}
           bind:editItemId
           onMove={(points) => {
@@ -738,6 +762,7 @@ import { setMapDirty } from "./services/map-sync";
           value={$MapStore.map.dockpoints}
           dockpointsId="map-0-dockpoints"
           {edit}
+          {editCategory}
           {drawActive}
           bind:editItemId
           onMove={(points) => {

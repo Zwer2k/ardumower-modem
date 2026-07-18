@@ -3,13 +3,17 @@
   import type { Dockpoints as DockpointsModel, Point as PointType } from "./model";
   import Point from "./Point.svelte";
   import Edge from "./Edge.svelte";
+  import type { MapArea } from "./model";
 
   export let value: DockpointsModel;
   export let dockpointsId: string;
   export let edit: boolean = false;
+  export let editCategory: MapArea = "dockpoints";
   export let editItemId: null | string = null;
   export let drawActive: boolean = false;
   export let onMove: (points: PointType[]) => void = () => {};
+
+  $: isActive = editCategory === "dockpoints";
 
   function updatePoint(index: number, x: number, y: number) {
     value = {
@@ -29,18 +33,7 @@
   />
 {/if}
 
-{#if edit}
-  {#each value.points as point, index}
-    <Point
-      value={point}
-      mapItemId={dockpointsId + "-point-" + index}
-      bind:editItemId
-      {drawActive}
-      strokeChoose="orange"
-      r={0.11}
-      on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}
-    />
-  {/each}
+{#if edit && isActive}
   {#each pointsToEdges(value.points) as edge, index}
     <Edge
       value={edge}
@@ -48,6 +41,17 @@
       bind:editItemId
       strokeChoose="orange"
       strokeWidth={0.03}
+    />
+  {/each}
+  {#each value.points as point, index}
+    <Point
+      value={point}
+      mapItemId={dockpointsId + "-point-" + index}
+      bind:editItemId
+      {drawActive}
+      strokeChoose="orange"
+      r={0.08}
+      on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}
     />
   {/each}
 {/if}

@@ -1,12 +1,15 @@
 <script lang="ts">
-  import { Button, ComboBox, Row } from "carbon-components-svelte";
+  import { Button, ComboBox, Dropdown, Row } from "carbon-components-svelte";
   import IconPen from "carbon-icons-svelte/lib/Pen.svelte";
   import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
   import IconAdd from "carbon-icons-svelte/lib/Add.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import type { EditItem } from "../interactions/map-edit";
+  import type { MapArea } from "../model";
 
   export let edit: boolean;
+  export let editCategory: MapArea = "perimeter";
+  export let categoryItems: { id: string; text: string }[] = [];
   export let editItems: EditItem[];
   export let selectedId: string | null;
   export let editPoint: boolean;
@@ -14,6 +17,7 @@
   export let drawActive: boolean;
   export let mowerPos: { x: number; y: number } | null;
   export let nearPos: boolean;
+  export let onSelectCategory: (e: CustomEvent) => void;
   export let onSelect: (e: CustomEvent) => void;
   export let onClear: () => void;
   export let onDrawClick: () => void;
@@ -25,10 +29,24 @@
   function handleSelect(e: CustomEvent) {
     onSelect(e);
   }
+
+  function handleCategorySelect(e: CustomEvent) {
+    onSelectCategory(e);
+  }
 </script>
 
 <Row class="map-edit-row">
-  <div class="edit-combo">
+  <div class="edit-category">
+    <Dropdown
+      disabled={!edit || drawActive}
+      labelText="Ebene bearbeiten"
+      selectedId={editCategory}
+      items={categoryItems}
+      on:select={handleCategorySelect}
+    />
+  </div>
+  <!-- Hidden legacy point/edge selector, retained for future use -->
+  <div class="edit-combo" hidden>
     <ComboBox
       disabled={!edit || drawActive}
       placeholder="Select item to edit"
@@ -83,6 +101,14 @@
   .action-btns {
     display: flex;
     flex-wrap: nowrap;
+  }
+  .edit-category {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .edit-category :global(.bx--dropdown) {
+    width: 100%;
+    min-width: 0;
   }
   .edit-combo {
     flex: 1 1 auto;

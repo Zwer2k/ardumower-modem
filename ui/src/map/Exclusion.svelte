@@ -35,7 +35,14 @@
 
 <path d={arrowD} stroke="black" stroke-width={lineWidth} fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
-{#if edit}
+{#if edit && isActive}
+  {#each pointsToEdges(value.points) as edge, index}
+    <Edge
+      value={edge}
+      mapItemId={exclusionId + "-edge-" + index}
+      bind:editItemId
+    />
+  {/each}
   {#each value.points as point, index}
     <Point
       value={point}
@@ -43,13 +50,6 @@
       bind:editItemId
       {drawActive}
       on:move={(e) => updatePoint(index, e.detail.x, e.detail.y)}
-    />
-  {/each}
-  {#each pointsToEdges(value.points) as edge, index}
-    <Edge
-      value={edge}
-      mapItemId={exclusionId + "-edge-" + index}
-      bind:editItemId
     />
   {/each}
 {/if}

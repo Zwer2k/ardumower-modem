@@ -1,4 +1,4 @@
-import type { Point, Edge } from "../model";
+import type { Point, Edge, MapArea } from "../model";
 import { MapStore, cloneMap } from "../service";
 import { pointsToEdges } from "../core/geometry";
 import { get } from "svelte/store";
@@ -225,16 +225,38 @@ export interface EditItem {
   text: string;
 }
 
-export function buildEditItems(map: import("../model").Map): EditItem[] {
+export function buildEditItems(map: import("../model").Map, category?: MapArea): EditItem[] {
   if (!map) return [];
-  return [
-    map.perimeter.points.map(pointsToEditItem("map-0-perimeter-point-", "Perimeter point #")),
-    pointsToEdges(map.perimeter.points).map(edgesToEditItem("map-0-perimeter-edge-", "Perimeter edge #")),
-    ...map.exclusions.map((e, i) => [
+  const items = [
+    ...map.perimeter.points.map(pointsToEditItem("map-0-perimeter-point-", "Perimeter point #")),
+    ...pointsToEdges(map.perimeter.points).map(edgesToEditItem("map-0-perimeter-edge-", "Perimeter edge #")),
+    ...map.dockpoints.points.map(pointsToEditItem("map-0-dockpoints-point-", "Dockstrecke point #")),
+    ...pointsToEdges(map.dockpoints.points, false).map(edgesToEditItem("map-0-dockpoints-edge-", "Dockstrecke edge #")),
+    ...map.waypoints.points.map(pointsToEditItem("map-0-waypoints-point-", "Wegpunkt point #")),
+    ...pointsToEdges(map.waypoints.points, false).map(edgesToEditItem("map-0-waypoints-edge-", "Wegpunkt edge #")),
+    ...map.exclusions.flatMap((e, i) => [
       ...e.points.map(pointsToEditItem(`map-0-exclusion-${i}-point-`, `Exclusion #${i} point #`)),
       ...pointsToEdges(e.points).map(edgesToEditItem(`map-0-exclusion-${i}-edge-`, `Exclusion #${i} edge #`)),
     ]),
-  ].reduce((a, b) => [...a, ...b], [] as EditItem[]);
+  ];
+  if (!category) return items;
+  return items.filter((it) => itemBelongsToCategory(it.id, category));
+}
+
+export function itemBelongsToCategory(editItemId: string, category: MapArea): boolean {
+  if (category === "perimeter") return editItemId.includes("-perimeter-");
+  if (category === "dockpoints") return editItemId.includes("-dockpoints-");
+  if (category === "waypoints") return editItemId.includes("-waypoints-");
+  if (category === "exclusion") return editItemId.includes("-exclusion-");
+  return false;
+}
+
+export function categoryFromEditItemId(editItemId: string): MapArea | null {
+  if (editItemId.includes("-perimeter-")) return "perimeter";
+  if (editItemId.includes("-dockpoints-")) return "dockpoints";
+  if (editItemId.includes("-waypoints-")) return "waypoints";
+  if (editItemId.includes("-exclusion-")) return "exclusion";
+  return null;
 }
 
 export function deletePointByEditItemId(editItemId: string) {
@@ -256,6 +278,24 @@ export function deletePointByEditItemId(editItemId: string) {
       exclusions[exclusion].points = [...exclusions[exclusion].points];
       exclusions[exclusion].points.splice(index, 1);
       map.exclusions = exclusions;
+      return { ...store, map };
+    });
+  } else if (editItemId.indexOf("-dockpoints-") !== -1) {
+    const index = parseInt(editItemId.replace(/.*-point-([0-9]+)/, "$1"));
+    MapStore.update((store) => {
+      const map = { ...store.map };
+      map.dockpoints = { ...map.dockpoints };
+      map.dockpoints.points = [...map.dockpoints.points];
+      map.dockpoints.points.splice(index, 1);
+      return { ...store, map };
+    });
+  } else if (editItemId.indexOf("-waypoints-") !== -1) {
+    const index = parseInt(editItemId.replace(/.*-point-([0-9]+)/, "$1"));
+    MapStore.update((store) => {
+      const map = { ...store.map };
+      map.waypoints = { ...map.waypoints };
+      map.waypoints.points = [...map.waypoints.points];
+      map.waypoints.points.splice(index, 1);
       return { ...store, map };
     });
   }
@@ -328,44 +368,73 @@ export function buildInitialCandidates(
   ];
 }
 
-export function addPointAtMowerPosition(mowerPos: { x: number; y: number } | null, editItemId: string | null, editEdge: boolean): number | null {
+export function addPointAtMowerPosition(
+  mowerPos: { x: number; y: number } | null,
+  editItemId: string | null,
+  editEdge: boolean,
+  activeArea: MapArea = "perimeter"
+): number | null {
   if (!mowerPos) return null;
   const gpsPt: Point = { x: mowerPos.x, y: -mowerPos.y };
-  const perimeter = get(MapStore).map.perimeter;
+  const map = get(MapStore).map;
+  const targetArea = activeArea === "perimeter" ? map.perimeter : activeArea === "dockpoints" ? map.dockpoints : activeArea === "waypoints" ? map.waypoints : null;
 
-  if (perimeter.points.length === 0) {
-    MapStore.update((store) => ({
-      ...store,
-      map: { ...store.map, perimeter: { points: [gpsPt] } },
-    }));
+  if (targetArea && targetArea.points.length === 0) {
+    MapStore.update((store) => {
+      const newMap = { ...store.map };
+      if (activeArea === "perimeter") newMap.perimeter = { points: [gpsPt] };
+      else if (activeArea === "dockpoints") newMap.dockpoints = { points: [gpsPt] };
+      else if (activeArea === "waypoints") newMap.waypoints = { points: [gpsPt] };
+      return { ...store, map: newMap };
+    });
     setMapDirty(true);
     return 0;
   }
 
-  if (editEdge && editItemId) {
+  if (editEdge && editItemId && itemBelongsToCategory(editItemId, activeArea)) {
     const edgeMatch = editItemId.match(/^(.*)-edge-([0-9]+)$/);
-    if (edgeMatch && edgeMatch[1].includes("-perimeter")) {
+    if (edgeMatch) {
       const edgeIndex = parseInt(edgeMatch[2]);
       MapStore.update((store) => {
-        const map = { ...store.map };
-        map.perimeter = { ...map.perimeter, points: [...map.perimeter.points] };
-        map.perimeter.points.splice(edgeIndex + 1, 0, gpsPt);
-        return { ...store, map };
+        const newMap = { ...store.map };
+        if (activeArea === "perimeter") {
+          newMap.perimeter = { ...newMap.perimeter, points: [...newMap.perimeter.points] };
+          newMap.perimeter.points.splice(edgeIndex + 1, 0, gpsPt);
+        } else if (activeArea === "dockpoints") {
+          newMap.dockpoints = { ...newMap.dockpoints, points: [...newMap.dockpoints.points] };
+          newMap.dockpoints.points.splice(edgeIndex + 1, 0, gpsPt);
+        } else if (activeArea === "waypoints") {
+          newMap.waypoints = { ...newMap.waypoints, points: [...newMap.waypoints.points] };
+          newMap.waypoints.points.splice(edgeIndex + 1, 0, gpsPt);
+        }
+        return { ...store, map: newMap };
       });
       setMapDirty(true);
       return edgeIndex + 1;
     }
   }
 
-  const idx = findNearestEdgeIdx(gpsPt, perimeter.points);
-  MapStore.update((store) => {
-    const map = { ...store.map };
-    map.perimeter = { ...map.perimeter, points: [...map.perimeter.points] };
-    map.perimeter.points.splice(idx + 1, 0, gpsPt);
-    return { ...store, map };
-  });
-  setMapDirty(true);
-  return idx + 1;
+  if (targetArea) {
+    const idx = findNearestEdgeIdx(gpsPt, targetArea.points);
+    MapStore.update((store) => {
+      const newMap = { ...store.map };
+      if (activeArea === "perimeter") {
+        newMap.perimeter = { ...newMap.perimeter, points: [...newMap.perimeter.points] };
+        newMap.perimeter.points.splice(idx + 1, 0, gpsPt);
+      } else if (activeArea === "dockpoints") {
+        newMap.dockpoints = { ...newMap.dockpoints, points: [...newMap.dockpoints.points] };
+        newMap.dockpoints.points.splice(idx + 1, 0, gpsPt);
+      } else if (activeArea === "waypoints") {
+        newMap.waypoints = { ...newMap.waypoints, points: [...newMap.waypoints.points] };
+        newMap.waypoints.points.splice(idx + 1, 0, gpsPt);
+      }
+      return { ...store, map: newMap };
+    });
+    setMapDirty(true);
+    return idx + 1;
+  }
+
+  return null;
 }
 
 export function parseAreaFromEditItemId(editItemId: string): {

@@ -95,7 +95,7 @@
   on:mousedown={onMouseDown}
   on:mouseenter={() => (hovered = true)}
   on:mouseleave={() => (hovered = false)}
-  style="cursor: move;"
+  style="cursor: pointer;"
 >
   <title>test</title>
 </circle>
@@ -107,11 +107,12 @@
     r={hitR}
     fill="transparent"
     stroke="transparent"
+    pointer-events="all"
     role="none"
     on:click={click}
     on:mousedown={onMouseDown}
     on:mouseenter={() => (hovered = true)}
     on:mouseleave={() => (hovered = false)}
-    style="cursor: move;"
+    style="cursor: pointer;"
   />
 {/if}
