@@ -372,11 +372,71 @@ export function addPointAtMowerPosition(
   mowerPos: { x: number; y: number } | null,
   editItemId: string | null,
   editEdge: boolean,
+  editPoint: boolean,
   activeArea: MapArea = "perimeter"
 ): number | null {
   if (!mowerPos) return null;
   const gpsPt: Point = { x: mowerPos.x, y: -mowerPos.y };
   const map = get(MapStore).map;
+
+  if (activeArea === "exclusion" && editItemId) {
+    const exclMatch = editItemId.match(/-exclusion-([0-9]+)/);
+    if (exclMatch) {
+      const exclIndex = parseInt(exclMatch[1]);
+      const exclPoints = map.exclusions[exclIndex]?.points ?? [];
+      if (exclPoints.length === 0) {
+        MapStore.update((store) => {
+          const newMap = { ...store.map };
+          const exclusions = [...newMap.exclusions];
+          exclusions[exclIndex] = { ...exclusions[exclIndex], points: [gpsPt] };
+          newMap.exclusions = exclusions;
+          return { ...store, map: newMap };
+        });
+        setMapDirty(true);
+        return 0;
+      }
+      if (exclPoints.length === 1) {
+        MapStore.update((store) => {
+          const newMap = { ...store.map };
+          const exclusions = [...newMap.exclusions];
+          exclusions[exclIndex] = { ...exclusions[exclIndex], points: [...exclusions[exclIndex].points, gpsPt] };
+          newMap.exclusions = exclusions;
+          return { ...store, map: newMap };
+        });
+        setMapDirty(true);
+        return 1;
+      }
+      if (editEdge) {
+        const edgeMatch = editItemId.match(/^(.*)-edge-([0-9]+)$/);
+        if (edgeMatch) {
+          const edgeIndex = parseInt(edgeMatch[2]);
+          MapStore.update((store) => {
+            const newMap = { ...store.map };
+            const exclusions = [...newMap.exclusions];
+            exclusions[exclIndex] = { ...exclusions[exclIndex], points: [...exclusions[exclIndex].points] };
+            exclusions[exclIndex].points.splice(edgeIndex + 1, 0, gpsPt);
+            newMap.exclusions = exclusions;
+            return { ...store, map: newMap };
+          });
+          setMapDirty(true);
+          return edgeIndex + 1;
+        }
+      }
+      const idx = findNearestEdgeIdx(gpsPt, exclPoints);
+      MapStore.update((store) => {
+        const newMap = { ...store.map };
+        const exclusions = [...newMap.exclusions];
+        exclusions[exclIndex] = { ...exclusions[exclIndex], points: [...exclusions[exclIndex].points] };
+        exclusions[exclIndex].points.splice(idx + 1, 0, gpsPt);
+        newMap.exclusions = exclusions;
+        return { ...store, map: newMap };
+      });
+      setMapDirty(true);
+      return idx + 1;
+    }
+    return null;
+  }
+
   const targetArea = activeArea === "perimeter" ? map.perimeter : activeArea === "dockpoints" ? map.dockpoints : activeArea === "waypoints" ? map.waypoints : null;
 
   if (targetArea && targetArea.points.length === 0) {
@@ -389,6 +449,22 @@ export function addPointAtMowerPosition(
     });
     setMapDirty(true);
     return 0;
+  }
+
+  if (targetArea && targetArea.points.length === 1) {
+    MapStore.update((store) => {
+      const newMap = { ...store.map };
+      if (activeArea === "perimeter") {
+        newMap.perimeter = { ...newMap.perimeter, points: [...newMap.perimeter.points, gpsPt] };
+      } else if (activeArea === "dockpoints") {
+        newMap.dockpoints = { ...newMap.dockpoints, points: [...newMap.dockpoints.points, gpsPt] };
+      } else if (activeArea === "waypoints") {
+        newMap.waypoints = { ...newMap.waypoints, points: [...newMap.waypoints.points, gpsPt] };
+      }
+      return { ...store, map: newMap };
+    });
+    setMapDirty(true);
+    return 1;
   }
 
   if (editEdge && editItemId && itemBelongsToCategory(editItemId, activeArea)) {
@@ -411,6 +487,21 @@ export function addPointAtMowerPosition(
       });
       setMapDirty(true);
       return edgeIndex + 1;
+    }
+  }
+
+  if (activeArea === "dockpoints" && editPoint && editItemId && itemBelongsToCategory(editItemId, activeArea)) {
+    const pointMatch = editItemId.match(/^(.*)-point-([0-9]+)$/);
+    if (pointMatch) {
+      const pointIndex = parseInt(pointMatch[2]);
+      MapStore.update((store) => {
+        const newMap = { ...store.map };
+        newMap.dockpoints = { ...newMap.dockpoints, points: [...newMap.dockpoints.points] };
+        newMap.dockpoints.points.splice(pointIndex + 1, 0, gpsPt);
+        return { ...store, map: newMap };
+      });
+      setMapDirty(true);
+      return pointIndex + 1;
     }
   }
 

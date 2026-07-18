@@ -64,6 +64,21 @@ import { setMapDirty } from "./services/map-sync";
   $: editPoint = edit && !!editItemId && editItemId.indexOf("-point-") !== -1;
   $: editEdge = edit && !!editItemId && editItemId.indexOf("-edge-") !== -1;
   $: selectedId = editItemId;
+  $: selectedExclusionMatch = editItemId?.match(/-exclusion-([0-9]+)/);
+  $: selectedExclusionIndex = selectedExclusionMatch ? parseInt(selectedExclusionMatch[1]) : null;
+  $: canAdd = edit && !drawActive && mowerPos && mowerPos.x !== 0 && mowerPos.y !== 0 && (
+    editEdge ||
+    editPoint ||
+    (editCategory === "perimeter" && perimeterPoints <= 1) ||
+    (editCategory === "dockpoints" && dockpointsPoints <= 1) ||
+    (editCategory === "waypoints" && waypointsPoints <= 1) ||
+    (editCategory === "exclusion" && (
+      ($MapStore.map?.exclusions.length ?? 0) === 0 ||
+      (selectedExclusionIndex !== null && ($MapStore.map?.exclusions[selectedExclusionIndex].points.length ?? 0) <= 1)
+    ))
+  );
+  $: canCreateExclusion = edit && !drawActive && mowerPos && mowerPos.x !== 0 && mowerPos.y !== 0 && editCategory === "exclusion";
+  $: canDeleteExclusion = edit && !drawActive && editCategory === "exclusion" && selectedExclusionIndex !== null;
 
   // ─── Map management ────────────────────────────────────────────────────────
   let showManage = false;
@@ -75,6 +90,7 @@ import { setMapDirty } from "./services/map-sync";
     showManage = false;
     edit = false;
     showCalculate = false;
+    editItemId = null;
     stopDraw();
   }
 
@@ -365,11 +381,44 @@ import { setMapDirty } from "./services/map-sync";
 
   function onAddClick() {
     if (!mowerPos) return;
-    const index = addPointAtMowerPosition(mowerPos, editItemId, editEdge, editCategory);
+    if (editCategory === "exclusion" && !editItemId && ($MapStore.map?.exclusions.length ?? 0) === 0) {
+      onCreateExclusionClick();
+      return;
+    }
+    const index = addPointAtMowerPosition(mowerPos, editItemId, editEdge, editPoint, editCategory);
     if (index !== null) {
       const newPointId = buildPointId(editItemId, index);
       if (newPointId) selectNewPoint(newPointId);
     }
+  }
+
+  function onCreateExclusionClick() {
+    if (!mowerPos) return;
+    MapStore.update((store) => {
+      const map = { ...store.map };
+      map.exclusions = [
+        ...map.exclusions,
+        { points: [{ x: mowerPos.x, y: -mowerPos.y }] },
+      ];
+      return { ...store, map };
+    });
+    setMapDirty(true);
+    const newIndex = ($MapStore.map?.exclusions.length ?? 1) - 1;
+    editItemId = "map-0-exclusion-" + newIndex + "-point-0";
+  }
+
+  function onDeleteExclusionClick() {
+    if (!editItemId || editCategory !== "exclusion") return;
+    const match = editItemId.match(/-exclusion-([0-9]+)/);
+    if (!match) return;
+    const exclusionIndex = parseInt(match[1]);
+    MapStore.update((store) => {
+      const map = { ...store.map };
+      map.exclusions = map.exclusions.filter((_, i) => i !== exclusionIndex);
+      return { ...store, map };
+    });
+    setMapDirty(true);
+    editItemId = null;
   }
 
   function onDrawClick() {
@@ -660,6 +709,9 @@ import { setMapDirty } from "./services/map-sync";
           {editPoint}
           {editEdge}
           {drawActive}
+          {canAdd}
+          {canCreateExclusion}
+          {canDeleteExclusion}
           onSelectCategory={selectEditCategory}
           onSelect={selectEditItem}
           onClear={clearEditItem}
@@ -667,6 +719,8 @@ import { setMapDirty } from "./services/map-sync";
           onSplitClick={onSplitClick}
           onAddClick={onAddClick}
           onDeleteClick={onDeleteClick}
+          onCreateExclusionClick={onCreateExclusionClick}
+          onDeleteExclusionClick={onDeleteExclusionClick}
           {shouldFilterItem}
         />
       {/if}
@@ -689,6 +743,7 @@ import { setMapDirty } from "./services/map-sync";
       {waypointsPoints}
       {totalPoints}
       needsUpload={sync.needsUpload}
+      {selectedExclusionIndex}
       onCompassDown={compassState.onDown}
     />
     <Canvas

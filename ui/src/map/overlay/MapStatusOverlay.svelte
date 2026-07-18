@@ -9,6 +9,7 @@
   export let waypointsPoints: number;
   export let totalPoints: number;
   export let needsUpload: boolean;
+  export let selectedExclusionIndex: number | null = null;
   export let onCompassDown: (e: MouseEvent) => void;
 </script>
 
@@ -26,7 +27,7 @@
     <div><strong>Area:</strong> {(socketState.currentMapMeta?.area ?? 0).toFixed(1)} m²</div>
     <div><strong>Perimeter:</strong> {perimeterPoints}</div>
     {#each exclusionPoints as ep, i}
-      <div><strong>Excl #{i}:</strong> {ep}</div>
+      <div class:active={selectedExclusionIndex === i}><strong>Excl #{i}:</strong> {ep}</div>
     {/each}
     <div><strong>Dock:</strong> {dockpointsPoints}</div>
     <div><strong>Way:</strong> {waypointsPoints}</div>
@@ -64,6 +65,12 @@
     font-size: 0.75rem;
     line-height: 1.4;
     min-width: 120px;
+  }
+  .map-point-counts .active {
+    background: #fff9c4;
+    border-radius: 2px;
+    margin: -0.1rem -0.25rem;
+    padding: 0.1rem 0.25rem;
   }
   .sync-ok {
     color: #2e7d32;

@@ -4,6 +4,8 @@
   import IconSplit from "carbon-icons-svelte/lib/Split.svelte";
   import IconAdd from "carbon-icons-svelte/lib/Add.svelte";
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
+  import IconAddAlt from "carbon-icons-svelte/lib/AddAlt.svelte";
+  import IconSubtractAlt from "carbon-icons-svelte/lib/SubtractAlt.svelte";
   import type { EditItem } from "../interactions/map-edit";
   import type { MapArea } from "../model";
 
@@ -14,6 +16,9 @@
   export let selectedId: string | null;
   export let editPoint: boolean;
   export let editEdge: boolean;
+  export let canAdd: boolean;
+  export let canCreateExclusion: boolean;
+  export let canDeleteExclusion: boolean;
   export let drawActive: boolean;
   export let onSelectCategory: (e: CustomEvent) => void;
   export let onSelect: (e: CustomEvent) => void;
@@ -22,6 +27,8 @@
   export let onSplitClick: () => void;
   export let onAddClick: () => void;
   export let onDeleteClick: () => void;
+  export let onCreateExclusionClick: () => void;
+  export let onDeleteExclusionClick: () => void;
   export let shouldFilterItem: (item: EditItem, value: string) => boolean;
 
   function handleSelect(e: CustomEvent) {
@@ -76,13 +83,33 @@
       <Button
         kind="tertiary"
         size="small"
-        disabled={drawActive || !editEdge}
+        disabled={!canAdd}
         icon={IconAdd}
         iconDescription="Add"
         on:click={onAddClick}
       >
         <span class="btn-label">Add</span>
       </Button>
+      {#if editCategory === "exclusion"}
+        <Button
+          kind="tertiary"
+          size="small"
+          disabled={!canCreateExclusion}
+          icon={IconAddAlt}
+          iconDescription="New exclusion"
+          on:click={onCreateExclusionClick}
+        >
+          <span class="btn-label">New</span>
+        </Button>
+        <Button
+          kind="danger"
+          size="small"
+          disabled={!canDeleteExclusion}
+          icon={IconSubtractAlt}
+          iconDescription="Delete exclusion"
+          on:click={onDeleteExclusionClick}
+        />
+      {/if}
       <Button
         kind="danger"
         size="small"
