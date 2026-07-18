@@ -8,10 +8,10 @@ export const rotatePointsAroundOrigin = (p: Point[], radians: number): Point[] =
       ({ x: x * c - y * s, y: x * s + y * c })))
   (Math.sin(radians), Math.cos(radians));
 
-export const pointsToEdges = (p: Point[]): Edge[] =>
+export const pointsToEdges = (p: Point[], closed: boolean = true): Edge[] =>
   p.length < 2
     ? []
-    : [...p, p[0]]
+    : (closed ? [...p, p[0]] : p.slice(0))
       .map((_, i, a) => (i === 0 ? undefined : [a[i - 1], a[i]]))
       .filter((x): x is [Point, Point] => x !== undefined)
       .map((p) => ({ begin: p[0], end: p[1] }));

@@ -52,8 +52,8 @@ import { setMapDirty } from "./services/map-sync";
   const categoryOptions: { id: string; text: string }[] = [
     { id: "perimeter", text: "Edit Perimeter" },
     { id: "dockpoints", text: "Edit Dockingpoints" },
-    { id: "waypoints", text: "Edit Waypoints" },
     { id: "exclusion", text: "Edit Exclusions" },
+    { id: "waypoints", text: "Edit Waypoints" },
   ];
 
   let editCategory: MapArea = "perimeter";
@@ -660,8 +660,6 @@ import { setMapDirty } from "./services/map-sync";
           {editPoint}
           {editEdge}
           {drawActive}
-          {mowerPos}
-          {nearPos}
           onSelectCategory={selectEditCategory}
           onSelect={selectEditItem}
           onClear={clearEditItem}

@@ -10,10 +10,12 @@
   export let strokeActive = "black";
   export let strokePassive = "grey";
   export let strokeWidth = 0.1;
+  export let hitStrokeWidth = Math.max(strokeWidth * 3, 0.05);
 
   $: stroke = editItemId === null ? strokeChoose : mapItemId === editItemId ? strokeActive : strokePassive
 
-  function click() {
+  function click(event: MouseEvent) {
+    event.stopPropagation();
     editItemId = mapItemId
   }
 </script>
@@ -25,6 +27,19 @@
   y2={value.end.y}
   {stroke}
   stroke-width={strokeWidth}
+  pointer-events="none"
   role="none"
-  on:click={click}
+/>
+
+<line
+  x1={value.begin.x}
+  y1={value.begin.y}
+  x2={value.end.x}
+  y2={value.end.y}
+  stroke="transparent"
+  stroke-width={hitStrokeWidth}
+  pointer-events="all"
+  role="none"
+  on:click={(e) => click(e)}
+  style="cursor: pointer;"
 />

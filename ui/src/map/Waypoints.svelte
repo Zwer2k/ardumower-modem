@@ -44,7 +44,7 @@
 {/if}
 
 {#if edit && isActive}
-  {#each pointsToEdges(value.points) as edge, index}
+  {#each pointsToEdges(value.points, false) as edge, index}
     <Edge
       value={edge}
       mapItemId={waypointsId + "-edge-" + index}

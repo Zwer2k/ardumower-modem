@@ -15,8 +15,6 @@
   export let editPoint: boolean;
   export let editEdge: boolean;
   export let drawActive: boolean;
-  export let mowerPos: { x: number; y: number } | null;
-  export let nearPos: boolean;
   export let onSelectCategory: (e: CustomEvent) => void;
   export let onSelect: (e: CustomEvent) => void;
   export let onClear: () => void;
@@ -78,7 +76,7 @@
       <Button
         kind="tertiary"
         size="small"
-        disabled={drawActive || !mowerPos || nearPos}
+        disabled={drawActive || !editEdge}
         icon={IconAdd}
         iconDescription="Add"
         on:click={onAddClick}
