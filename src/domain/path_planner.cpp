@@ -478,6 +478,25 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
     if (areasToMow.size() == 1 && !areasToMow[0].empty())
         boundary = &areasToMow[0];
 
+    // Walk along the boundary of the mowable area itself. For a single area
+    // this is the area boundary; for multiple areas (caused by exclusions) we
+    // try to use the union of all mowable areas when it results in a single
+    // boundary polygon so connectors follow exclusion edges instead of the
+    // outer perimeter. If the union is split, fall back to the outer perimeter.
+    Polygon walkBoundary;
+    const Polygon *walkBoundaryPtr = boundary;
+    if (areasToMow.size() == 1 && !areasToMow[0].empty()) {
+        walkBoundaryPtr = &areasToMow[0];
+    } else if (areasToMow.size() > 1) {
+        auto unionAreas = clipUnion(areasToMow);
+        if (unionAreas.size() == 1) {
+            walkBoundary = std::move(unionAreas[0]);
+            walkBoundaryPtr = &walkBoundary;
+        } else {
+            walkBoundaryPtr = &perimeter;
+        }
+    }
+
     for (size_t i = 0; i < polys.size(); i++) {
         const auto &poly = polys[i];
         if (poly.empty()) continue;
@@ -489,10 +508,7 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
             bool exitsBoundary = d > 0.001 && lineExitsPerimeter(from, to, *boundary);
             bool leavesMowArea = d > 0.001 && !segmentStaysInAreas(from, to, areasToMow);
             if (exitsBoundary || leavesMowArea) {
-                // If the mowable area is split, walk the outer perimeter so the
-                // connector can travel between disconnected areas.
-                const Polygon &walkBoundary = areasToMow.size() > 1 ? perimeter : *boundary;
-                Polygon conn = walkPerimeter(walkBoundary, from, to);
+                Polygon conn = walkPerimeter(*walkBoundaryPtr, from, to);
                 for (size_t k = 0; k < conn.size(); k++)
                     if (distance(waypoints.back(), conn[k]) > 0.01)
                         waypoints.push_back(conn[k]);
