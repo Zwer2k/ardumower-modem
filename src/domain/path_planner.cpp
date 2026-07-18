@@ -539,11 +539,29 @@ Polygon calculateWaypoints(ArduMower::Domain::Robot::MowerMap &map,
         }
     }
 
-    // Collect all area polygons (inward offset may split at bottlenecks)
+    // Collect all area polygons (inward offset may split at bottlenecks).
+    // Start from the perimeter with exclusions removed so obstacles stay unwalkable.
     std::vector<Polygon> areasToMow;
-    if (settings.distanceToBorder > 0 && settings.width > 0.001) {
+    if (map.exclusions.empty()) {
+      if (settings.distanceToBorder > 0 && settings.width > 0.001) {
         double offsetDist = settings.distanceToBorder * settings.width;
         areasToMow = offsetPolygonInward(perimeter, offsetDist);
+      }
+    } else {
+      std::vector<Polygon> base = clipDifference(perimeter, map.exclusions);
+      if (base.empty()) {
+        Log(WARN, "%sExclusions removed entire perimeter, nothing to mow", _LOG_);
+        return {};
+      }
+      if (settings.distanceToBorder > 0 && settings.width > 0.001) {
+        double offsetDist = settings.distanceToBorder * settings.width;
+        for (const auto &area : base) {
+          auto offset = offsetPolygonInward(area, offsetDist);
+          areasToMow.insert(areasToMow.end(), offset.begin(), offset.end());
+        }
+      } else {
+        areasToMow = std::move(base);
+      }
     }
     if (areasToMow.empty()) areasToMow = {perimeter};
     for (auto it = areasToMow.begin(); it != areasToMow.end(); )
