@@ -1,0 +1,21 @@
+{
+  "name": "pathplanner",
+  "version": "1.0.0",
+  "description": "Ardumower path planner geometry library",
+  "keywords": "path planner, geometry",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ardumower/ardumower-modem"
+  },
+  "authors": [
+    {
+      "name": "Ardumower"
+    }
+  ],
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif32"],
+  "dependencies": {
+    "Clipper2": "^1.0.0"
+  }
+}

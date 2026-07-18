@@ -20,3 +20,9 @@ dependencies.lock
 *ci_script_executed.txt
 src/git_version.cpp
 src/sys/asset_bundle.h
+
+# Native path planner test artifacts
+test_pathplanner/test_exclusion
+test_pathplanner/test_dump
+test_pathplanner/test_clip_*
+*.o
