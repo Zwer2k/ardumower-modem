@@ -41,7 +41,7 @@ struct MowSettings {
     int pattern;
     float width;
     int angle;
-    int distanceToBorder;
+    float distanceToBorder;
     int borderLaps;
     bool mowArea;
     bool mowExclusionBorder;
@@ -49,7 +49,7 @@ struct MowSettings {
 
     MowSettings()
         : timestamp(0), pattern(0), width(0.3f), angle(0),
-          distanceToBorder(0), borderLaps(0),
+          distanceToBorder(0.0f), borderLaps(0),
           mowArea(true), mowExclusionBorder(false), mowBorderCcw(false) {}
 };
 
