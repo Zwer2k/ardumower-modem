@@ -153,6 +153,210 @@ static void nearestOnBoundary(const Point &p, const Polygon &poly,
     }
 }
 
+static bool segmentsIntersect(const Point &a1, const Point &a2, const Point &b1, const Point &b2) {
+    double o1 = crossProduct(a1, a2, b1);
+    double o2 = crossProduct(a1, a2, b2);
+    double o3 = crossProduct(b1, b2, a1);
+    double o4 = crossProduct(b1, b2, a2);
+    if (o1 * o2 < 0 && o3 * o4 < 0) return true;
+    // Check collinear cases
+    auto onSegment = [](const Point &p, const Point &q, const Point &r) {
+        return q.X <= std::max(p.X, r.X) + 1e-9 && q.X >= std::min(p.X, r.X) - 1e-9 &&
+               q.Y <= std::max(p.Y, r.Y) + 1e-9 && q.Y >= std::min(p.Y, r.Y) - 1e-9;
+    };
+    if (std::abs(o1) < 1e-9 && onSegment(a1, b1, a2)) return true;
+    if (std::abs(o2) < 1e-9 && onSegment(a1, b2, a2)) return true;
+    if (std::abs(o3) < 1e-9 && onSegment(b1, a1, b2)) return true;
+    if (std::abs(o4) < 1e-9 && onSegment(b1, a2, b2)) return true;
+    return false;
+}
+
+static bool segmentIntersectsPolygon(const Point &from, const Point &to, const Polygon &poly) {
+    if (poly.size() < 3) return false;
+    for (size_t i = 0; i < poly.size(); i++) {
+        size_t j = (i + 1) % poly.size();
+        if (segmentsIntersect(from, to, poly[i], poly[j])) return true;
+    }
+    return false;
+}
+
+static Point nearestPointOnPolygon(const Point &p, const Polygon &poly) {
+    if (poly.size() < 3) return p;
+    Point best = poly[0];
+    double bestDist = distance(p, best);
+    for (size_t i = 0; i < poly.size(); i++) {
+        size_t j = (i + 1) % poly.size();
+        double dx = poly[j].X - poly[i].X, dy = poly[j].Y - poly[i].Y;
+        double len2 = dx*dx + dy*dy;
+        if (len2 < 1e-10) continue;
+        double t = std::max(0.0, std::min(1.0, ((p.X - poly[i].X)*dx + (p.Y - poly[i].Y)*dy) / len2));
+        Point proj = {poly[i].X + t*dx, poly[i].Y + t*dy};
+        double d = distance(p, proj);
+        if (d < bestDist) { bestDist = d; best = proj; }
+    }
+    return best;
+}
+
+static Polygon walkBoundaryWithHoles(const Point &from, const Point &to,
+    const Polygon &outerBoundary,
+    const std::vector<Polygon> &holes)
+{
+    // Primary route: graph-based Dijkstra over all boundaries (outer + holes).
+    // If that fails to connect the two points, fall back to a simple outer-
+    // boundary walk, which is always hole-free.
+    std::vector<Polygon> boundaries;
+    boundaries.push_back(outerBoundary);
+    for (const auto &h : holes) {
+        if (h.size() >= 3) boundaries.push_back(h);
+    }
+
+    struct Node { Point p; };
+    std::vector<Node> nodes;
+    std::vector<std::vector<std::pair<size_t, double>>> adj;
+    std::vector<size_t> polyStart;
+
+    for (const auto &poly : boundaries) {
+        polyStart.push_back(nodes.size());
+        for (size_t i = 0; i < poly.size(); i++) {
+            nodes.push_back({poly[i]});
+            adj.emplace_back();
+        }
+    }
+
+    for (size_t b = 0; b < boundaries.size(); b++) {
+        const auto &poly = boundaries[b];
+        size_t start = polyStart[b];
+        for (size_t i = 0; i < poly.size(); i++) {
+            size_t j = (i + 1) % poly.size();
+            double d = distance(nodes[start + i].p, nodes[start + j].p);
+            adj[start + i].push_back({start + j, d});
+            adj[start + j].push_back({start + i, d});
+        }
+    }
+
+    auto project = [&](const Point &p, size_t &polyIdx, size_t &edgeIdx, Point &proj, double &bestDist) {
+        polyIdx = std::numeric_limits<size_t>::max();
+        edgeIdx = 0;
+        proj = p;
+        bestDist = std::numeric_limits<double>::max();
+        for (size_t b = 0; b < boundaries.size(); b++) {
+            const auto &poly = boundaries[b];
+            for (size_t i = 0; i < poly.size(); i++) {
+                size_t j = (i + 1) % poly.size();
+                double dx = poly[j].X - poly[i].X;
+                double dy = poly[j].Y - poly[i].Y;
+                double len2 = dx * dx + dy * dy;
+                if (len2 < 0.001) continue;
+                double t = std::max(0.0, std::min(1.0, ((p.X - poly[i].X) * dx + (p.Y - poly[i].Y) * dy) / len2));
+                Point pp = {poly[i].X + t * dx, poly[i].Y + t * dy};
+                double dd = distance(p, pp);
+                if (dd < bestDist) {
+                    bestDist = dd;
+                    polyIdx = b;
+                    edgeIdx = i;
+                    proj = pp;
+                }
+            }
+        }
+    };
+
+    size_t fromPoly, fromEdge, toPoly, toEdge;
+    Point fromProj, toProj;
+    double fromDist, toDist;
+    project(from, fromPoly, fromEdge, fromProj, fromDist);
+    project(to, toPoly, toEdge, toProj, toDist);
+
+    if (fromPoly == std::numeric_limits<size_t>::max() || toPoly == std::numeric_limits<size_t>::max()) {
+        return {fromProj, toProj};
+    }
+
+    size_t fromNode = nodes.size();
+    nodes.push_back({fromProj});
+    adj.emplace_back();
+    size_t toNode = nodes.size();
+    nodes.push_back({toProj});
+    adj.emplace_back();
+
+    auto connectToEdge = [&](size_t node, size_t polyIdx, size_t edgeIdx) {
+        size_t start = polyStart[polyIdx];
+        const auto &poly = boundaries[polyIdx];
+        size_t i = edgeIdx;
+        size_t j = (edgeIdx + 1) % poly.size();
+        double d1 = distance(nodes[node].p, nodes[start + i].p);
+        double d2 = distance(nodes[node].p, nodes[start + j].p);
+        adj[node].push_back({start + i, d1});
+        adj[start + i].push_back({node, d1});
+        adj[node].push_back({start + j, d2});
+        adj[start + j].push_back({node, d2});
+    };
+    connectToEdge(fromNode, fromPoly, fromEdge);
+    connectToEdge(toNode, toPoly, toEdge);
+
+    std::vector<double> dist(nodes.size(), std::numeric_limits<double>::max());
+    std::vector<int> prev(nodes.size(), -1);
+    dist[fromNode] = 0.0;
+    using PQItem = std::pair<double, size_t>;
+    std::priority_queue<PQItem, std::vector<PQItem>, std::greater<PQItem>> pq;
+    pq.push({0.0, fromNode});
+    while (!pq.empty()) {
+        auto [d, u] = pq.top(); pq.pop();
+        if (d > dist[u] + 1e-9) continue;
+        if (u == toNode) break;
+        for (const auto &[v, w] : adj[u]) {
+            if (dist[u] + w < dist[v] - 1e-9) {
+                dist[v] = dist[u] + w;
+                prev[v] = (int)u;
+                pq.push({dist[v], v});
+            }
+        }
+    }
+
+    Polygon result;
+    if (prev[toNode] != -1) {
+        std::vector<size_t> path;
+        for (int u = (int)toNode; u != -1; u = prev[u]) path.push_back((size_t)u);
+        std::reverse(path.begin(), path.end());
+        for (size_t idx : path) {
+            if (result.empty() || distance(result.back(), nodes[idx].p) > 0.001)
+                result.push_back(nodes[idx].p);
+        }
+        return result;
+    }
+
+    // Fallback: walk along the outer boundary between the two projections.
+    Point fromOuter = nearestPointOnPolygon(from, outerBoundary);
+    Point toOuter = nearestPointOnPolygon(to, outerBoundary);
+
+    size_t iFrom = nearestPointIndex(fromOuter, outerBoundary);
+    size_t iTo = nearestPointIndex(toOuter, outerBoundary);
+    size_t n = outerBoundary.size();
+
+    if (iFrom == iTo || distance(fromOuter, toOuter) < 0.001) {
+        return {fromOuter, toOuter};
+    }
+
+    auto buildPath = [&](size_t startPt, size_t endPt) -> Polygon {
+        Polygon path;
+        path.push_back(fromOuter);
+        for (size_t k = startPt; ; k = (k + 1) % n) {
+            path.push_back(outerBoundary[k]);
+            if (k == endPt) break;
+            if (path.size() > n + 3) break;
+        }
+        path.push_back(toOuter);
+        return path;
+    };
+
+    Polygon cwPath = buildPath((iFrom + 1) % n, iTo);
+    Polygon ccwPath = buildPath((iTo + 1) % n, iFrom);
+
+    double cwLen = 0, ccwLen = 0;
+    for (size_t i = 1; i < cwPath.size(); i++) cwLen += distance(cwPath[i-1], cwPath[i]);
+    for (size_t i = 1; i < ccwPath.size(); i++) ccwLen += distance(ccwPath[i-1], ccwPath[i]);
+
+    return cwLen < ccwLen ? cwPath : ccwPath;
+}
+
 static Polygon walkPerimeter(const Polygon &peri, const Point &from, const Point &to) {
     Polygon result;
     if (peri.size() < 3) { result.push_back(to); return result; }
@@ -222,30 +426,80 @@ static Point projectToBoundary(const Point &p, const Polygon &poly) {
     return best;
 }
 
-static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
-    if (area.size() < 3) return waypoints;
+static Point projectToAreaBoundary(const Point &p, const std::vector<Polygon> &areas) {
+    Point best = p;
+    double bestDist = std::numeric_limits<double>::max();
+    bool insideAny = false;
+    for (const auto &area : areas) {
+        if (area.size() < 3) continue;
+        if (pointInPolygon(p, area)) { insideAny = true; break; }
+        Point proj = projectToBoundary(p, area);
+        double d = distance(p, proj);
+        if (d < bestDist) { bestDist = d; best = proj; }
+    }
+    if (insideAny) return p;
+    return best;
+}
+
+static Polygon pruneOutside(const Polygon &waypoints, const std::vector<Polygon> &areas) {
+    if (areas.empty()) return waypoints;
     Polygon result;
     result.reserve(waypoints.size());
     for (const auto &wp : waypoints) {
-        if (pointInPolygon(wp, area)) {
-            if (result.empty() || distance(result.back(), wp) > 0.01)
-                result.push_back(wp);
-        } else {
-            Point snapped = projectToBoundary(wp, area);
-            if (result.empty() || distance(result.back(), snapped) > 0.01)
-                result.push_back(snapped);
-        }
+        Point snapped = projectToAreaBoundary(wp, areas);
+        if (result.empty() || distance(result.back(), snapped) > 0.01)
+            result.push_back(snapped);
     }
     return result;
 }
 
+static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
+    return pruneOutside(waypoints, std::vector<Polygon>{area});
+}
+
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
-    double width, const Point &startNear)
+    const std::vector<Polygon> &holes, double width, const Point &startNear)
 {
-    PP_LOG(0, "%scalculateRingsPattern width=%.3f", _LOG_, width);
+    (void)perimeter;
+    PP_LOG(0, "%scalculateRingsPattern width=%.3f holes=%d", _LOG_, width, (int)holes.size());
     if (areaToMow.size() < 3 || width < 0.001) return {};
 
+    auto shrinkByHoles = [&](const Polygon &ring, double margin) -> std::vector<Polygon> {
+        if (holes.empty()) return {ring};
+        std::vector<Polygon> inflatedHoles;
+        for (const auto &h : holes) {
+            if (h.size() < 3) continue;
+            Polygon positive = (polygonArea(h) > 0.0) ? h : reversePolygon(h);
+            auto expanded = clipOffset(positive, margin);
+            for (const auto &p : expanded) inflatedHoles.push_back(p);
+        }
+        auto clipped = clipDifference(ring, inflatedHoles);
+        std::vector<Polygon> result;
+        for (const auto &p : clipped) {
+            if (p.size() >= 3 && polygonArea(p) > 0.001)
+                result.push_back(p);
+        }
+        return result;
+    };
+
+    auto clipRingAgainstHoles = [&](const Polygon &ring) -> std::vector<Polygon> {
+        return shrinkByHoles(ring, width * 1.5);
+    };
+
+    // Start the ring sequence from a slightly shrunken area so that the first
+    // ring never grazes the exclusion boundary when the user does not want to
+    // mow along it.  This keeps the outermost ring clearly inside the mowable
+    // region.
     Polygon first = areaToMow;
+    if (!holes.empty()) {
+        auto shrunk = shrinkByHoles(first, width * 0.5);
+        if (!shrunk.empty()) {
+            first = shrunk[0];
+            for (size_t i = 1; i < shrunk.size(); i++)
+                if (polygonArea(shrunk[i]) > polygonArea(first))
+                    first = shrunk[i];
+        }
+    }
     size_t firstBest = nearestPointIndex(startNear, first);
     Polygon firstRot;
     firstRot.reserve(first.size());
@@ -255,15 +509,16 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     std::vector<Polygon> queue;
     queue.push_back(firstRot);
 
-    Polygon route;
+    std::vector<Polygon> rings;
 
     while (!queue.empty()) {
         Polygon currentArea = queue.front();
         queue.erase(queue.begin());
         if (currentArea.size() < 3) continue;
 
-        if (!route.empty()) {
-            size_t best = nearestPointIndex(route.back(), currentArea);
+        if (!rings.empty()) {
+            const Polygon &lastRing = rings.back();
+            size_t best = nearestPointIndex(lastRing.back(), currentArea);
             Polygon rot;
             rot.reserve(currentArea.size());
             for (size_t i = 0; i < currentArea.size(); i++)
@@ -271,63 +526,96 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
             currentArea = rot;
         }
 
-        for (const auto &p : currentArea)
-            if (route.empty() || distance(route.back(), p) > 0.01)
-                route.push_back(p);
+        rings.push_back(currentArea);
 
         auto nextList = clipOffset(currentArea, -width);
         double curAreaVal = std::abs(polygonArea(currentArea));
-        bool anyAdded = false;
         for (const auto &next : nextList) {
             if (next.size() < 3) continue;
             double nextAreaVal = std::abs(polygonArea(next));
             if (nextAreaVal < 0.001 || nextAreaVal >= curAreaVal - 0.001) continue;
-            queue.push_back(next);
-            anyAdded = true;
+            auto clipped = clipRingAgainstHoles(next);
+            for (const auto &c : clipped) queue.push_back(c);
         }
-        if (!anyAdded) continue;
     }
 
-    route = pruneOutside(route, perimeter);
+    Polygon route;
+    for (size_t i = 0; i < rings.size(); i++) {
+        if (i > 0) {
+            Point from = route.back();
+            Point to = rings[i][0];
+            if (distance(from, to) > 0.001) {
+                route.push_back(from);
+                route.push_back(to);
+            }
+        }
+        for (const auto &p : rings[i])
+            if (route.empty() || distance(route.back(), p) > 0.01)
+                route.push_back(p);
+    }
+
     PP_LOG(0, "%scalculateRingsPattern done: %d points", _LOG_, route.size());
     return route;
 }
 
-Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
-    const Point &startNear, double width)
+Polygon addBorderLaps(const Polygon &perimeter, const std::vector<Polygon> &holes,
+    int laps, bool ccw, const Point &startNear, double width)
 {
     PP_LOG(0, "%saddBorderLaps laps=%d ccw=%d width=%.3f", _LOG_, laps, ccw, width);
     if (laps <= 0 || perimeter.size() < 3) return {};
 
     Polygon route;
-    Polygon currentRing = perimeter;
     Point near = startNear;
+    Polygon currentBoundary = perimeter;
 
     for (int lap = 0; lap < laps; lap++) {
-        bool cw = isClockwise(currentRing);
-        Polygon ring = currentRing;
-        if (ccw == cw) std::reverse(ring.begin(), ring.end());
-
-        size_t startIdx = nearestPointIndex(near, ring);
-        Polygon ordered;
-        for (size_t i = 0; i < ring.size(); i++) {
-            size_t idx = (startIdx + i) % ring.size();
-            if (ordered.empty() || distance(ordered.back(), ring[idx]) > 0.01)
-                ordered.push_back(ring[idx]);
+        // If we are supposed to mow exclusion borders, the lap boundary is the
+        // outer perimeter with all exclusions cut out.  Offsetting this inward
+        // then gives us separate polygons: one for the outer perimeter and one
+        // for each exclusion, all at the correct lap distance.
+        std::vector<Polygon> boundaries;
+        if (!holes.empty()) {
+            auto diff = clipDifference(currentBoundary, holes);
+            for (const auto &p : diff) {
+                if (p.size() >= 3) boundaries.push_back(p);
+            }
         }
-        if (!ordered.empty() && distance(ordered.back(), ordered[0]) > 0.01)
-            ordered.push_back(ordered[0]);
+        if (boundaries.empty()) boundaries.push_back(currentBoundary);
 
-        for (const auto &p : ordered)
-            if (route.empty() || distance(route.back(), p) > 0.01)
-                route.push_back(p);
+        // Sort boundaries so we start each lap from the closest polygon and
+        // continue with the nearest remaining polygon.  This produces a
+        // continuous-ish lap route that stays within the mowable area.
+        sortSolutionPolygonsByDistance(boundaries, near);
 
-        if (!route.empty()) near = route.back();
+        for (size_t b = 0; b < boundaries.size(); b++) {
+            Polygon ring = boundaries[b];
+            bool cw = isClockwise(ring);
+            if (ccw == cw) std::reverse(ring.begin(), ring.end());
 
+            size_t startIdx = nearestPointIndex(near, ring);
+            Polygon ordered;
+            for (size_t i = 0; i < ring.size(); i++) {
+                size_t idx = (startIdx + i) % ring.size();
+                if (ordered.empty() || distance(ordered.back(), ring[idx]) > 0.01)
+                    ordered.push_back(ring[idx]);
+            }
+            if (!ordered.empty() && distance(ordered.back(), ordered[0]) > 0.01)
+                ordered.push_back(ordered[0]);
+
+            for (const auto &p : ordered)
+                if (route.empty() || distance(route.back(), p) > 0.01)
+                    route.push_back(p);
+
+            if (!route.empty()) near = route.back();
+        }
+
+        // Prepare the next lap boundary by shrinking the current outer
+        // perimeter inward.  Holes stay fixed so the inner lap polygons keep the
+        // correct shape around the exclusions.
         if (lap + 1 < laps) {
-            auto nextList = clipOffset(currentRing, -width);
+            auto nextList = clipOffset(currentBoundary, -width);
             if (nextList.empty() || nextList[0].size() < 3) break;
-            currentRing = nextList[0];
+            currentBoundary = nextList[0];
         }
     }
 
@@ -343,7 +631,6 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
     while (!solution.empty()) {
         double minDist = 160000;
         size_t minPolyIdx = 0;
-        size_t minPtIdx = 0;
         bool reverse = false;
 
         for (size_t i = 0; i < solution.size(); i++) {
@@ -353,10 +640,10 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
             double dFirst = distance(currentPos, solution[i][0]);
             double dLast = distance(currentPos, solution[i][n - 1]);
             if (dFirst < minDist) {
-                minDist = dFirst; minPolyIdx = i; minPtIdx = 0; reverse = false;
+                minDist = dFirst; minPolyIdx = i; reverse = false;
             }
             if (dLast < minDist) {
-                minDist = dLast; minPolyIdx = i; minPtIdx = n - 1; reverse = true;
+                minDist = dLast; minPolyIdx = i; reverse = true;
             }
         }
 
@@ -593,9 +880,26 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
                     distance(connSeg[0][0], connSeg[0].back()) < d - 1e-6) {
                     crossesHole = true;
                 }
+                // Additional robustness: segment midpoint or sample points may
+                // be inside a hole even when endpoints are outside and the
+                // direct line stays mostly outside the hole boundary.
+                if (!crossesHole) {
+                    int samples = std::max(3, (int)(d / 0.05));
+                    if (samples > 20) samples = 20;
+                    for (int k = 1; k < samples && !crossesHole; k++) {
+                        double t = (double)k / samples;
+                        Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
+                        for (const auto &hole : holes) {
+                            if (pointInPolygon(p, hole)) {
+                                crossesHole = true;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             if (exitsBoundary || leavesMowArea || crossesHole) {
-                Polygon conn = walkPerimeter(*walkBoundaryPtr, from, to);
+                Polygon conn = walkBoundaryWithHoles(from, to, *walkBoundaryPtr, holes);
                 for (size_t k = 0; k < conn.size(); k++)
                     if (distance(waypoints.back(), conn[k]) > 0.01)
                         waypoints.push_back(conn[k]);
@@ -644,7 +948,25 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
       }
       mowableRegion = areasToMow.empty() ? std::vector<Polygon>{perimeter} : areasToMow;
     } else {
-      mowableRegion = clipDifference(perimeter, map.exclusions);
+      // If the user does not want to mow the exclusion border, keep the
+      // mowable area at a small safety distance from each exclusion so
+      // generated rings/lines never graze the exclusion boundary.
+      std::vector<Polygon> effectiveExclusions = map.exclusions;
+      if (!settings.mowExclusionBorder) {
+        double exclusionMargin = settings.width * 0.5;
+        if (exclusionMargin < 1e-3) exclusionMargin = 1e-3;
+        std::vector<Polygon> expanded;
+        for (const auto &excl : map.exclusions) {
+          if (excl.size() < 3) continue;
+          auto e = clipOffset(excl, exclusionMargin);
+          for (const auto &p : e) {
+            if (polygonArea(p) > 0.0) expanded.push_back(p);
+            else expanded.push_back(reversePolygon(p));
+          }
+        }
+        if (!expanded.empty()) effectiveExclusions = std::move(expanded);
+      }
+      mowableRegion = clipDifference(perimeter, effectiveExclusions);
       if (mowableRegion.empty()) {
         PP_LOG(0, "%sExclusions removed entire perimeter, nothing to mow", _LOG_);
         return {};
@@ -686,7 +1008,13 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
     }
 
     if (settings.borderLaps > 0 && settings.mowBorderCcw) {
-        Polygon borderLaps = addBorderLaps(perimeter, settings.borderLaps, true, startNear, settings.width);
+        std::vector<Polygon> borderHoles;
+        if (settings.mowExclusionBorder) {
+            for (const auto &ex : map.exclusions) {
+                if (ex.size() >= 3) borderHoles.push_back(ex);
+            }
+        }
+        Polygon borderLaps = addBorderLaps(perimeter, borderHoles, settings.borderLaps, true, startNear, settings.width);
         route = borderLaps;
         if (!route.empty()) startNear = route.back();
     }
@@ -696,7 +1024,7 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
 
         if (settings.pattern == 2) {
             for (const auto &area : areasToMow) {
-                Polygon ar = calculateRingsPattern(perimeter, area, settings.width, startNear);
+                Polygon ar = calculateRingsPattern(perimeter, area, holes, settings.width, startNear);
                 if (!ar.empty()) allSegments.push_back(ar);
             }
         } else {
@@ -741,8 +1069,14 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
                 // Rotate the already-inflated holes into the pass coordinate system.
                 std::vector<Polygon> rotatedHoles = rotatePolygons(holes, -angleDeg);
 
-                // Clip open zigzag against the outer boundary, then subtract holes.
-                auto clipped = clipIntersectOpen({zigzag}, {outerBoundary});
+                // Clip open zigzag against the mowable areas (already
+                // exclusion-free). This is more robust than clipping against
+                // the outer boundary and then subtracting holes separately,
+                // because some long segments may pass through the hole if the
+                // open-path intersection does not split them correctly.
+                auto clipped = clipIntersectOpen({zigzag}, rotatedAreas);
+                // Keep the hole subtraction as a safety net for any segments
+                // that still cross an inflated hole.
                 if (!rotatedHoles.empty()) {
                     clipped = clipSegmentsAgainstHoles(clipped, rotatedHoles);
                 }
@@ -752,7 +1086,7 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
                     sortSolutionPolygonsByDistance(passSegments, startNear);
                     Polygon passRoute;
                     connectPolysUsingPathFinding(passRoute, passSegments, perimeter, areasToMow, holes);
-                    passRoute = pruneOutside(passRoute, perimeter);
+                    passRoute = pruneOutside(passRoute, areasToMow);
                     if (!passRoute.empty()) allSegments.push_back(passRoute);
                 }
             }
@@ -762,10 +1096,10 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
             sortSolutionPolygonsByDistance(allSegments, startNear);
             Polygon pattern;
             connectPolysUsingPathFinding(pattern, allSegments, perimeter, areasToMow, holes);
-            pattern = pruneOutside(pattern, perimeter);
+            pattern = pruneOutside(pattern, areasToMow);
 
             if (!route.empty() && !pattern.empty()) {
-                Polygon conn = walkPerimeter(perimeter, route.back(), pattern[0]);
+                Polygon conn = walkBoundaryWithHoles(route.back(), pattern[0], perimeter, holes);
                 for (size_t k = 0; k < conn.size(); k++)
                     if (distance(route.back(), conn[k]) > 0.01)
                         route.push_back(conn[k]);
@@ -776,7 +1110,13 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
     }
 
     if (settings.borderLaps > 0 && !settings.mowBorderCcw) {
-        Polygon borderLaps = addBorderLaps(perimeter, settings.borderLaps, false, startNear, settings.width);
+        std::vector<Polygon> borderHoles;
+        if (settings.mowExclusionBorder) {
+            for (const auto &ex : map.exclusions) {
+                if (ex.size() >= 3) borderHoles.push_back(ex);
+            }
+        }
+        Polygon borderLaps = addBorderLaps(perimeter, borderHoles, settings.borderLaps, false, startNear, settings.width);
         if (!route.empty() && !borderLaps.empty()) {
             Polygon conn = walkPerimeter(perimeter, route.back(), borderLaps[0]);
             for (size_t k = 0; k < conn.size(); k++)

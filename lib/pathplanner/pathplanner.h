@@ -72,9 +72,9 @@ std::vector<Intersection> intersectRayWithPolygon(double y, const Polygon &poly)
 std::vector<Polygon> offsetPolygonInward(const Polygon &poly, double distance);
 
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
-    double width, const Point &startNear);
-Polygon addBorderLaps(const Polygon &perimeter, int laps, bool ccw,
-    const Point &startNear, double width);
+    const std::vector<Polygon> &holes, double width, const Point &startNear);
+Polygon addBorderLaps(const Polygon &perimeter, const std::vector<Polygon> &holes,
+    int laps, bool ccw, const Point &startNear, double width);
 
 void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point &startPt);
 void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon> &polys,
