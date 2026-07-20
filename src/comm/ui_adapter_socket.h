@@ -43,6 +43,8 @@ namespace ArduMower
         deleteMap,
         discardMap,
         setActiveMap,
+        importMap,
+        exportMap,
         requestDataTypeLength
       };
 
@@ -62,6 +64,7 @@ namespace ArduMower
         operationProgress,
         mapList,
         drivenTrack,
+        cassandraMap,
         responseDataTypeLength
       };
 

@@ -367,6 +367,36 @@ void UiSocketItem::handleData(RequestDataType dataType, JsonDocument &jsonData)
     break;
   }
 
+   case RequestDataType::importMap: {
+    String json = jsonData["json"] | "";
+    String name = jsonData["name"] | "";
+    double rotation = jsonData["rotation"] | 0.0;
+    ArduMower::Domain::Robot::MowerMap imported;
+    if (_source.importCassandraMap(json, imported)) {
+      imported.rotation = rotation;
+      _socketHandler->setMap(imported);
+      _socketHandler->abortMapChunkSend();
+      yield();
+      _socketHandler->sendData(ResponseDataType::map, NULL, true);
+      _socketHandler->sendMapList(NULL);
+    }
+    break;
+  }
+
+   case RequestDataType::exportMap: {
+    ArduMower::Domain::Robot::MowerMap map = _source.mowerMap();
+    String json = _source.exportCassandraMap(map);
+    if (json.length() > 0) {
+      JsonDocument resp;
+      resp["type"] = ResponseDataType::cassandraMap;
+      resp["data"]["json"] = json;
+      String out;
+      serializeJson(resp, out);
+      this->sendText(out);
+    }
+    break;
+  }
+
   default:
     break;
   }

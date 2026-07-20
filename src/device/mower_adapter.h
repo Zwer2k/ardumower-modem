@@ -186,6 +186,9 @@ namespace ArduMower
       virtual double currentMapArea() override;
       virtual double currentMapRotation() override { return _map.rotation; }
 
+      virtual bool importCassandraMap(const String &json, ArduMower::Domain::Robot::MowerMap &outMap) override;
+      virtual String exportCassandraMap(const ArduMower::Domain::Robot::MowerMap &map) override;
+
       // Zugriff auf gecachte rohe Antworten (für HTTP-Cache)
       virtual String cachedRawState() { return _cachedRawState; }
       virtual String cachedRawStats() { return _cachedRawStats; }

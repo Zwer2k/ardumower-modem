@@ -384,6 +384,29 @@ double MowerAdapter::currentMapArea() {
   return _currentMapArea;
 }
 
+bool MowerAdapter::importCassandraMap(const String &json, ArduMower::Domain::Robot::MowerMap &outMap) {
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, json);
+  if (err) {
+    Log(WARN, "%simportCassandraMap: JSON parse failed: %s", _LOG_, err.c_str());
+    return false;
+  }
+  if (!outMap.fromCassandraJson(doc.as<JsonObject>())) {
+    Log(WARN, "%simportCassandraMap: invalid map geometry", _LOG_);
+    return false;
+  }
+  return true;
+}
+
+String MowerAdapter::exportCassandraMap(const ArduMower::Domain::Robot::MowerMap &map) {
+  JsonDocument doc;
+  JsonObject obj = doc.to<JsonObject>();
+  map.toCassandraJson(obj);
+  String out;
+  serializeJsonPretty(doc, out);
+  return out;
+}
+
 // ===== SPIFFS-Persistenz (vorbereitet, aber noch nicht aktiv) =====
 // static const char *mapStorageFile = "/mower_map";
 //
