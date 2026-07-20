@@ -324,7 +324,7 @@ namespace ArduMower
         int pattern;
         float width;
         int angle;
-        int distanceToBorder;
+        float distanceToBorder;
         int borderLaps;
         bool mowArea;
         bool mowExclusionBorder;
@@ -332,7 +332,7 @@ namespace ArduMower
 
         MowSettings()
             : timestamp(0), pattern(0), width(0.3f), angle(0),
-              distanceToBorder(0), borderLaps(0),
+              distanceToBorder(0.0f), borderLaps(0),
               mowArea(true), mowExclusionBorder(false), mowBorderCcw(false) {}
 
         bool operator==(const MowSettings &other) {
@@ -409,6 +409,11 @@ namespace ArduMower
         virtual int currentMapCrc() { return 0; }
         virtual double currentMapArea() { return 0.0; }
         virtual double currentMapRotation() { return 0.0; }
+
+        // CassandRA-compatible JSON import/export helpers.
+        // Returns true on successful import, the map is placed into outMap.
+        virtual bool importCassandraMap(const String &json, ArduMower::Domain::Robot::MowerMap &outMap) { (void)json; (void)outMap; return false; }
+        virtual String exportCassandraMap(const ArduMower::Domain::Robot::MowerMap &map) { (void)map; return ""; }
       };
 
       class CommandExecutor

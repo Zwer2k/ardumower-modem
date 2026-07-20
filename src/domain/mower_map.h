@@ -114,6 +114,96 @@ namespace ArduMower {
                     unmarshalGeometry(obj["map"]);
                 }
 
+                // Import/Export a CassandRA-compatible map JSON.
+                // CassandRA format uses lower-case {x,y} arrays, a top-level
+                // "perimeter" ring, "exclusions" array of rings, optional
+                // "mowPoints"/"dockPoints"/"wayPoints" and meta fields.
+                bool fromCassandraJson(JsonObject obj) {
+                    perimeter.clear();
+                    exclusions.clear();
+                    dockpoints.clear();
+                    waypoints.clear();
+
+                    JsonArray perim = obj["perimeter"];
+                    if (!perim) perim = obj["perimeter"];
+                    if (perim) {
+                        for (JsonObject p : perim) {
+                            perimeter.push_back(unmarshalMapPoint(p));
+                        }
+                    }
+                    if (perimeter.size() < 3) return false;
+                    // Ensure closed ring
+                    if (perimeter.size() > 0 &&
+                        (perimeter.front().X != perimeter.back().X ||
+                         perimeter.front().Y != perimeter.back().Y)) {
+                        perimeter.push_back(perimeter.front());
+                    }
+
+                    JsonArray excls = obj["exclusions"];
+                    if (excls) {
+                        for (JsonArray ex : excls) {
+                            std::vector<MapPoint> e;
+                            for (JsonObject p : ex) {
+                                e.push_back(unmarshalMapPoint(p));
+                            }
+                            if (e.size() >= 3) {
+                                if (e.front().X != e.back().X || e.front().Y != e.back().Y) {
+                                    e.push_back(e.front());
+                                }
+                                exclusions.push_back(e);
+                            }
+                        }
+                    }
+
+                    JsonArray docks = obj["dockPoints"];
+                    if (!docks) docks = obj["dockpoints"];
+                    if (docks) {
+                        for (JsonObject p : docks) {
+                            dockpoints.push_back(unmarshalMapPoint(p));
+                        }
+                    }
+
+                    JsonArray wps = obj["wayPoints"];
+                    if (!wps) wps = obj["waypoints"];
+                    if (wps) {
+                        for (JsonObject p : wps) {
+                            waypoints.push_back(unmarshalMapPoint(p));
+                        }
+                    }
+
+                    if (obj["rotation"].is<JsonVariant>()) {
+                        rotation = obj["rotation"];
+                    }
+                    return true;
+                }
+
+                void toCassandraJson(JsonObject obj) const {
+                    auto writePoint = [](JsonObject o, const MapPoint &p) {
+                        o["x"] = p.X;
+                        o["y"] = p.Y;
+                    };
+                    auto writeRing = [&](JsonArray arr, const std::vector<MapPoint> &ring) {
+                        for (const auto &p : ring) writePoint(arr.add<JsonObject>(), p);
+                    };
+
+                    JsonArray perim = obj["perimeter"].to<JsonArray>();
+                    writeRing(perim, perimeter);
+
+                    JsonArray excls = obj["exclusions"].to<JsonArray>();
+                    for (const auto &ex : exclusions) {
+                        JsonArray exArr = excls.add<JsonArray>();
+                        writeRing(exArr, ex);
+                    }
+
+                    JsonArray docks = obj["dockPoints"].to<JsonArray>();
+                    writeRing(docks, dockpoints);
+
+                    JsonArray wps = obj["wayPoints"].to<JsonArray>();
+                    writeRing(wps, waypoints);
+
+                    obj["rotation"] = rotation;
+                }
+
     // Sunray-kompatibler CRC: px = x*100 (cm), crc = Σ(trunc16(px) + trunc16(py))
     int computeMapCrc() const {
         return computeMapCrcDetail(nullptr, nullptr, nullptr, nullptr);
