@@ -31,3 +31,6 @@ test_pathplanner/route.txt
 test_pathplanner/tmp-*
 test_pathplanner/tmp_*
 *.o
+
+# Deobfuscated web app reference (reconstructed from external source)
+docs/ardumower-webapp-deobfuscated/
