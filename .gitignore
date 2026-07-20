@@ -25,4 +25,9 @@ src/sys/asset_bundle.h
 test_pathplanner/test_exclusion
 test_pathplanner/test_dump
 test_pathplanner/test_clip_*
+test_pathplanner/out/
+test_pathplanner/*.svg
+test_pathplanner/route.txt
+test_pathplanner/tmp-*
+test_pathplanner/tmp_*
 *.o
