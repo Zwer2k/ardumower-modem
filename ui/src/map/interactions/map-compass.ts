@@ -5,14 +5,21 @@ export interface CompassDragState {
   rotationManuallySet: boolean;
   lastRotationMapId: string | null;
   compassRotation: number;
+  setRotation: (r: number) => void;
 }
 
 export function createCompassState(): CompassDragState {
-  return {
+  const state = {
     rotationManuallySet: false,
     lastRotationMapId: null,
     compassRotation: 0,
+    setRotation: (r: number) => {
+      const normalized = ((r % 360) + 360) % 360;
+      currentMapRotationStore.set(normalized);
+      setMapDirty(true);
+    },
   };
+  return state;
 }
 
 export function onCompassDown(

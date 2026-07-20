@@ -19,6 +19,7 @@ import { setMapDirty } from "./services/map-sync";
   import MapManagementToolbar from "./toolbar/MapManagementToolbar.svelte";
   import MapEditToolbar from "./toolbar/MapEditToolbar.svelte";
   import MapCalculateToolbar from "./toolbar/MapCalculateToolbar.svelte";
+  import CassandraMapDialog from "./CassandraMapDialog.svelte";
   import MapStatusOverlay from "./overlay/MapStatusOverlay.svelte";
   import MapGotoOverlay from "./overlay/MapGotoOverlay.svelte";
   import {
@@ -46,6 +47,7 @@ import { setMapDirty } from "./services/map-sync";
   let edit = false;
   let wasEditing = false;
   let showMowSettings = false;
+  let showCassandraDialog = false;
   let selectedId: string | null = null;
   let editItemId: string | null = null;
   let editItems: EditItem[] = [];
@@ -311,6 +313,21 @@ import { setMapDirty } from "./services/map-sync";
     const target = dropdownSelectedId || effectiveMapId;
     if (!target || target === "__unsaved__") return;
     socketService.sendSetActiveMap(target);
+  }
+
+  function onImportCassandraMap(map: import("./model").Map, rotation: number) {
+    compassState.setRotation(rotation);
+    socketService.sendImportMap(
+      JSON.stringify({
+        perimeter: map.perimeter.points,
+        exclusions: map.exclusions.map((e) => e.points),
+        dockpoints: map.dockpoints.points,
+        waypoints: map.waypoints.points,
+        rotation,
+      }),
+      $mapWorkflowStore.pendingName || effectiveMapName || `Karte ${$socketStore.maps.length + 1}`,
+      rotation,
+    );
   }
 
   // ─── Point counts & sync state ─────────────────────────────────────────────
@@ -696,6 +713,7 @@ import { setMapDirty } from "./services/map-sync";
           onDeleteMap={onDeleteMap}
           onSetDefaultMap={onSetDefaultMap}
           onNewMap={onNewMap}
+          onOpenCassandra={() => (showCassandraDialog = true)}
         />
       {/if}
 
@@ -871,6 +889,13 @@ import { setMapDirty } from "./services/map-sync";
 </div>
 
 <MowSettingsDialog bind:open={showMowSettings} />
+
+<CassandraMapDialog
+  bind:open={showCassandraDialog}
+  map={$MapStore.map}
+  rotation={compassState.rotation}
+  onImport={onImportCassandraMap}
+/>
 
 <style>
   .map-dashboard {

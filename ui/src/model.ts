@@ -293,6 +293,7 @@ export enum ResponseDataType {
   operationProgress,
   mapList,
   drivenTrack,
+  cassandraMap,
 }
 
 export interface OperationProgress {
@@ -369,6 +370,8 @@ export enum RequestDataType {
   deleteMap,
   discardMap,
   setActiveMap,
+  importMap,
+  exportMap,
 }
 
 export interface MowSettingsData {

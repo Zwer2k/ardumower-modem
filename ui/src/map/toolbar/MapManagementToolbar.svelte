@@ -6,6 +6,7 @@
   import IconTrashCan from "carbon-icons-svelte/lib/TrashCan.svelte";
   import IconStar from "carbon-icons-svelte/lib/Star.svelte";
   import IconNew from "carbon-icons-svelte/lib/DocumentAdd.svelte";
+  import IconImportExport from "carbon-icons-svelte/lib/Cloud.svelte";
   import type { MapWorkflow } from "../workflow/map-workflow-store";
 
   export let workflow: MapWorkflow;
@@ -21,6 +22,7 @@
   export let onDeleteMap: () => void;
   export let onSetDefaultMap: () => void;
   export let onNewMap: () => void;
+  export let onOpenCassandra: () => void;
   export let workflowBusy: boolean;
 </script>
 
@@ -86,6 +88,16 @@
         iconDescription="New map"
       >
         <span class="btn-label">New</span>
+      </Button>
+      <Button
+        kind="tertiary"
+        size="small"
+        disabled={workflowBusy}
+        on:click={onOpenCassandra}
+        icon={IconImportExport}
+        iconDescription="Import / Export CassandRA map"
+      >
+        <span class="btn-label">JSON</span>
       </Button>
       {#if pendingName && pendingName !== effectiveMapName}
         <span class="pending-map-name" title="Neuer Name, noch nicht gespeichert">→ {pendingName}</span>

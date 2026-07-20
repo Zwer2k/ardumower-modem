@@ -479,6 +479,14 @@ class SocketService {
                 case ResponseDataType.mowSettings:
                   mowSettingsStore.set(jsonData.data as MowSettings);
                   break;
+                case ResponseDataType.cassandraMap: {
+                  const data = jsonData.data as { json: string };
+                  if (data?.json) {
+                    const event = new CustomEvent("cassandra-map-export", { detail: data.json });
+                    window.dispatchEvent(event);
+                  }
+                  break;
+                }
                 case ResponseDataType.drivenTrack:
                   drivenTrackStore.set(jsonData.data as DrivenTrackData);
                   break;
@@ -774,6 +782,22 @@ class SocketService {
     const req: RequestSocketMessage = {
       type: RequestDataType.setActiveMap,
       data: { id },
+    };
+    this.sendMessage(req);
+  }
+
+  sendImportMap(json: string, name: string, rotation: number = 0) {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.importMap,
+      data: { json, name, rotation },
+    };
+    this.sendMessage(req);
+  }
+
+  sendExportMap() {
+    const req: RequestSocketMessage = {
+      type: RequestDataType.exportMap,
+      data: {},
     };
     this.sendMessage(req);
   }
