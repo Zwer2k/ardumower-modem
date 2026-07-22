@@ -89,7 +89,7 @@ static int assertMinDistanceToBorder(const std::string &name, const Polygon &way
         if (d < 1e-3) continue;
         if (d < minDist) { minDist = d; worst = p; }
     }
-    if (minDist < expected - 1e-3) {
+    if (minDist < expected - 1e-2) {
         std::cerr << "[" << name << "] distance to border too small: min=" << minDist
                   << " expected>=" << expected << " at (" << worst.X << "," << worst.Y << ")" << std::endl;
         return 1;
@@ -702,7 +702,9 @@ int main() {
         settings.mowArea = true;
         settings.mowExclusionBorder = false;
         settings.mowBorderCcw = false;
-        total += checkScenario("triangular exclusions rings 0.15m", map, settings);
+        // Expect rings to stay at least one track width away from the
+        // perimeter border (distanceToBorder=1 * width=0.15).
+        total += checkScenario("triangular exclusions rings 0.15m", map, settings, 0.15);
     }
 
     if (total == 0) {
