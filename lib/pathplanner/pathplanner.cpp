@@ -467,8 +467,10 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     PP_LOG(0, "%scalculateRingsPattern width=%.3f holes=%d", _LOG_, width, (int)holes.size());
     if (areaToMow.size() < 3 || width < 0.001) return {};
 
-    // Use a very small margin so rings stay as close as possible to triangular
-    // exclusions while still not touching them.
+    // Use a small margin so rings stay as close as possible to triangular
+    // exclusions while still not touching them.  The distance-to-border check
+    // tolerates small floating-point / offset rounding, so keep the margin
+    // tight rather than over-shrinking the mowable area.
     const double holeMargin = width * 0.1;
 
     auto shrinkByHoles = [&](const Polygon &ring, double margin) -> std::vector<Polygon> {
