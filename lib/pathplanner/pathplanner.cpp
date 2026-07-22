@@ -457,12 +457,19 @@ static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
     return pruneOutside(waypoints, std::vector<Polygon>{area});
 }
 
+static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter);
+static bool segmentExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter);
+
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
     const std::vector<Polygon> &holes, double width, const Point &startNear)
 {
     (void)perimeter;
     PP_LOG(0, "%scalculateRingsPattern width=%.3f holes=%d", _LOG_, width, (int)holes.size());
     if (areaToMow.size() < 3 || width < 0.001) return {};
+
+    // Use a very small margin so rings stay as close as possible to triangular
+    // exclusions while still not touching them.
+    const double holeMargin = width * 0.1;
 
     auto shrinkByHoles = [&](const Polygon &ring, double margin) -> std::vector<Polygon> {
         if (holes.empty()) return {ring};
@@ -483,7 +490,7 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     };
 
     auto clipRingAgainstHoles = [&](const Polygon &ring) -> std::vector<Polygon> {
-        return shrinkByHoles(ring, width * 1.5);
+        return shrinkByHoles(ring, holeMargin);
     };
 
     // Start the ring sequence from a slightly shrunken area so that the first
@@ -492,7 +499,7 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     // region.
     Polygon first = areaToMow;
     if (!holes.empty()) {
-        auto shrunk = shrinkByHoles(first, width * 0.5);
+        auto shrunk = shrinkByHoles(first, holeMargin);
         if (!shrunk.empty()) {
             first = shrunk[0];
             for (size_t i = 1; i < shrunk.size(); i++)
@@ -545,8 +552,29 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
             Point from = route.back();
             Point to = rings[i][0];
             if (distance(from, to) > 0.001) {
-                route.push_back(from);
-                route.push_back(to);
+                // If the direct connector crosses an exclusion or leaves the
+                // perimeter, route along the original perimeter boundary
+                // instead of using the straight line. This keeps the mower
+                // inside the mapped area even between distant ring start/end
+                // points.
+                bool crossesHole = false;
+                for (const auto &hole : holes) {
+                    if (segmentIntersectsPolygon(from, to, hole)) {
+                        crossesHole = true;
+                        break;
+                    }
+                }
+                bool exitsPerimeter = lineExitsPerimeter(from, to, perimeter);
+                if (crossesHole || exitsPerimeter) {
+                    Polygon conn = walkBoundaryWithHoles(from, to, perimeter, holes);
+                    for (const auto &p : conn) {
+                        if (route.empty() || distance(route.back(), p) > 0.01)
+                            route.push_back(p);
+                    }
+                } else {
+                    route.push_back(from);
+                    route.push_back(to);
+                }
             }
         }
         for (const auto &p : rings[i])
@@ -817,6 +845,20 @@ static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon
     return false;
 }
 
+static bool segmentExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter) {
+    double segLen = distance(from, to);
+    if (segLen < 1e-6) return false;
+    int samples = std::max(5, (int)(segLen / 0.005));
+    if (samples > 200) samples = 200;
+    for (int k = 0; k <= samples; k++) {
+        double t = (double)k / samples;
+        Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
+        if (!pointInPolygon(p, perimeter) && !pointOnBoundary(p, perimeter, 1e-6))
+            return true;
+    }
+    return false;
+}
+
 static bool segmentStaysInAreas(const Point &from, const Point &to,
     const std::vector<Polygon> &areas)
 {
@@ -845,24 +887,6 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
     const std::vector<Polygon> &holes) {
     waypoints.clear();
 
-    const Polygon *boundary = &perimeter;
-    if (areasToMow.size() == 1 && !areasToMow[0].empty())
-        boundary = &areasToMow[0];
-
-    Polygon walkBoundary;
-    const Polygon *walkBoundaryPtr = boundary;
-    if (areasToMow.size() == 1 && !areasToMow[0].empty()) {
-        walkBoundaryPtr = &areasToMow[0];
-    } else if (areasToMow.size() > 1) {
-        auto unionAreas = clipUnion(areasToMow);
-        if (unionAreas.size() == 1) {
-            walkBoundary = std::move(unionAreas[0]);
-            walkBoundaryPtr = &walkBoundary;
-        } else {
-            walkBoundaryPtr = &perimeter;
-        }
-    }
-
     for (size_t i = 0; i < polys.size(); i++) {
         const auto &poly = polys[i];
         if (poly.empty()) continue;
@@ -871,7 +895,9 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
             const Point &from = waypoints.back();
             const Point &to = poly[0];
             double d = distance(from, to);
-            bool exitsBoundary = d > 0.001 && lineExitsPerimeter(from, to, *boundary);
+            // Always check against the original perimeter so a connector can
+            // never leave the mapped area, even when areasToMow is inset.
+            bool exitsPerimeter = d > 0.001 && segmentExitsPerimeter(from, to, perimeter);
             bool leavesMowArea = d > 0.001 && !segmentStaysInAreas(from, to, areasToMow);
             bool crossesHole = false;
             if (!holes.empty()) {
@@ -898,8 +924,10 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
                     }
                 }
             }
-            if (exitsBoundary || leavesMowArea || crossesHole) {
-                Polygon conn = walkBoundaryWithHoles(from, to, *walkBoundaryPtr, holes);
+            if (exitsPerimeter || leavesMowArea || crossesHole) {
+                // Route along the original perimeter boundary (and holes) so
+                // the connector stays inside the mapped area.
+                Polygon conn = walkBoundaryWithHoles(from, to, perimeter, holes);
                 for (size_t k = 0; k < conn.size(); k++)
                     if (distance(waypoints.back(), conn[k]) > 0.01)
                         waypoints.push_back(conn[k]);
@@ -1127,6 +1155,32 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
     }
 
     route = pruneOutside(route, perimeter);
+
+    // Final safety pass: ensure no route segment leaves the perimeter.
+    // This can happen for connector segments produced by different pattern
+    // stages (border laps, rings, zigzag) when the direct line cuts across a
+    // concave part of the perimeter or across exclusion holes.
+    Polygon safeRoute;
+    for (size_t i = 0; i < route.size(); i++) {
+        if (i == 0) {
+            safeRoute.push_back(route[i]);
+            continue;
+        }
+        const Point &from = safeRoute.back();
+        const Point &to = route[i];
+        if (distance(from, to) < 0.001) continue;
+
+        if (segmentExitsPerimeter(from, to, perimeter)) {
+            Polygon conn = walkBoundaryWithHoles(from, to, perimeter, holes);
+            for (const auto &p : conn) {
+                if (safeRoute.empty() || distance(safeRoute.back(), p) > 0.01)
+                    safeRoute.push_back(p);
+            }
+        }
+        safeRoute.push_back(to);
+    }
+    route = std::move(safeRoute);
+
     PP_LOG(0, "%scalculateWaypoints done: %d waypoints", _LOG_, route.size());
     return route;
 }

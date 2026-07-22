@@ -18,27 +18,6 @@
 
 using namespace ArduMower::Modem::PathPlannerCore;
 
-static bool pointInOrOnPolygon(const Point &p, const Polygon &poly) {
-    if (poly.size() < 3) return false;
-    bool inside = false;
-    for (size_t i = 0, j = poly.size() - 1; i < poly.size(); j = i++) {
-        if ((poly[i].Y > p.Y) != (poly[j].Y > p.Y) &&
-            p.X < (poly[j].X - poly[i].X) * (p.Y - poly[i].Y) / (poly[j].Y - poly[i].Y) + poly[i].X)
-            inside = !inside;
-    }
-    if (inside) return true;
-    for (size_t i = 0; i < poly.size(); i++) {
-        size_t j = (i + 1) % poly.size();
-        double dx = poly[j].X - poly[i].X, dy = poly[j].Y - poly[i].Y;
-        double len2 = dx * dx + dy * dy;
-        if (len2 < 1e-10) continue;
-        double t = std::max(0.0, std::min(1.0, ((p.X - poly[i].X) * dx + (p.Y - poly[i].Y) * dy) / len2));
-        double px = poly[i].X + t * dx, py = poly[i].Y + t * dy;
-        if ((p.X - px) * (p.X - px) + (p.Y - py) * (p.Y - py) < 1e-6) return true;
-    }
-    return false;
-}
-
 static bool pointOnBoundary(const Point &p, const Polygon &poly, double tolSq = 1e-6) {
     for (size_t i = 0; i < poly.size(); i++) {
         size_t j = (i + 1) % poly.size();
@@ -249,11 +228,28 @@ static void writeSvg(const std::string &name, const Map &map, const Polygon &way
     std::cout << "[" << name << "] wrote " << filename << std::endl;
 }
 
+static bool segmentExitsPerimeter(const Point &a, const Point &b, const Polygon &perimeter) {
+    int samples = std::max(3, (int)(std::hypot(b.X - a.X, b.Y - a.Y) / 0.05));
+    if (samples > 50) samples = 50;
+    for (int k = 0; k <= samples; k++) {
+        double t = (double)k / samples;
+        Point p{a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t};
+        if (!pointInPolygon(p, perimeter) && !pointOnBoundary(p, perimeter, 1e-6)) return true;
+    }
+    return false;
+}
+
 static int checkScenario(const std::string &name, Map &map, Settings &settings, double expectedMinDistToBorder = -1.0) {
     auto waypoints = calculateWaypoints(map, settings, nullptr);
     writeSvg(name, map, waypoints);
     int violations = 0;
     for (size_t i = 1; i < waypoints.size(); i++) {
+        if (segmentExitsPerimeter(waypoints[i - 1], waypoints[i], map.perimeter)) {
+            if (violations == 0) std::cerr << "[" << name << "] violations:" << std::endl;
+            std::cerr << "  segment exits perimeter " << i - 1 << " (" << waypoints[i - 1].X << "," << waypoints[i - 1].Y << ") -> ("
+                      << waypoints[i].X << "," << waypoints[i].Y << ")" << std::endl;
+            violations++;
+        }
         for (const auto &excl : map.exclusions) {
             if (segmentInsideExclusion(waypoints[i - 1], waypoints[i], excl, map.perimeter)) {
                 // When the user explicitly wants to mow the exclusion border,
@@ -677,7 +673,36 @@ int main() {
         settings.mowArea = true;
         settings.mowExclusionBorder = true;
         settings.mowBorderCcw = false;
-        total += checkScenario("cassandra user map 0.35m border offset", map, settings, 0.15);
+        total += checkScenario("mower map 0.35m border offset", map, settings, 0.15);
+    }
+
+    {
+        Map map;
+        // User map with triangular exclusions (Y-down modem coordinates inverted to Y-up)
+        map.perimeter = {
+            {4.82, 10.21}, {4.65, 10.31}, {4.84, 10.32}, {5.18, 10.14}, {5.41, 9.99},
+            {5.79, 9.62}, {5.71, 9.38}, {6.22, 8.77}, {6.52, 8.86}, {7.05, 8.46},
+            {7.26, 8.28}, {7.41, 8.26}, {7.88, 8.04}, {9.19, 9.429999}, {10.35, 8.349998},
+            {10.04, 8.309999}, {9.88, 8.17}, {9.71, 8.01}, {9.58, 7.72}, {9.52, 7.45},
+            {9.28, 7.45}, {9.139999, 7.31}, {7.08, 5.34}, {6.99, 5.04}, {7.03, 4.88},
+            {7.200765133, 3.921196222}, {5.73, 3.17}, {5.51, 3.45}, {6.28, 4.66}, {3.03, 7.8},
+            {3.4, 8.02}, {3.73, 8.179996}, {4, 8.33}, {4.16, 8.53}, {4.26, 8.7}, {4.26, 8.98},
+            {4.75, 9.429999}, {4.92, 9.5}, {5.02, 9.69}, {5.06, 9.88}, {5.03, 10.01}, {4.82, 10.21}
+        };
+        map.exclusions = {
+            {{{4.719904, 7.044161}, {5.843588352, 7.190095425}, {5.653875351, 6.21234417}, {4.719904, 7.044161}}},
+            {{{7.274784565, 6.07714653}, {7.8222785, 6.445652008}, {7.948623657, 7.108962059}, {7.485359192, 7.456410408}, {6.611474514, 7.130019665}, {7.274784565, 6.07714653}}}
+        };
+        Settings settings;
+        settings.pattern = 2;
+        settings.width = 0.15f;
+        settings.angle = 0;
+        settings.distanceToBorder = 1;
+        settings.borderLaps = 1;
+        settings.mowArea = true;
+        settings.mowExclusionBorder = false;
+        settings.mowBorderCcw = false;
+        total += checkScenario("triangular exclusions rings 0.15m", map, settings);
     }
 
     if (total == 0) {
