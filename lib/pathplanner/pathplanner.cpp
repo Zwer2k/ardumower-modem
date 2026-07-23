@@ -22,6 +22,30 @@ namespace PathPlannerCore {
 static const double _PI = 3.14159265358979323846;
 static const double DEG2RAD = _PI / 180.0;
 
+// Tunable path-planner parameters.  These are expressed as factors of the
+// mowing width (settings.width) so they can later be exposed in the UI.
+namespace Tune {
+
+// Distance of mowing lines from exclusion borders when the exclusion border
+// is not mowed.  1.0 means the line center is one mower width away from the
+// exclusion, leaving an unmowed strip of about half a width at the exclusion.
+static const double exclusionMarginFactor = 1.0;
+
+// Spacing between successive ring lines as a factor of the mowing width.
+// A value below 1.0 makes the rings overlap slightly, which guarantees full
+// coverage even when rings are smoothed or clipped by exclusions.
+static const double ringSpacingFactor = 0.9;
+
+// Progressive ring smoothing: inner rings gradually forget perimeter details.
+// The closing radius for ring n is
+//     r = min(n * width * smoothingGrowth, width * smoothingMax)
+// Ring 0 (outermost) is never smoothed so the configured border distance is
+// kept exactly.
+static const double smoothingGrowth = 0.25;
+static const double smoothingMax = 1.0;
+
+} // namespace Tune
+
 double distance(const Point &a, const Point &b) {
     double dx = a.X - b.X;
     double dy = a.Y - b.Y;
@@ -152,6 +176,24 @@ static void nearestOnBoundary(const Point &p, const Polygon &poly,
         if (d < bestDist) { bestDist = d; edgeIdx = i; proj = pp; }
     }
 }
+static bool segmentsIntersect(const Point &a1, const Point &a2, const Point &b1, const Point &b2) {
+    double o1 = crossProduct(a1, a2, b1);
+    double o2 = crossProduct(a1, a2, b2);
+    double o3 = crossProduct(b1, b2, a1);
+    double o4 = crossProduct(b1, b2, a2);
+    if (o1 * o2 < 0 && o3 * o4 < 0) return true;
+    // Check collinear cases
+    auto onSegment = [](const Point &p, const Point &q, const Point &r) {
+        return q.X <= std::max(p.X, r.X) + 1e-9 && q.X >= std::min(p.X, r.X) - 1e-9 &&
+               q.Y <= std::max(p.Y, r.Y) + 1e-9 && q.Y >= std::min(p.Y, r.Y) - 1e-9;
+    };
+    if (std::abs(o1) < 1e-9 && onSegment(a1, b1, a2)) return true;
+    if (std::abs(o2) < 1e-9 && onSegment(a1, b2, a2)) return true;
+    if (std::abs(o3) < 1e-9 && onSegment(b1, a1, b2)) return true;
+    if (std::abs(o4) < 1e-9 && onSegment(b1, a2, b2)) return true;
+    return false;
+}
+
 static Point nearestPointOnPolygon(const Point &p, const Polygon &poly) {
     if (poly.size() < 3) return p;
     Point best = poly[0];
@@ -439,12 +481,18 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     if (areaToMow.size() < 3 || width < 0.001) return {};
 
     // Generate all parallel contour rings at once, each offset inward by
-    // multiples of the mowing width.  This ensures the whole area is covered
-    // uniformly instead of following a single shrinking path that can leave
-    // large unmowed strips between widely separated rings.
+    // multiples of the (overlapping) line spacing.  This ensures the whole
+    // area is covered uniformly instead of following a single shrinking path
+    // that can leave large unmowed strips between widely separated rings.
+    //
+    // The spacing is Tune::ringSpacingFactor times the mowing width, so the
+    // rings overlap slightly and no unmowed gaps appear when rings are
+    // smoothed or clipped by exclusions.
+    const double step = width * Tune::ringSpacingFactor;
     std::vector<Polygon> rings;
     double offset = 0.0;
     bool first = true;
+    int ringLevel = 0;
     while (true) {
         std::vector<Polygon> offsets;
         if (first) {
@@ -458,10 +506,92 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
         for (auto &ring : offsets) {
             if (ring.size() < 3) continue;
             if (std::abs(polygonArea(ring)) < 0.001) continue;
+
+            // Progressive smoothing: inner rings gradually forget perimeter
+            // details so long stretches become straight instead of copying
+            // every indentation of the outer boundary.  Ring 0 is never
+            // smoothed so the configured border distance is kept exactly.
+            // A smoothed ring is only accepted when it does not come closer to
+            // any exclusion hole than the unsmoothed ring, otherwise the
+            // original ring is kept.
+            if (ringLevel > 0) {
+                double r = std::min(ringLevel * width * Tune::smoothingGrowth,
+                                    width * Tune::smoothingMax);
+                if (r > 0.001) {
+                    auto closed = clipOffset(ring, r);
+                    if (!closed.empty()) {
+                        closed = clipOffset(closed[0], -r);
+                        // Keep the largest resulting polygon so small
+                        // artifacts from the closing operation are dropped.
+                        Polygon best;
+                        double bestArea = 0.0;
+                        for (const auto &c : closed) {
+                            double a = std::abs(polygonArea(c));
+                            if (a > bestArea) { bestArea = a; best = c; }
+                        }
+                        if (best.size() >= 3) {
+                            // Only accept the smoothed ring when it stays
+                            // inside the original mowable area and no ring
+                            // segment crosses an exclusion hole.  A segment
+                            // check is necessary because the closing operation
+                            // can pull a long straight edge across a hole even
+                            // when all vertices are outside.
+                            bool safe = true;
+                            for (size_t i = 0; i + 1 < best.size() && safe; i++) {
+                                for (const auto &hole : holes) {
+                                    // Check the segment against every hole edge.
+                                    for (size_t j = 0; j < hole.size() && safe; j++) {
+                                        size_t k = (j + 1) % hole.size();
+                                        if (segmentsIntersect(best[i], best[i + 1], hole[j], hole[k])) {
+                                            safe = false;
+                                        }
+                                    }
+                                    if (!safe) break;
+                                    // Also test the segment midpoint: even
+                                    // without an edge intersection the whole
+                                    // segment could lie inside the hole.
+                                    Point mid{(best[i].X + best[i + 1].X) / 2,
+                                              (best[i].Y + best[i + 1].Y) / 2};
+                                    if (pointInPolygon(mid, hole)) {
+                                        safe = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (safe) {
+                                auto clippedToArea = clipIntersect({best}, areaToMow);
+                                if (!clippedToArea.empty() &&
+                                    std::abs(polygonArea(clippedToArea[0])) > 0.001) {
+                                    ring = std::move(clippedToArea[0]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (!holes.empty()) {
                 auto clipped = clipDifference(ring, holes);
                 for (auto &c : clipped) {
                     if (c.size() >= 3 && std::abs(polygonArea(c)) > 0.001) {
+                        // Reject degenerate rings that only trace along hole
+                        // boundaries.  When the remaining area collapses
+                        // between holes, clipOffset can return a ring that
+                        // follows the hole contour exactly; such a ring would
+                        // drive the mower directly along the exclusion border.
+                        bool onHoleBoundary = true;
+                        const double boundaryTol = 0.02; // 2 cm
+                        for (const auto &p : c) {
+                            bool nearAny = false;
+                            for (const auto &hole : holes) {
+                                if (distance(p, nearestPointOnPolygon(p, hole)) < boundaryTol) {
+                                    nearAny = true;
+                                    break;
+                                }
+                            }
+                            if (!nearAny) { onHoleBoundary = false; break; }
+                        }
+                        if (onHoleBoundary) continue;
                         rings.push_back(c);
                         anyValid = true;
                     }
@@ -472,7 +602,8 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
             }
         }
         if (!anyValid) break;
-        offset += width;
+        offset += step;
+        ringLevel++;
     }
 
     if (rings.empty()) return {};
@@ -819,6 +950,25 @@ void connectPolysUsingPathFinding(Polygon &waypoints, const std::vector<Polygon>
                         }
                     }
                 }
+                // Reject connectors that graze a hole boundary within a small
+                // epsilon.  Such connectors are numerically unstable: tiny
+                // rounding differences decide whether a sample point is inside
+                // or outside the hole.  Routing along the boundary is safer
+                // and costs only a few extra waypoints.
+                if (!crossesHole) {
+                    int samples = std::max(3, (int)(d / 0.05));
+                    if (samples > 20) samples = 20;
+                    for (int k = 0; k <= samples && !crossesHole; k++) {
+                        double t = (double)k / samples;
+                        Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
+                        for (const auto &hole : holes) {
+                            if (pointOnBoundary(p, hole, 2e-3 * 2e-3)) {
+                                crossesHole = true;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             if (exitsPerimeter || leavesMowArea || crossesHole) {
                 // Route along the original perimeter boundary (and holes) so
@@ -878,13 +1028,10 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
       // unmowed buffer around each exclusion is at most one mower width wide.
       std::vector<Polygon> effectiveExclusions = map.exclusions;
       if (!settings.mowExclusionBorder) {
-        // Keep the mowable area 1.5 mowing widths away from each exclusion.
-        // With a 0.15 m mower this leaves a tidy 0.15 m unmowed strip around
-        // the exclusion (mower centerline is 0.15 m from the border, the deck
-        // reaches half a width further, i.e. 0.075 m, so the untouched band is
-        // 0.15 m - 0.075 m = 0.075 m ... actually to get a full 0.15 m strip
-        // the centerline must be 1.5 widths away).
-        double exclusionMargin = settings.width * 1.5;
+        // Keep the line center Tune::exclusionMarginFactor widths away from
+        // each exclusion.  With factor 1.0 and a 0.15 m mower the deck edge
+        // (half width) reaches to within 0.075 m of the exclusion border.
+        double exclusionMargin = settings.width * Tune::exclusionMarginFactor;
         if (exclusionMargin < 1e-3) exclusionMargin = 1e-3;
         std::vector<Polygon> expanded;
         for (const auto &excl : map.exclusions) {
@@ -920,14 +1067,15 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
     if (areasToMow.empty()) return {};
 
     // Collect exclusion holes for connector checks (negative-area polygons in mowableRegion).
-    // Inflate holes slightly so clipped segment endpoints lie outside the original exclusion.
+    // Inflate holes by a tiny numeric epsilon so that ring vertices produced by
+    // clipping do not land exactly on the hole boundary, which would be
+    // flagged as "inside" by downstream point-in-polygon tests.
     std::vector<Polygon> holes;
     for (const auto &poly : mowableRegion)
         if (polygonArea(poly) < 0.0) holes.push_back(poly);
     {
         std::vector<Polygon> inflatedHoles;
-        double inflateBy = settings.width * 0.05;
-        if (inflateBy < 1e-3) inflateBy = 1e-3;
+        const double inflateBy = 0.015; // 15 mm safety buffer
         for (const auto &hole : holes) {
             auto expanded = clipOffset(reversePolygon(hole), inflateBy);
             for (auto &p : expanded) {
