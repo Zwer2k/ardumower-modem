@@ -152,34 +152,6 @@ static void nearestOnBoundary(const Point &p, const Polygon &poly,
         if (d < bestDist) { bestDist = d; edgeIdx = i; proj = pp; }
     }
 }
-
-static bool segmentsIntersect(const Point &a1, const Point &a2, const Point &b1, const Point &b2) {
-    double o1 = crossProduct(a1, a2, b1);
-    double o2 = crossProduct(a1, a2, b2);
-    double o3 = crossProduct(b1, b2, a1);
-    double o4 = crossProduct(b1, b2, a2);
-    if (o1 * o2 < 0 && o3 * o4 < 0) return true;
-    // Check collinear cases
-    auto onSegment = [](const Point &p, const Point &q, const Point &r) {
-        return q.X <= std::max(p.X, r.X) + 1e-9 && q.X >= std::min(p.X, r.X) - 1e-9 &&
-               q.Y <= std::max(p.Y, r.Y) + 1e-9 && q.Y >= std::min(p.Y, r.Y) - 1e-9;
-    };
-    if (std::abs(o1) < 1e-9 && onSegment(a1, b1, a2)) return true;
-    if (std::abs(o2) < 1e-9 && onSegment(a1, b2, a2)) return true;
-    if (std::abs(o3) < 1e-9 && onSegment(b1, a1, b2)) return true;
-    if (std::abs(o4) < 1e-9 && onSegment(b1, a2, b2)) return true;
-    return false;
-}
-
-static bool segmentIntersectsPolygon(const Point &from, const Point &to, const Polygon &poly) {
-    if (poly.size() < 3) return false;
-    for (size_t i = 0; i < poly.size(); i++) {
-        size_t j = (i + 1) % poly.size();
-        if (segmentsIntersect(from, to, poly[i], poly[j])) return true;
-    }
-    return false;
-}
-
 static Point nearestPointOnPolygon(const Point &p, const Polygon &poly) {
     if (poly.size() < 3) return p;
     Point best = poly[0];
@@ -457,7 +429,6 @@ static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
     return pruneOutside(waypoints, std::vector<Polygon>{area});
 }
 
-static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter);
 static bool segmentExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter);
 
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
@@ -467,122 +438,69 @@ Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow
     PP_LOG(0, "%scalculateRingsPattern width=%.3f holes=%d", _LOG_, width, (int)holes.size());
     if (areaToMow.size() < 3 || width < 0.001) return {};
 
-    // Use a small margin so rings stay as close as possible to triangular
-    // exclusions while still not touching them.  The distance-to-border check
-    // tolerates small floating-point / offset rounding, so keep the margin
-    // tight rather than over-shrinking the mowable area.
-    const double holeMargin = width * 0.1;
-
-    auto shrinkByHoles = [&](const Polygon &ring, double margin) -> std::vector<Polygon> {
-        if (holes.empty()) return {ring};
-        std::vector<Polygon> inflatedHoles;
-        for (const auto &h : holes) {
-            if (h.size() < 3) continue;
-            Polygon positive = (polygonArea(h) > 0.0) ? h : reversePolygon(h);
-            auto expanded = clipOffset(positive, margin);
-            for (const auto &p : expanded) inflatedHoles.push_back(p);
-        }
-        auto clipped = clipDifference(ring, inflatedHoles);
-        std::vector<Polygon> result;
-        for (const auto &p : clipped) {
-            if (p.size() >= 3 && polygonArea(p) > 0.001)
-                result.push_back(p);
-        }
-        return result;
-    };
-
-    auto clipRingAgainstHoles = [&](const Polygon &ring) -> std::vector<Polygon> {
-        return shrinkByHoles(ring, holeMargin);
-    };
-
-    // Start the ring sequence from a slightly shrunken area so that the first
-    // ring never grazes the exclusion boundary when the user does not want to
-    // mow along it.  This keeps the outermost ring clearly inside the mowable
-    // region.
-    Polygon first = areaToMow;
-    if (!holes.empty()) {
-        auto shrunk = shrinkByHoles(first, holeMargin);
-        if (!shrunk.empty()) {
-            first = shrunk[0];
-            for (size_t i = 1; i < shrunk.size(); i++)
-                if (polygonArea(shrunk[i]) > polygonArea(first))
-                    first = shrunk[i];
-        }
-    }
-    size_t firstBest = nearestPointIndex(startNear, first);
-    Polygon firstRot;
-    firstRot.reserve(first.size());
-    for (size_t i = 0; i < first.size(); i++)
-        firstRot.push_back(first[(firstBest + i) % first.size()]);
-
-    std::vector<Polygon> queue;
-    queue.push_back(firstRot);
-
+    // Generate all parallel contour rings at once, each offset inward by
+    // multiples of the mowing width.  This ensures the whole area is covered
+    // uniformly instead of following a single shrinking path that can leave
+    // large unmowed strips between widely separated rings.
     std::vector<Polygon> rings;
-
-    while (!queue.empty()) {
-        Polygon currentArea = queue.front();
-        queue.erase(queue.begin());
-        if (currentArea.size() < 3) continue;
-
-        if (!rings.empty()) {
-            const Polygon &lastRing = rings.back();
-            size_t best = nearestPointIndex(lastRing.back(), currentArea);
-            Polygon rot;
-            rot.reserve(currentArea.size());
-            for (size_t i = 0; i < currentArea.size(); i++)
-                rot.push_back(currentArea[(best + i) % currentArea.size()]);
-            currentArea = rot;
+    double offset = 0.0;
+    bool first = true;
+    while (true) {
+        std::vector<Polygon> offsets;
+        if (first) {
+            offsets = {areaToMow};
+            first = false;
+        } else {
+            offsets = clipOffset(areaToMow, -offset);
         }
-
-        rings.push_back(currentArea);
-
-        auto nextList = clipOffset(currentArea, -width);
-        double curAreaVal = std::abs(polygonArea(currentArea));
-        for (const auto &next : nextList) {
-            if (next.size() < 3) continue;
-            double nextAreaVal = std::abs(polygonArea(next));
-            if (nextAreaVal < 0.001 || nextAreaVal >= curAreaVal - 0.001) continue;
-            auto clipped = clipRingAgainstHoles(next);
-            for (const auto &c : clipped) queue.push_back(c);
+        if (offsets.empty()) break;
+        bool anyValid = false;
+        for (auto &ring : offsets) {
+            if (ring.size() < 3) continue;
+            if (std::abs(polygonArea(ring)) < 0.001) continue;
+            if (!holes.empty()) {
+                auto clipped = clipDifference(ring, holes);
+                for (auto &c : clipped) {
+                    if (c.size() >= 3 && std::abs(polygonArea(c)) > 0.001) {
+                        rings.push_back(c);
+                        anyValid = true;
+                    }
+                }
+            } else {
+                rings.push_back(ring);
+                anyValid = true;
+            }
         }
+        if (!anyValid) break;
+        offset += width;
+    }
+
+    if (rings.empty()) return {};
+
+    // Sort rings by distance from startNear so the mower begins near its
+    // current position and works inward.
+    std::sort(rings.begin(), rings.end(), [&](const Polygon &a, const Polygon &b) {
+        double da = distance(startNear, nearestPointOnPolygon(startNear, a));
+        double db = distance(startNear, nearestPointOnPolygon(startNear, b));
+        return da < db;
+    });
+
+    // Rotate each ring so it starts at the point nearest to the previous one,
+    // then connect the rings using the same path-finding logic as the zigzag
+    // pattern so connectors never cross exclusion holes or leave the perimeter.
+    Point current = startNear;
+    for (auto &ring : rings) {
+        size_t best = nearestPointIndex(current, ring);
+        Polygon rot;
+        rot.reserve(ring.size());
+        for (size_t i = 0; i < ring.size(); i++)
+            rot.push_back(ring[(best + i) % ring.size()]);
+        ring = std::move(rot);
+        current = ring.back();
     }
 
     Polygon route;
-    for (size_t i = 0; i < rings.size(); i++) {
-        if (i > 0) {
-            Point from = route.back();
-            Point to = rings[i][0];
-            if (distance(from, to) > 0.001) {
-                // If the direct connector crosses an exclusion or leaves the
-                // perimeter, route along the original perimeter boundary
-                // instead of using the straight line. This keeps the mower
-                // inside the mapped area even between distant ring start/end
-                // points.
-                bool crossesHole = false;
-                for (const auto &hole : holes) {
-                    if (segmentIntersectsPolygon(from, to, hole)) {
-                        crossesHole = true;
-                        break;
-                    }
-                }
-                bool exitsPerimeter = lineExitsPerimeter(from, to, perimeter);
-                if (crossesHole || exitsPerimeter) {
-                    Polygon conn = walkBoundaryWithHoles(from, to, perimeter, holes);
-                    for (const auto &p : conn) {
-                        if (route.empty() || distance(route.back(), p) > 0.01)
-                            route.push_back(p);
-                    }
-                } else {
-                    route.push_back(from);
-                    route.push_back(to);
-                }
-            }
-        }
-        for (const auto &p : rings[i])
-            if (route.empty() || distance(route.back(), p) > 0.01)
-                route.push_back(p);
-    }
+    connectPolysUsingPathFinding(route, rings, perimeter, {areaToMow}, holes);
 
     PP_LOG(0, "%scalculateRingsPattern done: %d points", _LOG_, route.size());
     return route;
@@ -822,31 +740,6 @@ std::vector<Polygon> clipSegmentsAgainstHoles(const std::vector<Polygon> &segmen
     return result;
 }
 
-static bool lineExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter) {
-    for (size_t i = 0; i < perimeter.size(); i++) {
-        size_t j = (i + 1) % perimeter.size();
-        double o1 = crossProduct(perimeter[i], perimeter[j], from);
-        double o2 = crossProduct(perimeter[i], perimeter[j], to);
-        double o3 = crossProduct(from, to, perimeter[i]);
-        double o4 = crossProduct(from, to, perimeter[j]);
-        if (o1 * o2 < 0 && o3 * o4 <= 0) return true;
-    }
-
-    double segLen = distance(from, to);
-    if (segLen > 1e-6) {
-        double step = 0.10;
-        int samples = std::max(1, (int)(segLen / step));
-        if (samples > 20) samples = 20;
-        for (int k = 1; k < samples; k++) {
-            double t = (double)k / samples;
-            Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
-            if (!pointInPolygon(p, perimeter) && !pointOnBoundary(p, perimeter))
-                return true;
-        }
-    }
-    return false;
-}
-
 static bool segmentExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter) {
     double segLen = distance(from, to);
     if (segLen < 1e-6) return false;
@@ -860,6 +753,7 @@ static bool segmentExitsPerimeter(const Point &from, const Point &to, const Poly
     }
     return false;
 }
+
 
 static bool segmentStaysInAreas(const Point &from, const Point &to,
     const std::vector<Polygon> &areas)
@@ -979,11 +873,18 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
       mowableRegion = areasToMow.empty() ? std::vector<Polygon>{perimeter} : areasToMow;
     } else {
       // If the user does not want to mow the exclusion border, keep the
-      // mowable area at a small safety distance from each exclusion so
-      // generated rings/lines never graze the exclusion boundary.
+      // mowable area one full mowing width away from each exclusion so the
+      // generated rings do not graze the exclusion boundary and so the
+      // unmowed buffer around each exclusion is at most one mower width wide.
       std::vector<Polygon> effectiveExclusions = map.exclusions;
       if (!settings.mowExclusionBorder) {
-        double exclusionMargin = settings.width * 0.5;
+        // Keep the mowable area 1.5 mowing widths away from each exclusion.
+        // With a 0.15 m mower this leaves a tidy 0.15 m unmowed strip around
+        // the exclusion (mower centerline is 0.15 m from the border, the deck
+        // reaches half a width further, i.e. 0.075 m, so the untouched band is
+        // 0.15 m - 0.075 m = 0.075 m ... actually to get a full 0.15 m strip
+        // the centerline must be 1.5 widths away).
+        double exclusionMargin = settings.width * 1.5;
         if (exclusionMargin < 1e-3) exclusionMargin = 1e-3;
         std::vector<Polygon> expanded;
         for (const auto &excl : map.exclusions) {
