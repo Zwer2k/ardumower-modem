@@ -176,6 +176,24 @@ static void nearestOnBoundary(const Point &p, const Polygon &poly,
         if (d < bestDist) { bestDist = d; edgeIdx = i; proj = pp; }
     }
 }
+
+// Check if a point lies on (or very close to) any polygon edge.
+static bool pointOnBoundary(const Point &p, const Polygon &poly, double tolSq = 1e-6) {
+    if (poly.size() < 2) return false;
+    for (size_t i = 0; i < poly.size(); i++) {
+        size_t j = (i + 1) % poly.size();
+        double dx = poly[j].X - poly[i].X, dy = poly[j].Y - poly[i].Y;
+        double len2 = dx*dx + dy*dy;
+        if (len2 < 1e-10) continue;
+        double t = std::max(0.0, std::min(1.0,
+            ((p.X - poly[i].X)*dx + (p.Y - poly[i].Y)*dy) / len2));
+        Point proj = {poly[i].X + t*dx, poly[i].Y + t*dy};
+        double d2 = (p.X - proj.X)*(p.X - proj.X) + (p.Y - proj.Y)*(p.Y - proj.Y);
+        if (d2 < tolSq) return true;
+    }
+    return false;
+}
+
 static bool segmentsIntersect(const Point &a1, const Point &a2, const Point &b1, const Point &b2) {
     double o1 = crossProduct(a1, a2, b1);
     double o2 = crossProduct(a1, a2, b2);
@@ -471,6 +489,111 @@ static Polygon pruneOutside(const Polygon &waypoints, const Polygon &area) {
     return pruneOutside(waypoints, std::vector<Polygon>{area});
 }
 
+// Remove near-duplicate points and redundant backtracking from a route.
+// Backtracking happens when ring connectors visit a perimeter or hole edge
+// that was already traversed earlier, forcing the mower to turn 180 degrees.
+// A point is only dropped when the resulting shortcut stays inside the
+// perimeter, so we never cut across concave corners or exclusion holes.
+static Polygon simplifyRoute(const Polygon &route, const Polygon &perimeter,
+    double epsilon = 0.02) {
+    if (route.size() < 3) return route;
+
+    // Helper: check whether the straight segment from->to stays inside the
+    // perimeter (or on its boundary).  We sample a few points along the
+    // segment and accept the shortcut only when every sample is inside.
+    auto segmentInside = [&](const Point &from, const Point &to) {
+        double segLen = distance(from, to);
+        if (segLen < 1e-6) return true;
+        int samples = std::max(3, (int)(segLen / 0.05));
+        if (samples > 20) samples = 20;
+        for (int k = 0; k <= samples; k++) {
+            double t = (double)k / samples;
+            Point p{from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t};
+            if (!pointInPolygon(p, perimeter) && !pointOnBoundary(p, perimeter, 1e-6))
+                return false;
+        }
+        return true;
+    };
+
+    Polygon out;
+    out.reserve(route.size());
+    for (size_t i = 0; i < route.size(); i++) {
+        // Skip near-duplicate consecutive points.
+        if (!out.empty() && distance(out.back(), route[i]) < epsilon)
+            continue;
+        // Skip a point when it lies almost on the straight line between its
+        // neighbours (collinear within epsilon).  This removes intermediate
+        // points on long straight segments without changing the path shape.
+        if (out.size() >= 1 && i + 1 < route.size()) {
+            const Point &prev = out.back();
+            const Point &next = route[i + 1];
+            double cross = std::abs(crossProduct(prev, route[i], next));
+            double len = distance(prev, next);
+            if (len > 1e-9 && cross / len < epsilon * 0.5) {
+                // The point is nearly on the segment prev->next; dropping it
+                // does not change the travelled path.  Only accept the
+                // shortcut when it stays inside the perimeter.
+                if (segmentInside(prev, next))
+                    continue;
+            }
+        }
+        out.push_back(route[i]);
+    }
+    // Second pass: remove U-turns and partial backtracking that force the
+    // mower to turn 180 degrees on the spot.
+    // Two patterns are handled:
+    //   1. A -> B -> A (exact return to a previous point)
+    //   2. A -> B -> C where C lies on segment A-B (partial backtrack)
+    Polygon cleaned;
+    cleaned.reserve(out.size());
+    for (size_t i = 0; i < out.size(); i++) {
+        if (cleaned.size() >= 2) {
+            const Point &a = cleaned[cleaned.size() - 2];
+            const Point &b = cleaned[cleaned.size() - 1];
+
+            // Pattern 1: exact return to A
+            if (distance(a, out[i]) < epsilon && distance(b, out[i]) > epsilon) {
+                // Only drop B when the shortcut from A to the current point
+                // stays inside the perimeter.
+                if (segmentInside(a, out[i])) {
+                    cleaned.pop_back();
+                    continue;
+                }
+            }
+
+            // Pattern 2: partial backtrack where C lies on segment A-B.
+            // The route went A -> B and then turned around, so C is between
+            // A and B.  Dropping B and going directly from A to C removes the
+            // backtracking without changing the covered path.
+            double abx = b.X - a.X, aby = b.Y - a.Y;
+            double acx = out[i].X - a.X, acy = out[i].Y - a.Y;
+            double len2ab = abx * abx + aby * aby;
+            if (len2ab > 1e-9) {
+                double t = (acx * abx + acy * aby) / len2ab;
+                if (t > 0.0 && t < 1.0) {
+                    // Distance from C to line A-B
+                    double projx = a.X + t * abx;
+                    double projy = a.Y + t * aby;
+                    double dx = out[i].X - projx;
+                    double dy = out[i].Y - projy;
+                    double distToLine = std::sqrt(dx * dx + dy * dy);
+                    if (distToLine < epsilon) {
+                        // C is on segment A-B.  Drop B and continue from A
+                        // directly to C, but only when the shortcut stays
+                        // inside the perimeter.
+                        if (segmentInside(a, out[i])) {
+                            cleaned.pop_back();
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        cleaned.push_back(out[i]);
+    }
+    return cleaned;
+}
+
 static bool segmentExitsPerimeter(const Point &from, const Point &to, const Polygon &perimeter);
 
 Polygon calculateRingsPattern(const Polygon &perimeter, const Polygon &areaToMow,
@@ -742,23 +865,6 @@ void sortSolutionPolygonsByDistance(std::vector<Polygon> &solution, const Point 
     }
 
     solution = sorted;
-}
-
-static bool pointOnBoundary(const Point &p, const Polygon &poly, double tolSq = 1e-6) {
-    for (size_t i = 0; i < poly.size(); i++) {
-        size_t j = (i + 1) % poly.size();
-        double dx = poly[j].X - poly[i].X;
-        double dy = poly[j].Y - poly[i].Y;
-        double len2 = dx * dx + dy * dy;
-        if (len2 < 1e-10) continue;
-        double tt = std::max(0.0, std::min(1.0,
-            ((p.X - poly[i].X) * dx + (p.Y - poly[i].Y) * dy) / len2));
-        double px = poly[i].X + tt * dx;
-        double py = poly[i].Y + tt * dy;
-        if ((p.X - px) * (p.X - px) + (p.Y - py) * (p.Y - py) <= tolSq)
-            return true;
-    }
-    return false;
 }
 
 static void addEdgeEvents(const Point &a, const Point &b,
@@ -1231,6 +1337,10 @@ Polygon calculateWaypoints(Map &map, Settings &settings, const State *state) {
         safeRoute.push_back(to);
     }
     route = std::move(safeRoute);
+
+    // Remove redundant points and backtracking so perimeter edges are not
+    // traversed multiple times and no 180-degree turns remain on the border.
+    route = simplifyRoute(route, perimeter);
 
     PP_LOG(0, "%scalculateWaypoints done: %d waypoints", _LOG_, route.size());
     return route;
