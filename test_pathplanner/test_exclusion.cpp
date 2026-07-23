@@ -37,7 +37,10 @@ static bool pointInsideExclusion(const Point &p, const Polygon &exclusion) {
     // purpose of violation detection. This allows mowing along the border when
     // the user explicitly requested it (mowExclusionBorder) while still
     // flagging segments that cross into the interior of the exclusion.
-    if (pointOnBoundary(p, exclusion, 1e-6)) return false;
+    // The tolerance is 2 mm because route coordinates are rounded to
+    // millimetres when written to the SVG/waypoint list, so a point that is
+    // intended to lie exactly on the border can end up a tiny bit inside.
+    if (pointOnBoundary(p, exclusion, 2e-3 * 2e-3)) return false;
     bool inside = false;
     for (size_t i = 0, j = exclusion.size() - 1; i < exclusion.size(); j = i++) {
         if ((exclusion[i].Y > p.Y) != (exclusion[j].Y > p.Y) &&
@@ -700,7 +703,7 @@ int main() {
         settings.distanceToBorder = 1;
         settings.borderLaps = 1;
         settings.mowArea = true;
-        settings.mowExclusionBorder = false;
+        settings.mowExclusionBorder = true;
         settings.mowBorderCcw = false;
         // Expect rings to stay at least one track width away from the
         // perimeter border (distanceToBorder=1 * width=0.15).
